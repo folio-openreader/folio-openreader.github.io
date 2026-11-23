@@ -112,19 +112,64 @@ let state={positions:{...record(prior.positions)},bookmarks:{...record(prior.boo
 if(!safePosition(state.positions[DEMO_ID],demo))state.positions[DEMO_ID]={chapter:Math.max(0,Math.min(2,Number(storedValue('folio-page'))||0)),paragraph:0,fraction:0};
 const legacySaved=sanitizeSaved(readJSON('folio-words',[]));
 const LEARNING_KEY='folio-learning-v1';
-const learningSnapshot=readJSON(LEARNING_KEY,null);
-let learning=loadLearning(learningSnapshot,learningSnapshot?.version===1&&Array.isArray(learningSnapshot.rows)?[]:legacySaved),learningDirty=!learningSnapshot,learningTimer=0,seenTimer=0;
+const SYNC_WORDS='folio-word-store-v2';
+let legacyCursor=storedValue(LEARNING_KEY),legacyListCursor=storedValue('folio-words'),wordDisk=null,wordDiskFault=false;
+const diskOptions=()=>({storage:localStorage,locks:navigator.locks,legacyCursor:()=>legacyCursor,legacyListCursor:()=>legacyListCursor,liveWords:()=>learning,onApplied(next){
+  clearTimeout(learningTimer);learningDirty=false;
+  if(learning!==next){learning=next;try{reviewSequence++;resetWordView();reviewQueue=[];manualWords.clear();recentSeriesWords=[];deactivatePractice();renderHomePanel();wordSavedState();refreshSelectedStage()}catch{wordStoreNotice('Словарь сохранён. Перезагрузите страницу, чтобы обновить экран.')}}
+}});
+function wordStoreNotice(message){const el=$('#sync-word-notice');el.hidden=!message;el.textContent=message}
+const otherTab='Словарь открыт в другой вкладке. Здесь изменения слов не сохраняются. Закройте другую вкладку и перезагрузите эту страницу.';
+if(storedValue(SYNC_WORDS)!==null){
+  try{wordDisk=(await import('./sync-local.js')).createWordStore(diskOptions());if(!await wordDisk.own())wordStoreNotice(otherTab)}
+  catch{wordDiskFault=true;wordStoreNotice('Не удалось открыть сохранённый словарь. Перезагрузите Folio. Исходная копия не удалена; сохранение слов остановлено.')}
+}
+const learningSnapshot=wordDisk?.packed??readJSON(LEARNING_KEY,null);
+const malformedLearningAtBoot=legacyCursor!==null
+  ?!learningSnapshot||learningSnapshot.version!==1||!Array.isArray(learningSnapshot.rows)
+  :legacyListCursor!==null&&(()=>{try{const list=JSON.parse(legacyListCursor);return !Array.isArray(list)||list.length!==legacySaved.length||list.some(w=>typeof w!=='string'||!w.trim()||w.length>128)}catch{return true}})();
+let learning=loadLearning(learningSnapshot,learningSnapshot?.version===1&&Array.isArray(learningSnapshot.rows)?[]:legacySaved,wordDisk?.enrolled?8640000000000000:Date.now()),learningDirty=!learningSnapshot,learningTimer=0,seenTimer=0;
 const stageText={new:'Новое',learning:'Учу',almost:'Почти',known:'Знаю'};
 const stageIcon={new:'zap',learning:'openBook',almost:'flame',known:'check'};
 let wordFilter='all',wordLimit=48,selectingWords=false,wordDeleteDialog=null;
 const selectedWordKeys=new Set();
 let reviewQueue=[],reviewIndex=0,reviewed=0,reviewRecalled=0,reviewSequence=0,reviewCanGrade=false,reviewOpener=null;
 function legacyWords(){return [...new Set(Object.values(learning.words).map(r=>r.word))]}
+function assertWordWriter(){
+  if(wordDiskFault||malformedLearningAtBoot&&!wordDisk?.enrolled)throw Error('local-invalid');
+  if(wordDisk?.enrolled){wordDisk.assertEditor();return}
+  if(localStorage.getItem(SYNC_WORDS)!==null||localStorage.getItem(LEARNING_KEY)!==legacyCursor||legacyCursor===null&&localStorage.getItem('folio-words')!==legacyListCursor){
+    wordStoreNotice('Словарь изменился в другой вкладке. Здесь новые изменения слов не сохраняются. При необходимости скачайте резервную копию и перезагрузите страницу.');
+    throw Error('local-changed');
+  }
+}
+// No lock acquisition here: nonholders remain read-only. Validate before each
+// ordinary mutation, including delayed/passive actions. Only an explicit transfer enrolls.
+function canWriteWords(notify=false){
+  try{assertWordWriter();return true}catch{
+    if(notify){wordStoreNotice('Словарь не изменён. Закройте другие вкладки Folio и перезагрузите страницу.');toast('Здесь словарь доступен только для чтения.')}
+    return false;
+  }
+}
+function persistWordRows(packed){
+  assertWordWriter();if(wordDisk?.enrolled){wordDisk.saveWords(packed);return}
+  const raw=JSON.stringify(packed);localStorage.setItem(LEARNING_KEY,raw);legacyCursor=raw;
+}
+function wordSaved(){clearTimeout(learningTimer);learningDirty=false;try{mirrorLegacy()}catch{}}
+function failedWordSave(){toast('Словарь не изменён. Проверьте свободное место и открытые вкладки.')}
+function changeScore(record,edit){
+  if(record!==learning.words[record.key]||!canWriteWords(true))return false;
+  const {wins,manual,lapsed,lastActionAt,nextReviewAt}=record;
+  if(!edit())return false;
+  try{persistWordRows(packLearning(learning));wordSaved();return true}
+  catch{Object.assign(record,{wins,manual,lapsed,lastActionAt,nextReviewAt});failedWordSave();return false}
+}
+function mirrorLegacy(){if(!wordDisk?.enrolled){const list=JSON.stringify(legacyWords());localStorage.setItem('folio-words',list);legacyListCursor=list}}
 function saveLearning(){
   clearTimeout(learningTimer);
   if(!learningDirty)return;
-  localStorage.setItem(LEARNING_KEY,JSON.stringify(packLearning(learning)));
-  localStorage.setItem('folio-words',JSON.stringify(legacyWords()));
+  persistWordRows(packLearning(learning));
+  mirrorLegacy();
   learningDirty=false;
 }
 function trackChanged(){learningDirty=true;clearTimeout(learningTimer);learningTimer=setTimeout(saveState,260)}
@@ -304,8 +349,8 @@ function actionFeedback(event, kind='study'){
 }
 function studyStatus(record,event){
   const keyboard=event?.detail===0;
-  const s=stage(record),changed=s==='known'?resumeLearning(record,Date.now()):markKnown(record,Date.now());
-  if(!changed)return;actionFeedback(event);trackChanged();saveState();renderHomePanel();wordSavedState();refreshSelectedStage();
+  const s=stage(record),changed=changeScore(record,()=>s==='known'?resumeLearning(record,Date.now()):markKnown(record,Date.now()));
+  if(!changed)return;actionFeedback(event);renderHomePanel();wordSavedState();refreshSelectedStage();
   const destination=stage(record),updated=$$('#saved-list [data-study-word]').find(row=>row.dataset.studyWord===record.key);
   const status=$('#word-stage-feedback');
   status.textContent='«'+record.word+'» теперь в разделе «'+stageText[destination]+'».';
@@ -318,10 +363,12 @@ function studyStatus(record,event){
   }
 }
 function removeStudy(record,event){
+  if(!canWriteWords(true))return;
   if(!confirm(`Убрать «${record.word}»? Встречи и повторы этого слова будут удалены.`))return;
   const keyboard=event?.detail===0,index=$$('#saved-list .saved-row').findIndex(row=>row.dataset.studyWord===record.key);
+  try{persistWordRows(packLearning(learning,{excludeKeys:new Set([record.key])}))}catch{failedWordSave();return}
   if(removeWord(learning,record.word,record.language)){
-    trackChanged();saveState();renderHomePanel();wordSavedState();refreshSelectedStage();
+    wordSaved();renderHomePanel();wordSavedState();refreshSelectedStage();
     if(keyboard){
       const buttons=$$('#saved-list .word-card-remove');
       (buttons[Math.min(index,buttons.length-1)]||$('#words-title')).focus({preventScroll:true});
@@ -367,10 +414,10 @@ function removeSelectedWords(keys){
   if(!records.length)throw new Error('Selection no longer exists');
   const exactKeys=new Set(records.map(r=>r.key));
   // Persist the authoritative snapshot first; denied storage leaves the list and selection unchanged.
-  localStorage.setItem(LEARNING_KEY,JSON.stringify(packLearning(learning,{excludeKeys:exactKeys})));
+  persistWordRows(packLearning(learning,{excludeKeys:exactKeys}));
   for(const r of records)removeWord(learning,r.word,r.language);
   clearTimeout(learningTimer);learningDirty=false;
-  try{localStorage.setItem('folio-words',JSON.stringify(legacyWords()))}catch{}
+  try{mirrorLegacy()}catch{}
   exitWordSelection();renderHomePanel();wordSavedState();refreshSelectedStage();
   return 'Удалено: '+wordCountText(records.length)+'.';
 }
@@ -687,6 +734,7 @@ function scheduleSeen(){
   const epoch=renderEpoch,bookId=current.id,chapterIndex=chapter,index=paragraph,scroller=$('#reading-scroll'),y=scroller.scrollTop;
   seenTimer=setTimeout(()=>{
     if(epoch!==renderEpoch||current?.id!==bookId||chapter!==chapterIndex||paragraph!==index||$('#reader').hidden||suppressScroll||document.visibilityState!=='visible'||document.querySelector('dialog[open]')||Math.abs(scroller.scrollTop-y)>3)return;
+    if(!canWriteWords())return;
     const row=$('#paragraph-'+index);if(!row?.isConnected)return;
     const clip=readingClip(),rowRect=row.getBoundingClientRect();
     if(Math.min(clip.bottom,rowRect.bottom)-Math.max(clip.top,rowRect.top)<Math.min(55,rowRect.height*.60))return;
@@ -953,24 +1001,27 @@ function syncWordMark(anchor,record){
 function toggleWordSaved(event){
   if(!wordAnchor||!$('#word-dialog').open)return;
   const a=wordAnchor,status=$('#word-save-status'),record=selectedRecord();
+  if(!canWriteWords(true)){status.textContent='Словарь не изменён: эта вкладка не может его сохранить.';return}
   wordFlight.cancel();
   if(record){
     try{
-      localStorage.setItem(LEARNING_KEY,JSON.stringify(packLearning(learning,{excludeKeys:new Set([record.key])})));
+      persistWordRows(packLearning(learning,{excludeKeys:new Set([record.key])}));
     }catch{
       status.textContent='Не удалось сохранить изменение.';
       toast('Не удалось убрать слово.');return;
     }
     a.undoRemove=detachWord(learning,a.token,a.trackLanguage);
     clearTimeout(learningTimer);learningDirty=false;
-    try{localStorage.setItem('folio-words',JSON.stringify(legacyWords()))}catch{}
+    try{mirrorLegacy()}catch{}
     syncWordMark(a,null);wordSavedState();status.textContent='Убрано из словаря.';
   }else{
     const next=a.undoRemove?a.undoRemove(learning):trackWord(learning,a.token,a.trackLanguage,Date.now());
     if(!next){status.textContent='Слово не добавлено.';toast('Не удалось добавить слово.');return}
     a.undoRemove=null;
     if(tokenInClip(a.button,readingClip()))noteLookup(next,a.location,Date.now());
-    trackChanged();saveState();syncWordMark(a,next);wordSavedState();status.textContent='Добавлено в словарь.';
+    try{persistWordRows(packLearning(learning));wordSaved()}
+    catch{a.undoRemove=detachWord(learning,a.token,a.trackLanguage);wordSavedState();status.textContent='Не удалось добавить слово. Словарь не изменён.';failedWordSave();return}
+    syncWordMark(a,next);wordSavedState();status.textContent='Добавлено в словарь.';
     if(event.isTrusted&&event.detail>0)wordFlight.start(a.token,a.button.getBoundingClientRect(),$('#word-sheet-heading'));
   }
   $('#word-count').textContent=Object.keys(learning.words).length;
@@ -1039,11 +1090,14 @@ async function showWord(button,event){
   wordAnchor.location={bookId:current.id,chapter,paragraph:pi,offset:wordAnchor.offset};
   $$('.word.selected').forEach(b=>b.classList.remove('selected'));button.classList.add('selected');
   const existed=getWord(learning,button.textContent,trackLanguage);
-  const record=existed||(state.prefs.autoSaveWords?trackWord(learning,button.textContent,trackLanguage,Date.now()):null);
-  if(record){
+  const writable=canWriteWords(),record=existed||(writable&&state.prefs.autoSaveWords?trackWord(learning,button.textContent,trackLanguage,Date.now()):null);
+  if(record&&writable){
     const changed=tokenInClip(button,readingClip())&&noteLookup(record,wordAnchor.location,Date.now());
-    if(!existed||changed)trackChanged();
-    if(existed)attachStage(button,record);else syncWordMark(wordAnchor,record);
+    if(existed){if(changed)trackChanged();attachStage(button,record)}
+    else{
+      try{persistWordRows(packLearning(learning));wordSaved();syncWordMark(wordAnchor,record)}
+      catch{removeWord(learning,wordAnchor.token,wordAnchor.trackLanguage);$('#word-save-status').textContent='Автосохранение не удалось. Слово не добавлено.';failedWordSave()}
+    }
   }
   setActiveParagraph(pi,true);clearTimeout(seenTimer);resetWordContext();$('#word-sheet-heading').textContent=button.textContent;
   $('#word-sheet-heading').lang=source||'';wordSavedState();
@@ -1154,21 +1208,27 @@ async function arrangeBackup(file){
   }catch(e){if(sequence===backupSequence)status.textContent=e.message}
 }
 async function restoreBackup(){
-  if(!backupDraft||restoring)return;restoring=true;$('#restore-backup').disabled=true;$('#backup-file').disabled=true;
+  if(!backupDraft||restoring)return;
+  if(!canWriteWords(true)){$('#backup-preview').textContent='Восстановление не начато. Закройте другую вкладку Folio и перезагрузите страницу.';return}
+  restoring=true;$('#restore-backup').disabled=true;$('#backup-file').disabled=true;
   const backup=backupDraft,ids=new Set(books.map(b=>b.id)),fresh=backup.books.filter(b=>!ids.has(b.id));
   try{
     if(fresh.length)await dbAction('readwrite',store=>{for(const b of fresh)store.add(b);return store.count()});
     books.push(...fresh);
+    const merged=mergeLearning(learning,loadLearning(backup.learning,backup.words));
+    // The optional books transaction may already have committed; never imply a full rollback.
+    try{persistWordRows(packLearning(merged))}
+    catch{renderHomePanel();$('#backup-preview').textContent=fresh.length?'Книги добавлены, но словарь и настройки не восстановлены. Проверьте место и открытые вкладки.':'Словарь и настройки не изменены. Проверьте место и открытые вкладки.';$('#restore-backup').disabled=false;return}
+    learning=merged;wordSaved();
     for(const b of books){
       if(!state.positions[b.id]&&backup.positions[b.id])state.positions[b.id]=backup.positions[b.id];
       const marks=Array.isArray(state.bookmarks[b.id])?state.bookmarks[b.id]:[],added=backup.bookmarks[b.id]||[];
       if(added.length)state.bookmarks[b.id]=[...new Map([...added,...marks].map(p=>[`${p.chapter}/${p.paragraph}`,p])).values()];
     }
-    learning=mergeLearning(learning,loadLearning(backup.learning,backup.words));trackChanged();
     if($('#backup-prefs').checked){const {theme,accent,font,size}=backup.prefs;Object.assign(state.prefs,{theme,accent,font,size});applyPrefs()}
     const savedOK=saveState();renderHomePanel();$('#backup-dialog').close();
     toast(savedOK?'Копия восстановлена.':'Данные добавлены, но настройки и слова могут не сохраниться.');
-  }catch(e){$('#backup-preview').textContent='Не удалось восстановить копию. Данные не изменены. '+(e.name==='QuotaExceededError'?'Недостаточно места.':'Проверьте хранилище браузера.');$('#restore-backup').disabled=false}
+  }catch(e){$('#backup-preview').textContent='Не удалось завершить восстановление. Перед повтором проверьте библиотеку. '+(e.name==='QuotaExceededError'?'Недостаточно места.':'Проверьте хранилище браузера.');$('#restore-backup').disabled=false}
   finally{restoring=false;$('#backup-file').disabled=false}
 }
 let languageUI=null;
@@ -1780,7 +1840,7 @@ function prepareReview(){
   $('#review-reveal').hidden=false;$('#review-reveal').disabled=false;
 }
 function startReview(keys=null,event){
-  const dialog=$('#review-dialog');if(dialog.open)return;
+  const dialog=$('#review-dialog');if(dialog.open||!canWriteWords(true))return;
   const records=keys?[...keys].map(key=>learning.words[key]):Object.values(learning.words);
   reviewQueue=recallQueue(records);
   if(!reviewQueue.length){renderHomePanel();return}
@@ -1814,12 +1874,13 @@ function nextReview(){
 function gradeReview(recalled,event){
   const record=reviewQueue[reviewIndex],now=Date.now();
   if(!record||!reviewCanGrade||!$('#review-dialog').open)return;
-  reviewCanGrade=false;
-  if(record===learning.words[record.key]&&due(record,now)&&review(record,{recalled,now})){
+  if(!canWriteWords(true))return;
+  if(record===learning.words[record.key]&&due(record,now)){
+    if(!changeScore(record,()=>review(record,{recalled,now})))return;
     reviewed++;if(recalled)reviewRecalled++;
-    actionFeedback(event,recalled?'correct':'incorrect');trackChanged();saveState();
+    actionFeedback(event,recalled?'correct':'incorrect');
   }
-  nextReview();renderHomePanel();
+  reviewCanGrade=false;nextReview();renderHomePanel();
 }
 $('#review-start').onclick=e=>{if(selectingWords)startReview(selectedWordKeys,e)};
 $('#practice-review').onclick=e=>startReview(null,e);
@@ -1906,6 +1967,25 @@ $('#export-backup').onclick=()=>{const text=serializeBackup(books,state,legacyWo
 $('#open-backup').onclick=()=>{$('#backup-file').value='';$('#backup-prefs').checked=false;arrangeBackup(null);$('#backup-dialog').showModal()};$('#backup-file').onchange=e=>arrangeBackup(e.target.files[0]);$('#restore-backup').onclick=restoreBackup;
 $('#dictionary-import').onclick=importDictionaryFile;
 window.addEventListener('pagehide',()=>{practiceAudio.stop();capturePosition();if(learningDirty)saveState()});document.addEventListener('visibilitychange',()=>{if(document.hidden){practiceAudio.stop();clearTimeout(seenTimer);capturePosition();if(learningDirty)saveState()}else scheduleSeen()});
+let syncEpoch=0,syncPanel=null;
+async function showSyncPanel(){
+  const epoch=++syncEpoch,host=$('#folio-sync-settings');
+  if(location.hash!=='#profile/sync'){syncPanel?.dispose();syncPanel=null;return}
+  if(syncPanel)return;
+  try{
+    const mod=await import('./sync-panel.js');
+    if(epoch!==syncEpoch||location.hash!=='#profile/sync')return;
+    if(wordDiskFault)throw Error('local-invalid');
+    wordDisk??=mod.createWordStore(diskOptions());
+    syncPanel=mod.openSyncPanel(host,{disk:wordDisk,liveWords:()=>{if(location.hash!=='#profile/sync')throw Object.assign(new Error(),{code:'local-changed'});return learning}});
+  }catch{if(epoch===syncEpoch)host.textContent='Не удалось открыть перенос. Перезагрузите страницу и попробуйте снова.'}
+}
+$('#profile-view').addEventListener('folio:profile-page',showSyncPanel);
+window.addEventListener('storage',e=>{
+  if(e.key===SYNC_WORDS&&(!wordDisk?.held||e.newValue===null))wordStoreNotice('Другая вкладка изменила словарь. Перед редактированием слов перезагрузите Folio.');
+});
+window.addEventListener('pagehide',()=>{syncEpoch++;syncPanel?.dispose();syncPanel=null;wordDisk?.close()});
+window.addEventListener('pageshow',e=>{if(e.persisted&&(wordDisk?.enrolled||storedValue(SYNC_WORDS)!==null)){location.reload();return}if(e.persisted&&location.hash==='#profile/sync')void showSyncPanel()});
 function readHash(){
   if(!location.hash.startsWith('#read/')){starterIntent++;editorialIntent++;showHome(homeRoute());return}
   let id;try{id=decodeURIComponent(location.hash.slice(6))}catch{id=DEMO_ID}
@@ -1933,6 +2013,6 @@ catch{db=null;toast('Хранилище книг недоступно. Демо 
 installVoiceControls({language:box=>box.closest('#preferences')&&current?
   speechLanguage(readingSourceLanguage(current,chapter),state.prefs.readingLanguage):state.prefs.readingLanguage,
   beforeSample:cancelSpeech});
-readHash();
+readHash();if(location.hash==='#profile/sync')void showSyncPanel();
 window.dispatchEvent(new Event('folio:ready'));
 document.getElementById('folio-boot')?.remove();

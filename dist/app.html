@@ -2,6 +2,7 @@
 <html lang="ru" data-theme="paper"><head><meta name="robots" content="noindex, follow"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,interactive-widget=resizes-content"><meta name="color-scheme" content="light"><meta name="theme-color" content="#f4efdf">
 <!-- Resolve the saved reader palette before any stylesheet or app module can paint. -->
 <style>
+#sync-word-notice:not([hidden]){position:fixed;inset:auto 1rem max(5rem,env(safe-area-inset-bottom)) 1rem;margin:0 auto;padding:.75rem 1rem;max-width:36rem;z-index:30;background:var(--card,var(--bg,Canvas));color:var(--ink,CanvasText);border:1px solid var(--line,GrayText);border-radius:.75rem}
 :root[data-theme="light"]{--boot-bg:#ffffff;--boot-ink:#000000;color-scheme:light}
 :root[data-theme="paper"]{--boot-bg:#f4efdf;--boot-ink:#36342d;color-scheme:light}
 :root[data-theme="linen"]{--boot-bg:#e4e9de;--boot-ink:#243126;color-scheme:light}
@@ -249,6 +250,7 @@ html{background-color:var(--boot-bg)}
   <ul>
     <li><a class="profile-stack-row" href="#profile/dictionaries" data-profile-open="dictionaries"><i class="profile-row-icon" data-icon="vault" aria-hidden="true"></i><span class="profile-row-label">Словари</span><i class="profile-row-forward" aria-hidden="true"></i></a></li>
     <li><a class="profile-stack-row" href="#profile/storage" data-profile-open="storage"><i class="profile-row-icon icon-glyph" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 14 5.5 7h13L20 14M4 14h16v4H4zm3 2h.01"/><path d="M10 16h6"/></svg></i><span class="profile-row-label">Хранилище</span><i class="profile-row-forward" aria-hidden="true"></i></a></li>
+    <li><a class="profile-stack-row" href="#profile/sync" data-profile-open="sync"><i class="profile-row-icon" data-icon="lock" aria-hidden="true"></i><span class="profile-row-label">Перенос слов</span><i class="profile-row-forward" aria-hidden="true"></i></a></li>
     <li><a class="profile-stack-row" href="#profile/backups" data-profile-open="backups"><i class="profile-row-icon" data-icon="download" aria-hidden="true"></i><span class="profile-row-label">Резервная копия</span><i class="profile-row-forward" aria-hidden="true"></i></a></li>
   </ul>
 </section>
@@ -326,6 +328,10 @@ html{background-color:var(--boot-bg)}
     </section>
     <p id="local-storage-status" class="muted" role="status"></p>
   </div>
+</section>
+<section class="profile-stack-page" data-stack-page="sync" aria-labelledby="folio-sync-heading" hidden>
+  <header class="profile-stack-head"><a href="#profile" class="profile-stack-back" data-profile-up aria-label="Назад в профиль"><i data-icon="back" aria-hidden="true"></i><span>Профиль</span></a><h1 id="folio-sync-heading" tabindex="-1"><span class="profile-page-title">Перенос слов</span></h1></header>
+  <div id="folio-sync-settings" class="settings-card profile-stack-body">Подготовка переноса…</div>
 </section>
 <section class="profile-stack-page" data-stack-page="backups" aria-labelledby="backup-heading" hidden>
   <header class="profile-stack-head">
@@ -437,4 +443,4 @@ html{background-color:var(--boot-bg)}
     <button type="submit" class="primary">Сохранить</button>
   </form>
 </dialog>
-<div id="toast" role="status" aria-live="polite"></div><script type="module" src="profile-stack.js"></script><script type="module" src="app.js"></script></body></html>
+<p id="sync-word-notice" role="status" hidden></p><div id="toast" role="status" aria-live="polite"></div><script type="module" src="profile-stack.js"></script><script type="module" src="app.js"></script></body></html>
