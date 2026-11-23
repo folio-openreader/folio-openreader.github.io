@@ -1,0 +1,32 @@
+name: Import reviewed Folio source
+on:
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  import:
+    if: github.repository == 'folio-openreader/folio-openreader.github.io' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24'
+      - name: Verify and commit the reviewed source
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          asset="$(gh api "repos/$GITHUB_REPOSITORY/releases" --jq '[.[] | select(.draft and .name == "Reviewed Folio source transfer") | .assets[] | select(.state == "uploaded" and .name == "Folio-GitHub-Pages-2026-11-23.zip" and .size == 86175231) | .id] | first // empty')"
+          test -n "$asset"
+          zip="$RUNNER_TEMP/folio-reviewed.zip"
+          gh api "repos/$GITHUB_REPOSITORY/releases/assets/$asset" -H 'Accept: application/octet-stream' > "$zip"
+          printf '%s  %s\n' 33c5e8321d3ac6c331028a062fe820cf51f8cf9a59a373949f69d175426cf59a "$zip" | sha256sum -c -
+          unzip -oq "$zip" -x '.github/*'
+          npm test
+          git add -- ASSET-SHA256.txt LICENSE README.md artwork dist package.json tests tools
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'Import the reviewed Folio source and release assets'
+          git push origin HEAD:main
