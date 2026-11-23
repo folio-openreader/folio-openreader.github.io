@@ -1,6 +1,7 @@
 // Native text stays the default. PDF.js and OCR workers/models are opened on demand.
 export const pdfAssetBase = new URL('./vendor/pdfjs/', import.meta.url).href;
 const base = pdfAssetBase;
+const OCR_SOURCE_PIXELS = 32_000_000; // PDF.js guard before OCR assets are needed
 const MiB = 1024 * 1024;
 const LIMIT = {bytes: 24 * MiB, pages: 1000, chars: 4 * MiB, items: 800000, paragraphs: 16000, ms: 90000};
 class ImportIssue extends Error {}
@@ -8,7 +9,7 @@ const issue = message => new ImportIssue(message);
 const tooBig = () => issue('В PDF слишком много страниц или текста. Разделите книгу на части и попробуйте снова.');
 const protectedBook = () => issue('Этот PDF защищён или зашифрован. Выберите доступную вам незашифрованную версию.');
 const unsupported = () => issue('Не удалось запустить обработчик PDF. Откройте Folio в современном браузере или импортируйте TXT.');
-const noText = () => Object.assign(issue('В PDF нет читаемого текстового слоя. Включите распознавание (OCR) и повторите предпросмотр.'),{code:'PDF_NO_TEXT'});
+const noText = () => Object.assign(issue('В PDF нет читаемого текстового слоя. Попробуйте импорт с OCR.'),{code:'PDF_NO_TEXT'});
 const cache = new Map();
 function assets(key) {
   if (!cache.has(key)) {
@@ -232,9 +233,10 @@ export async function parsePdf(buffer, name = '', options={}) {
   if (!new TextDecoder('latin1').decode(bytes.subarray(0,1024)).includes('%PDF-')) throw issue('Файл не похож на PDF. Проверьте его формат.');
   let pdf;
   try { pdf = await import('./vendor/pdfjs/pdf.min.js'); } catch { throw unsupported(); }
-  const engine=options.ocr===true?await import('./ocr-engine.js'):null;
-  const selected=engine?engine.languages(options.languages):[];
-  const run=pdfBudget(options.signal,engine?15*60*1000:LIMIT.ms,'Обработка PDF заняла слишком много времени. Разделите книгу на части.');
+  const automatic=options.ocr==='auto', thorough=options.ocr==='thorough';
+  const enabled=options.ocr===true||automatic||thorough;
+  let engine;
+  const run=pdfBudget(options.signal,enabled?15*60*1000:LIMIT.ms,'Обработка PDF заняла слишком много времени. Разделите книгу на части.');
   const signal=run.signal;const check=()=>{if(signal.aborted)throw run.reason||aborted();};
   let port, worker, task, ocr, finished=false;
   try {
@@ -245,19 +247,20 @@ export async function parsePdf(buffer, name = '', options={}) {
         worker = new pdf.PDFWorker({port, verbosity:0});
       } catch { throw unsupported(); }
       port.onerror = () => run.stop(unsupported());
-      task = pdf.getDocument({data:bytes, worker, ...pdfLocalOptions(engine?engine.SOURCE_PIXELS:0, !!engine)});
+      task = pdf.getDocument({data:bytes, worker, ...pdfLocalOptions(enabled?OCR_SOURCE_PIXELS:0, enabled)});
       const doc = await task.promise;check();
       if (!doc.numPages || doc.numPages > LIMIT.pages) throw tooBig();
       const {info} = await doc.getMetadata();check();
       if (info?.EncryptFilterName || (await doc.getPermissions()) !== null) throw protectedBook();
-      const chapters=[], skipped=[], totals={items:0,chars:0,paragraphs:0}, meta=status(selected);
-      const images=engine?imageOps(pdf.OPS):null;
-      let language='', attempted=0;
+      const chapters=[], skipped=[], totals={items:0,chars:0,paragraphs:0}, meta=status([]);
+      const images=enabled?imageOps(pdf.OPS):null;
+      let language='', attempted=0, unavailable=null;
+      const capped=[];
       for (let n=1;n<=doc.numPages;n++) {
         check();options.onProgress?.({stage:'text',page:n,total:doc.numPages,progress:0});
         const page=await doc.getPage(n);let canvas,reader;
         try{
-          const layout=engine?{runs:[],anchors:[]}:null, styles=Object.create(null);
+          const layout=enabled?{runs:[],anchors:[]}:null, styles=Object.create(null);
           const collector=pageCollector(totals,layout);
           try{
             reader=page.streamTextContent().getReader();
@@ -274,22 +277,31 @@ export async function parsePdf(buffer, name = '', options={}) {
                 }
               }
             }
-          }catch(e){check();if(!engine||e instanceof ImportIssue)throw e; if(layout){layout.runs=[];layout.nativeError=true;}}
+          }catch(e){check();if(!enabled||e instanceof ImportIssue)throw e; if(layout){layout.runs=[];layout.nativeError=true;}}
           finally{reader?.releaseLock();}
           let paragraphs=collector.finish();
-          if(!engine)paragraphs=collector.columns();
-          if(engine){
-            // Text-only imports never use a damage verdict or OCR coordinates.
+          if(!enabled)paragraphs=collector.columns();
+          if(enabled){
+            // Retain the native result if a model could not load, e.g. offline.
             const keep=paragraphs.length>0 && !layout.nativeError && !nativeDamaged(paragraphs);
+            if(!keep)paragraphs=[];
             let needs=!keep;
-            if(!needs){
-              // Also handle small raster text inserts (not only full-page scans).
-              const ops=await page.getOperatorList({annotationMode:pdf.AnnotationMode.DISABLE});check();
-              if(ops.fnArray.length>350000) throw tooBig();
-              needs=ops.fnArray.some(op=>images.has(op));
+            if(!needs && !unavailable){
+              try {
+                const ops=await page.getOperatorList({annotationMode:pdf.AnnotationMode.DISABLE});check();
+                if(ops.fnArray.length>350000){
+                  if(!automatic)throw tooBig();
+                  needs=false;
+                }else needs=ops.fnArray.some(op=>images.has(op));
+              } catch(e){check();if(!automatic)throw e;/* a native page is still readable */}
             }
-            if(!needs)paragraphs=collector.columns();
-            if(needs){
+            if(keep && (!needs||unavailable))paragraphs=collector.columns();
+            if(needs && !unavailable && automatic && attempted>=engine?.OCR_PAGES){
+              capped.push(n);if(keep)paragraphs=collector.columns();
+              needs=false;
+            }
+            if(needs && !unavailable){
+              engine??=await import('./ocr-engine.js');check();
               const b=page.getViewport({scale:1});
               const view=page.getViewport({scale:engine.viewportScale(b.width,b.height)});
               canvas=engine.canvasAt(view.width,view.height);const ctx=canvas.getContext('2d');
@@ -299,28 +311,53 @@ export async function parsePdf(buffer, name = '', options={}) {
               try{await renderer.promise;}finally{signal.removeEventListener('abort',stop);}
               check();if(keep)maskRuns(ctx,view,layout);
               const regionHint=keep?{}:null;
-              if(keep?engine.hasInk(canvas,regionHint):await engine.hasPageMarks(canvas,signal)){
-                if(++attempted>engine.OCR_PAGES) throw issue('Более 150 страниц требуют OCR. Разделите PDF на несколько частей.');
-                ocr??=engine.ocrSession(selected,signal,options.onProgress);
-                const r=await ocr.read(canvas,n,doc.numPages,keep && !regionHint.skip);check();
-                if(r.paragraphs.length){
-                  for(const p of r.paragraphs){
-                    totals.chars+=p.text.length; if(totals.chars>LIMIT.chars || ++totals.paragraphs>LIMIT.paragraphs) throw tooBig();
-                  }
-                  meta.samples.push(sample(n,r));meta.pages.push(n);meta.confidence.push({page:n,value:r.confidence});if(r.confidence==null||r.confidence<70)meta.uncertain.push(n);
-                }else meta.unreadable.push(n);
-                paragraphs=mix(paragraphs,layout.anchors,r.paragraphs,view,keep);
-              } else if(!keep) paragraphs=[];
+              const marked=keep&&!thorough?engine.hasInk(canvas,regionHint):await engine.hasPageMarks(canvas,signal);
+              if(marked){
+                if(attempted>=engine.OCR_PAGES)throw issue('Более 150 страниц требуют OCR. Разделите PDF на несколько частей.');
+                attempted++;
+                if(!ocr){
+                  // A manual selection wins. Otherwise favor the PDF's
+                  // supported document language, then the chosen profile.
+                  const tag=language.split('-')[0].toLowerCase();
+                  const tagged=({en:'eng',ru:'rus',kk:'kaz'})[tag];
+                  const configured=options.languages??(tagged?[tagged]:options.preferredLanguages);
+                  meta.languages=engine.languages(configured);
+                  ocr=engine.ocrSession(meta.languages,signal,options.onProgress);
+                }
+                let r;
+                try{r=await ocr.read(canvas,n,doc.numPages,keep && !regionHint.skip);check();}
+                catch(e){
+                  check();
+                  if(!automatic||e?.code!=='OCR_MODEL_UNAVAILABLE')throw e;
+                  unavailable=e;ocr.close();ocr=null;
+                  if(keep)paragraphs=collector.columns();
+                }
+                if(r){
+                  if(r.paragraphs.length){
+                    for(const p of r.paragraphs){
+                      totals.chars+=p.text.length; if(totals.chars>LIMIT.chars || ++totals.paragraphs>LIMIT.paragraphs) throw tooBig();
+                    }
+                    meta.samples.push(sample(n,r));meta.pages.push(n);meta.confidence.push({page:n,value:r.confidence});if(r.confidence==null||r.confidence<70)meta.uncertain.push(n);
+                    paragraphs=mix(paragraphs,layout.anchors,r.paragraphs,view,keep);
+                  }else{meta.unreadable.push(n);if(keep)paragraphs=collector.columns();}
+                }
+              }else if(keep)paragraphs=collector.columns();
             }
           }
           if(paragraphs.length) chapters.push({title:'Страница '+n,paragraphs});else skipped.push(n);
         } finally {if(canvas) canvas.width=canvas.height=0;page.cleanup();}
       }
-      if (!chapters.length) throw engine?engine.noOCRText():noText();
+      if (!chapters.length) {
+        if(unavailable)throw unavailable;
+        if(!enabled)throw noText();
+        engine??=await import('./ocr-engine.js');throw engine.noOCRText();
+      }
       const warnings=['Импортирован текст по страницам, без изображений. В колонках и таблицах проверьте порядок чтения.'];
       if(engine) explainOcr(meta,warnings);
+      if(unavailable)warnings.push('Не удалось загрузить локальное распознавание. Доступный текст сохранён в предпросмотре. Для сканов подключитесь к интернету и повторите.');
+      if(capped.length)warnings.push('Достигнут предел в 150 страниц с распознаванием. Если нужен весь текст сканов, разделите PDF на части и повторите.');
       if(skipped.length)warnings.push('Пропущены страницы без читаемого текста ('+skipped.length+'): '+numbers(skipped));
-      return {format:'PDF',title:trimMeta(info?.Title)||trimMeta(name.replace(/\.pdf$/i,''))||'Без названия',author:trimMeta(info?.Author),language,chapters,warnings,...(engine?{ocr:meta}:{})};
+      return {format:'PDF',title:trimMeta(info?.Title)||trimMeta(name.replace(/\.pdf$/i,''))||'Без названия',author:trimMeta(info?.Author),language,chapters,warnings,...(attempted||options.ocr===true?{ocr:meta}:{})};
     };
     const result=await Promise.race([run.stopped,read()]);finished=true;return result;
   } catch(e){
@@ -341,7 +378,7 @@ export async function parseImage(buffer,name='',options={}){
   const engine=await import('./ocr-engine.js');
   if(buffer.byteLength>engine.MAX_IMAGE_BYTES) throw issue('Изображение больше 16 МБ. Выберите файл меньшего размера.');
   const bytes=buffer instanceof Uint8Array?buffer:new Uint8Array(buffer), {format}=engine.imageDimensions(bytes);
-  const selected=engine.languages(options.languages); const run=pdfBudget(options.signal,120000,'OCR изображения заняло слишком много времени. Уменьшите изображение.');
+  const selected=engine.languages(options.languages??options.preferredLanguages); const run=pdfBudget(options.signal,120000,'OCR изображения заняло слишком много времени. Уменьшите изображение.');
   let bitmap,canvas,ocr;
   const read=async()=>{
     engine.check(run.signal);options.onProgress?.({stage:'render',page:1,total:1,progress:0});
