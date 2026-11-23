@@ -1,0 +1,8 @@
+marian-MIT https://raw.githubusercontent.com/browsermt/marian-dev/e88c1aa5d5c5622cb52c7df09fbb7c3d7f4b5b5a/LICENSE.md
+intgemm https://raw.githubusercontent.com/kpu/intgemm/be3053515a8a04d19c6959a370eaf8b5a6eab686/LICENSE
+sentencepiece-Apache https://raw.githubusercontent.com/browsermt/sentencepiece/3ffdc0065a03cadd9d0e5e123aaf9b6ea7ffb05d/LICENSE
+sentencepiece-NOTICE https://raw.githubusercontent.com/browsermt/sentencepiece/3ffdc0065a03cadd9d0e5e123aaf9b6ea7ffb05d/NOTICE
+ssplit-LICENSE.md https://raw.githubusercontent.com/browsermt/ssplit-cpp/49fde6df7ee9199aedb9571be800448192e3515c/LICENSE.md
+yaml-cpp-MIT https://raw.githubusercontent.com/browsermt/marian-dev/e88c1aa5d5c5622cb52c7df09fbb7c3d7f4b5b5a/src/3rd_party/yaml-cpp/LICENSE
+spdlog-MIT https://raw.githubusercontent.com/browsermt/marian-dev/e88c1aa5d5c5622cb52c7df09fbb7c3d7f4b5b5a/src/3rd_party/spdlog/LICENSE
+emscripten https://raw.githubusercontent.com/emscripten-core/emscripten/3.1.8/LICENSE

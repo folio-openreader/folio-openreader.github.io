@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="color-scheme" content="light">
+  <meta name="theme-color" content="#f8f4eb">
+  <meta name="application-name" content="Folio">
+  <meta name="robots" content="index, follow">
+  <link rel="canonical" href="https://folio-openreader.github.io/">
+  <meta property="og:url" content="https://folio-openreader.github.io/">
+  <meta property="og:image" content="https://folio-openreader.github.io/landing/share.png">
+  <meta name="twitter:image" content="https://folio-openreader.github.io/landing/share.png">
+  <meta name="twitter:image:alt" content="Обложка рассказа The Night Ferry">
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"WebSite","name":"Folio","url":"https://folio-openreader.github.io/","inLanguage":"ru"}</script>
+  <title>Folio · Бесплатная читалка книг на иностранных языках со словарём</title>
+  <meta name="description" content="Читайте книги в оригинале в Folio: нажимайте на слова для перевода, сверяйте абзацы и повторяйте лексику. Добавьте EPUB, PDF, TXT, комикс CBZ или выберите книгу из каталога.">
+  <meta property="og:type" content="website">
+  <meta property="og:locale" content="ru_RU">
+  <meta property="og:site_name" content="Folio">
+  <meta property="og:title" content="Folio · Читайте в оригинале">
+  <meta property="og:description" content="Бесплатная читалка со словарём на полях. Загляните в пробную главу и откройте свою первую книгу.">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="Folio. Читайте в оригинале. Каштановая обложка The Night Ferry с гравюрой ночной переправы.">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="icon" href="./icons/folio-192.png" type="image/png">
+  <link rel="stylesheet" href="./landing/page.css">
+  <script src="./landing/sample.js" defer></script>
+<link rel="stylesheet" href="./landing/footer.css">
+</head>
+<body>
+<a class="skip" href="#main">К содержанию</a>
+<header class="wrap masthead">
+  <a class="brand" href="#main" aria-label="Folio, начало страницы"><img src="./icons/folio-192.png" width="34" height="34" alt="">Folio</a>
+  <nav aria-label="Навигация по странице"><a class="nav-text" href="#demo">Как читать</a><a class="nav-text" href="#shelf">Книжная полка</a><a class="nav-open" data-reader href="./app.html#library">Открыть читалку</a></nav>
+</header>
+<main id="main">
+  <section class="wrap hero" aria-labelledby="title">
+    <div class="hero-copy">
+      <p class="eyebrow"><span class="rule"></span>Бесплатная читалка со словарём</p>
+      <h1 id="title">Читайте<br><em>в оригинале.</em></h1>
+      <p class="lead">Встретили незнакомое слово? Нажмите на него прямо в книге. Перевод появится рядом, а слово можно оставить на повторение после главы.</p>
+      <div class="hero-actions"><a class="button-primary" data-reader href="./app.html#library"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 4.8c3.2-.9 6.3-.3 9 1.6 2.7-1.9 5.8-2.5 9-1.6v14.4c-3.2-.9-6.3-.3-9 1.6-2.7-1.9-5.8-2.5-9-1.6zm9 1.6v14.4"/></svg>Начать читать</a><a class="text-link" href="#demo">Попробовать на примере</a></div>
+      <p class="hero-note">Без подписки <span aria-hidden="true">·</span> Без регистрации <span aria-hidden="true">·</span> В браузере</p>
+    </div>
+    <figure class="exhibit">
+      <div class="book-stage" aria-hidden="true">
+        <div class="chart"></div><div class="book-shadow"></div>
+        <div class="book-position"><div class="book-object">
+          <div class="book-back"></div><div class="book-pages"></div><div class="book-tail"></div><div class="book-spine"></div>
+          <div class="book-endpaper"><i>The Night Ferry</i><span>Folio</span></div>
+          <div class="book-face"><img class="scene" src="./landing/night-ferry.svg" width="352" height="474" alt="" fetchpriority="high"></div>
+          <div class="ribbon"></div>
+        </div></div>
+      </div>
+      <figcaption><i class="caption-rule"></i><span lang="en">The Night Ferry</span><span class="caption-spacer">/</span>Пробный фрагмент</figcaption>
+    </figure>
+  </section>
+
+  <section class="demo-band" id="demo" aria-labelledby="demo-title"><div class="wrap demo-layout">
+    <div class="demo-copy">
+      <p class="eyebrow"><span class="rule"></span>На странице</p>
+      <h2 id="demo-title">Одно касание,<br> <em>и слово знакомо.</em></h2>
+      <p>Представьте: уже стемнело, Мара ждёт у канала. Что она зажгла? Нажмите на <span lang="en">lantern</span> в отрывке и прочитайте строку ещё раз.</p>
+      <p class="demo-guidance">Попробуйте также два других подчёркнутых слова.</p>
+      <button class="replay" id="demo-replay" type="button" hidden><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5v5h5M4.4 9.5A8 8 0 1 1 4.7 16"/></svg>Повторить показ</button>
+    </div>
+    <article class="reader-sample" aria-labelledby="sample-title">
+      <div class="sample-head"><span>Пробная глава</span><span aria-label="Английский и русский"><span lang="en">EN</span> / RU</span></div>
+      <h3 id="sample-title" lang="en">The Night Ferry</h3>
+      <p class="excerpt" lang="en">Mara lit the <span data-example="lantern">lantern</span> and waited by the <span data-example="canal">canal</span>. The last <span data-example="ferry">ferry</span> was still in sight.</p>
+      <div class="note-slot"><div class="word-note" id="demo-note">
+        <span class="note-icon" aria-hidden="true"><svg class="icon" viewBox="0 0 24 24"><path d="M5 4h13a1 1 0 0 1 1 1v15H7a2 2 0 0 1-2-2zm0 14a2 2 0 0 1 2-2h12M9 8h6m-6 3h4"/></svg></span>
+        <div><small>Словарь <span>EN / RU</span></small><p><b id="example-word" lang="en">lantern</b><span class="gloss-rule"></span><span id="example-gloss">фонарь</span></p></div>
+      </div></div>
+      <span class="sr-only" id="demo-announcement" role="status" aria-live="polite" aria-atomic="true"></span>
+      <noscript><p class="demo-fallback">Слова из фрагмента: lantern — фонарь, canal — канал, ferry — паром.</p></noscript>
+    </article>
+  </div></section>
+
+  <section class="wrap shelf" id="shelf" aria-labelledby="shelf-title">
+    <div class="section-heading"><div><p class="eyebrow"><span class="rule"></span>Из каталога Folio</p><h2 id="shelf-title">С какой книги <em>начнём?</em></h2></div><p>Три издания с разной сложностью. Выберите обложку, чтобы открыть книгу на английском.</p></div>
+    <div class="shelf-grid">
+      <a class="edition garden" data-reader href="./app.html#read/starter-secret-garden" aria-label="Открыть книгу The Secret Garden, Frances Hodgson Burnett">
+        <span class="edition-face" aria-hidden="true"><span class="cover-ink"><svg viewBox="0 0 138 108"><g stroke="currentColor" fill="none" stroke-linecap="round" stroke-width="1.3"><path d="M28 108q24-35 38-52 14-15 31-39M56 69q-13-15-12-34 15 8 15 29M66 57q11-16 28-17-7 14-24 14M77 45q-7-12-4-25 11 8 9 18M46 84q11-13 28-15-6 12-25 13M85 33q8-13 20-16-5 12-18 14"/><path d="M52 72q-12-10-21-12 6 12 17 17m16-20q-11-17-10-25 11 7 14 20m20-26q-4-9-1-18 7 7 5 14"/></g></svg></span><strong lang="en">The Secret<br><i>Garden</i></strong></span>
+        <span class="edition-info"><span lang="en">Frances Hodgson Burnett</span><span class="level">≈ B1</span></span>
+      </a>
+      <a class="edition island" data-reader href="./app.html#read/starter-treasure-island" aria-label="Открыть книгу Treasure Island, Robert Louis Stevenson">
+        <span class="edition-face" aria-hidden="true"><span class="cover-ink"><svg viewBox="0 0 138 108"><g stroke="currentColor" fill="none" stroke-linejoin="round" stroke-linecap="round" stroke-width="1.25"><circle cx="69" cy="52" r="33"/><circle cx="69" cy="52" r="29"/><path d="m69 8 7 36 35 8-35 7-7 38-8-38-35-7 35-8zm0 9v35l-8-8zm33 35H69l7-8zM69 86V52l7 7zM37 52h32l-8 7z"/><path d="m45 28 49 49m0-50L45 76"/><circle cx="69" cy="52" r="3"/></g></svg></span><strong lang="en">Treasure<br><i>Island</i></strong></span>
+        <span class="edition-info"><span lang="en">Robert Louis Stevenson</span><span class="level">≈ B2</span></span>
+      </a>
+      <a class="edition pride" data-reader href="./app.html#read/starter-crime-and-punishment-en" aria-label="Открыть книгу Crime and Punishment, Fyodor Dostoevsky">
+        <span class="edition-face" aria-hidden="true"><span class="cover-ink"><svg viewBox="0 0 138 108"><g stroke="currentColor" fill="none" stroke-linecap="round" stroke-width="1.25"><path d="M29 103q27-28 44-52 16-26 38-41-3 24-18 40T43 88m9-16q9-19 26-39 14-15 33-23m-3 13-16 4m11 6-18 4m11 6-19 4m11 5-17 6m-4 5 13-2M101 18l-2 7m-8 0-4 12m-6-2-4 13m-6-2-5 13m-6-1-5 14"/><path d="M70 87q19-9 36-5-21 1-26 8 11-2 15 0" /></g></svg></span><strong lang="en">Crime and<br><i>Punishment</i></strong></span>
+        <span class="edition-info"><span lang="en">Fyodor Dostoevsky</span><span class="level">≈ C1</span></span>
+      </a>
+    </div>
+  </section>
+  <section class="wrap toolkit" id="details" aria-labelledby="tools-title">
+    <div><p class="eyebrow"><span class="rule"></span>Возможности</p><h2 id="tools-title">Вокруг <em>книги.</em></h2><p class="tool-intro">Можно читать классику из каталога, научные статьи и новости или собрать полку из своих файлов.</p></div>
+    <dl class="feature-index">
+      <div><dt>Своя библиотека</dt><dd>Добавьте EPUB, TXT, PDF или комикс CBZ. Если в PDF или на фотографии нет выделяемого текста, распознайте его и проверьте результат.</dd></div>
+      <div><dt>Два языка рядом</dt><dd>Добавьте файл перевода того же издания, чтобы сверяться с ним абзац за абзацем. Короткая словарная карточка открывается прямо из оригинала.</dd></div>
+      <div><dt>Чтение вслух</dt><dd>Включите озвучку книги или послушайте отдельное слово. Доступные языки и голоса зависят от вашего устройства.</dd></div>
+      <div><dt>Практика после главы</dt><dd>Откройте сохранённые слова и сопоставьте их со значениями. Вы повторяете именно ту лексику, с которой встретились в книге.</dd></div>
+    </dl>
+  </section>
+  <section class="wrap faq" aria-labelledby="faq-title"><div><p class="eyebrow"><span class="rule"></span>Перед чтением</p><h2 id="faq-title">На <em>полях.</em></h2></div>
+    <div class="questions">
+      <details><summary>Folio бесплатен?</summary><p>Да. Книги из каталога, импорт своих файлов, словари и повторение слов доступны без подписки и регистрации. Если вы сами подключите сторонний ИИ-сервис, у него могут быть свои тарифы.</p></details>
+      <details><summary>Где хранятся мои книги и слова?</summary><p>В этом браузере на вашем устройстве. Автоматической синхронизации нет. Перед сменой браузера или устройства экспортируйте резервную копию в профиле. Страницы комиксов в неё не входят: сохраните исходные файлы.</p></details>
+      <details><summary>Какие файлы можно открыть?</summary><p>EPUB без DRM, TXT в UTF-8, незащищённый PDF, изображения PNG и JPEG, а также комиксы в CBZ. В режиме импорта текста сканы распознаются в браузере. Комиксы можно читать постранично.</p></details>
+      <details><summary>Откуда берётся перевод?</summary><p>Folio ищет слово в доступных словарях. В профиле можно установить словарь для своей языковой пары. Для чтения с готовым переводом добавьте файл того же издания; для перевода абзацев с английского на русский или хинди можно отдельно скачать модель. Для испанского доступен словарь, но не локальный перевод абзацев.</p></details>
+      <details id="source"><summary>Можно ли посмотреть исходный код?</summary><p id="source-status">Да. <a href="https://github.com/folio-openreader/folio-openreader.github.io">Откройте репозиторий Folio</a>, чтобы посмотреть код или предложить изменение.</p></details>
+    </div>
+  </section>
+</main>
+<footer class="footer"><div class="wrap footer-inner"><a class="brand" href="#main"><img src="./icons/folio-192.png" alt="" width="30" height="30">Folio</a><p>Читайте на своём языке. И ещё на одном.</p><nav aria-label="О проекте"><a href="https://github.com/folio-openreader/folio-openreader.github.io">GitHub</a><a href="./LICENSE.txt">Код: MIT</a><a href="./credits.html">Источники</a></nav></div></footer>
+</body>
+</html>

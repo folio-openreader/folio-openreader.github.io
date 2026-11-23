@@ -1,0 +1,351 @@
+<!doctype html>
+<html lang="ru"><head><meta name="robots" content="noindex, follow"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,interactive-widget=resizes-content"><meta name="color-scheme" content="light dark"><meta name="theme-color" content="#FFFFFF"><title>Folio · Читайте дальше</title><meta name="description" content="Личная библиотека и спокойное параллельное чтение. EPUB, PDF и TXT, параллельное чтение и практика слов."><link rel="stylesheet" href="style.css"><link rel="stylesheet" href="native.css"><link rel="stylesheet" href="study.css"><link rel="stylesheet" href="reading-fonts.css"><link rel="stylesheet" href="practice-player.css"><link rel="stylesheet" href="practice-refresh.css"><link rel="stylesheet" href="word-speech.css"><link rel="stylesheet" href="shell-motion.css"><link rel="stylesheet" href="command-button.css"><link rel="stylesheet" href="hold-button.css"><link rel="stylesheet" href="storage-meter.css"><link rel="stylesheet" href="profile-stack.css"><link rel="stylesheet" href="reading-activity.css"><link rel="stylesheet" href="byok-settings.css"><link rel="stylesheet" href="starter-shelf.css"><link rel="stylesheet" href="reader-preferences.css"><link rel="stylesheet" href="reading-home.css"><link rel="stylesheet" href="word-flight.css"><link rel="stylesheet" href="local-translation.css"><link rel="stylesheet" href="comic-reader.css"><link rel="stylesheet" href="comic-library.css"><link rel="stylesheet" href="research.css"><link rel="stylesheet" href="language-settings.css"><link rel="manifest" href="folio.webmanifest"><link rel="icon" href="icons/folio-192.png" type="image/png"><link rel="apple-touch-icon" href="icons/folio-touch.png"><link rel="stylesheet" href="boot.css"></head>
+<body>
+<div id="folio-boot"><div class="boot-word" aria-hidden="true"><span style="--i:0" data-ink="F">F</span><span style="--i:1" data-ink="o">o</span><span style="--i:2" data-ink="l">l</span><span style="--i:3" data-ink="i">i</span><span style="--i:4" data-ink="o">o</span></div><span role="status">Открываем Folio…</span><button type="button" hidden>Попробовать снова</button><noscript>Для чтения включите JavaScript.</noscript></div><script src="boot.js"></script>
+<div id="home" class="shell"><header class="home-header"><a class="brand" href="#home" aria-label="Folio, главная"><img src="icons/folio-192.png" width="37" height="37" alt=""><span>folio</span></a>
+    <button type="button" class="reading-mini" id="reading-goal-shortcut" aria-label="Показать дневную цель">
+      <svg viewBox="0 0 48 48" aria-hidden="true"><path class="goal-track" d="M10 35a17 17 0 1 1 28 0" pathLength="100"/><path class="goal-fill" d="M10 35a17 17 0 1 1 28 0" pathLength="100"/></svg>
+      <span id="reading-mini-count" aria-hidden="true">0<span> / 5</span></span>
+    </button>
+</header>
+<nav class="home-nav" aria-label="Основные разделы"><div class="nav-dock">
+  <i class="nav-current" aria-hidden="true"></i>
+  <button data-view="home" class="active" aria-current="page"><i data-icon="home"></i><span class="nav-name">Главная</span></button>
+  <button data-view="library"><i data-icon="library"></i><span class="nav-name">Библиотека</span></button>
+  <button data-view="words"><i data-icon="myDictionary"></i><span class="nav-name">Словарь<span id="word-count" hidden>0</span></span></button>
+  <button data-view="practice"><i data-icon="practice"></i><span class="nav-name">Практика</span></button>
+  <button data-view="profile"><i data-icon="person"></i><span class="nav-name">Профиль</span></button>
+</div></nav>
+<section id="home-view" aria-labelledby="home-title">
+  <div class="section-intro"><h1 id="home-title" tabindex="-1">Главная</h1></div>
+  <section id="language-welcome" class="language-card" aria-labelledby="language-welcome-title" hidden>
+    <h2 id="language-welcome-title">Добро пожаловать в Folio</h2><p>На каком языке вы читаете и на каком хотите видеть значения слов?</p>
+    <div class="language-selectors">
+    <label>Язык чтения<select data-lang-source></select></label><label>Язык значений и перевода<select data-lang-target></select></label>
+  </div><dl class="language-info" aria-live="polite"><div><dt>Слова</dt><dd data-lang-dictionary></dd></div><div><dt>Абзацы</dt><dd data-lang-paragraphs></dd></div></dl>
+    <div class="language-actions"><button type="button" class="primary" data-lang-continue>Начать чтение</button><button type="button" class="quiet" data-lang-skip>Пропустить</button></div>
+  </section>
+  <section class="home-widgets" aria-label="Виджеты чтения" aria-roledescription="карусель">
+    <div class="home-widget-track" id="home-widget-track">
+      <div class="home-widget" id="continue-card" role="group" aria-label="Продолжить чтение"></div>
+      <div class="home-widget goal-widget" id="reading-goal-widget" role="group" aria-label="Дневная цель" aria-hidden="true" inert>
+        <div class="goal-metric">
+          <svg viewBox="0 0 266 138" aria-hidden="true"><path class="goal-track" d="M8 130a125 125 0 0 1 250 0" pathLength="100"/><path class="goal-fill" d="M8 130a125 125 0 0 1 250 0" pathLength="100"/></svg>
+          <div class="goal-type"><h2>Сегодня</h2><span id="reading-today" class="goal-time" role="timer">0:00</span>
+            <button id="reading-goal-open" class="quiet" type="button" aria-haspopup="dialog">Цель: 5 мин</button></div>
+        </div>
+      </div>
+    </div>
+    <div class="home-widget-dots" role="group" aria-label="Переключить виджет">
+      <button type="button" data-home-widget="0" aria-label="Продолжить чтение" aria-pressed="true"></button>
+      <button type="button" data-home-widget="1" aria-label="Дневная цель" aria-pressed="false"></button>
+    </div>
+  </section>
+  <div class="section-title home-shelf-heading"><h2>Моя полка <span id="shelf-count" class="shelf-count"></span></h2></div>
+  <div id="books" class="books-grid"></div>
+  <section class="research-home" aria-labelledby="research-home-heading"><div class="section-title"><h2 id="research-home-heading">Научные статьи</h2><button type="button" class="icon-button" data-open-catalog="research" aria-label="Научные статьи в каталоге" title="Открыть каталог"><i data-icon="search"></i></button></div><div id="research-home-books" class="books-grid"></div><button type="button" class="quiet" data-open-catalog="research" id="research-home-empty">Открыть каталог</button></section>  <section class="research-home" aria-labelledby="news-home-heading"><div class="section-title"><h2 id="news-home-heading">Новости</h2><button type="button" class="icon-button" data-open-catalog="news" aria-label="Новости в каталоге" title="Открыть каталог"><i data-icon="search"></i></button></div><div id="news-home-books" class="books-grid"></div><button type="button" class="quiet" data-open-catalog="news" id="news-home-empty">Открыть каталог</button></section>
+</section>
+<section id="library-view" hidden aria-labelledby="library-title">
+  <div class="section-intro library-intro"><h1 id="library-title" tabindex="-1">Библиотека</h1></div>
+  <div class="library-import-actions"><button class="library-import" id="import-open" type="button">
+    <span class="library-import-icon"><i data-icon="upload"></i></span>
+    <span><strong>Импортировать книгу</strong><small>EPUB, PDF, TXT или фото</small></span>
+  </button><button class="library-import" id="comic-import-open" type="button"><span class="library-import-icon"><i data-icon="comicBook"></i></span><span><strong>Импортировать комикс</strong><small>CBZ, PDF или изображения</small></span></button></div>
+  <div class="catalog-switch" role="group" aria-label="Каталог">
+    <i class="catalog-current" aria-hidden="true"></i>
+    <button type="button" data-catalog="books" aria-label="Книги" title="Книги" aria-pressed="true" aria-controls="starter-shelf"><i data-icon="book" aria-hidden="true"></i></button>
+    <button type="button" data-catalog="research" aria-label="Научные статьи" title="Научные статьи" aria-pressed="false" aria-controls="research-catalog"><i data-icon="research" aria-hidden="true"></i></button>
+    <button type="button" data-catalog="news" aria-label="Новости" title="Новости" aria-pressed="false" aria-controls="news-catalog"><i data-icon="file" aria-hidden="true"></i></button>
+  </div>
+  <section id="starter-shelf" aria-labelledby="starter-title"></section>
+  <section id="research-catalog" class="research-section" aria-labelledby="research-catalog-title" hidden><div class="section-title"><h2 id="research-catalog-title">Научные статьи</h2></div><div class="research-cards"></div><p role="status" class="muted"></p><button type="button" class="quiet" data-research-retry hidden>Повторить</button></section>
+  <section id="news-catalog" class="research-section" aria-labelledby="news-catalog-title" hidden><div class="section-title"><h2 id="news-catalog-title">Мировые новости</h2></div><div class="research-cards"></div><p role="status" class="muted"></p><button type="button" class="quiet" data-research-retry hidden>Повторить</button></section>
+
+</section>
+<section id="words-view" class="tracker-view" hidden aria-labelledby="words-title">
+<div class="section-title words-heading-row">
+  <div><h1 id="words-title" tabindex="-1">Мои слова</h1><p id="study-summary"></p></div>
+  <div class="words-heading-tools" role="group" aria-label="Действия со словами">
+    <button type="button" class="icon-button icon-action" id="export-words" aria-label="Скачать слова" title="Скачать слова"><i data-icon="download"></i></button>
+    <button type="button" class="icon-button icon-action" id="word-selection-toggle" aria-label="Выбор слов" aria-pressed="false" aria-controls="saved-list word-selection-tools" title="Выбрать слова"><i data-icon="selectWords"></i></button>
+    <button type="button" class="icon-button icon-action" id="word-search-toggle" aria-label="Поиск по словам" aria-expanded="false" aria-controls="word-search-panel" title="Поиск по словам"><i data-icon="search"></i></button>
+  </div>
+</div>
+<div id="word-search-panel" class="word-search-panel" inert aria-hidden="true">
+  <div><label class="search-field"><span class="sr-only">Поиск по словам</span><input type="search" id="word-search" placeholder="Поиск по словам" autocomplete="off" autocapitalize="none" spellcheck="false" enterkeyhint="search"></label></div>
+</div>
+<div class="study-filters"><div id="word-stage-filters" class="stage-filters" role="group" aria-label="Статус слов"><button type="button" data-stage-filter="all" aria-pressed="true"><span>Все</span><small data-stage-count="all">0</small></button><button type="button" data-stage-filter="new" aria-pressed="false"><i data-icon="zap"></i><span>Новое</span><small data-stage-count="new">0</small></button><button type="button" data-stage-filter="learning" aria-pressed="false"><i data-icon="openBook"></i><span>Учу</span><small data-stage-count="learning">0</small></button><button type="button" data-stage-filter="almost" aria-pressed="false"><i data-icon="flame"></i><span>Почти</span><small data-stage-count="almost">0</small></button><button type="button" data-stage-filter="known" aria-pressed="false"><i data-icon="check"></i><span>Знаю</span><small data-stage-count="known">0</small></button></div></div>
+<p id="word-matches" class="muted" role="status"></p><p id="word-stage-feedback" class="sr-only" role="status"></p><div id="saved-list"></div><button class="quiet" id="words-more" hidden>Показать ещё</button>
+</section>
+<div class="word-selection" id="word-selection-tools" role="group" aria-label="Действия с выбранными словами" hidden>
+  <output id="word-selection-count" aria-live="polite"></output>
+  <div class="word-selection-actions">
+    <button type="button" id="words-to-practice" class="primary" disabled><i data-icon="practice"></i> Практика</button>
+    <button type="button" id="review-start" class="quiet" disabled>Флеш-карты</button>
+    <button type="button" class="icon-button" id="word-selection-remove" aria-label="Удалить выбранные слова" title="Удалить выбранные слова" disabled><i data-icon="trash"></i></button>
+  </div>
+</div>
+<section id="practice-view" class="practice-view" hidden aria-labelledby="practice-title">
+<div class="section-title practice-heading"><div><h1 id="practice-title" tabindex="-1">Практика</h1><p id="practice-summary">Тренируйтесь на словах, которые сохранили при чтении.</p></div></div>
+<div id="practice-menu">
+  <section class="lesson-feature" aria-labelledby="lesson-feature-title">
+    <div class="lesson-feature-heading"><span class="lesson-emblem" aria-hidden="true"><i data-icon="studySeries"></i></span><div><p class="lesson-kicker">Короткая серия</p><h2 id="lesson-feature-title">Словарная тренировка</h2></div></div>
+    <p class="lesson-feature-copy">Соединяйте пары, выбирайте значения и вспоминайте написание слов из своих книг.</p>
+    <div class="lesson-scope"><div><span id="lesson-scope-label">Умный подбор</span><p id="lesson-scope-note">Сначала слова, которые пора повторить.</p></div><button type="button" class="quiet" id="lesson-choose" aria-expanded="false" aria-controls="lesson-picker">Выбрать слова</button></div>
+    <div id="lesson-picker" hidden>
+      <label class="search-field"><span class="sr-only">Поиск слова для серии</span><input type="search" id="lesson-search" placeholder="Найти слово" autocomplete="off"></label>
+      <div id="lesson-options" class="lesson-picker-list" role="group" aria-label="Слова для серии"></div>
+      <button type="button" class="quiet" id="lesson-more" hidden>Показать ещё</button>
+      <div class="lesson-picker-foot"><span id="lesson-pick-count" role="status"></span><button class="quiet" id="lesson-clear" type="button">Сбросить выбор</button></div>
+    </div>
+    <button type="button" id="lesson-start" class="primary lesson-primary">Начать серию</button>
+    <p id="lesson-status" class="lesson-status" role="status"></p>
+    <a href="#library" class="lesson-fallback" id="lesson-library" hidden>Открыть библиотеку</a>
+  </section>
+  <div class="practice-formats">
+    <section class="practice-mode practice-mode-recall" aria-labelledby="recall-title">
+      <i class="mode-icon" data-icon="flashcards" aria-hidden="true"></i>
+      <div class="practice-mode-copy"><h2 id="recall-title">Флеш-карты</h2><p id="practice-recall-note">Вспомните значение, затем переверните карточку.</p></div>
+      <span class="practice-mode-count" id="practice-due-count" hidden></span>
+      <button type="button" id="practice-review" class="quiet">Открыть карточки</button>
+    </section>
+    <section class="practice-mode practice-mode-match" aria-labelledby="match-title">
+      <i class="mode-icon" data-icon="pairConnect" aria-hidden="true"></i>
+      <div class="practice-mode-copy"><h2 id="match-title">Соедините пары</h2><p>Найдите значение каждого слова.</p></div>
+      <button type="button" id="match-start" class="quiet">Собрать пары</button>
+      <div class="practice-mode-status"><p class="muted" id="match-menu-status" role="status"></p><a id="practice-view-words" class="quiet" href="#words" hidden>Открыть мои слова</a></div>
+    </section>
+  </div>
+</div>
+<section id="lesson-game" hidden aria-label="Серия упражнений">
+  <div class="lesson-bar"><button id="lesson-exit" class="icon-button" type="button" aria-label="Выйти из серии" title="Выйти из серии"><i data-icon="close"></i></button><progress id="lesson-meter" value="0" max="1" aria-label="Выполнено заданий"></progress><span id="lesson-progress"></span><label class="lesson-sound-setting" title="Звуки упражнений"><i data-icon="speaker" aria-hidden="true"></i><input id="lesson-sound" class="folio-switch" type="checkbox" role="switch" switch aria-label="Звуки упражнений"></label></div>
+  <div id="lesson-stage"></div>
+</section>
+<section id="match-game" hidden aria-labelledby="match-game-title">
+  <div class="match-top"><button id="match-exit" class="icon-button" aria-label="Вернуться к упражнениям" title="Вернуться к упражнениям"><i data-icon="back"></i></button><h2 id="match-game-title" tabindex="-1">Соедините пары</h2><span id="match-progress"></span></div>
+  <progress id="match-meter" value="0" max="4" aria-label="Собрано пар"></progress>
+  <p id="match-instructions">Выберите слово и его значение.</p>
+  <div id="match-board" class="match-board"><div><h3 id="match-words-title">Слова</h3><div id="match-words" class="match-stack" role="group" aria-labelledby="match-words-title"></div></div><div><h3 id="match-meanings-title">Значения</h3><div id="match-meanings" class="match-stack" role="group" aria-labelledby="match-meanings-title"></div></div></div>
+  <p id="match-feedback" class="match-feedback" role="status" aria-live="polite" aria-atomic="true"></p>
+  <div id="match-done" class="match-done" hidden><i data-icon="check"></i><h3 id="match-done-heading" tabindex="-1">Все пары собраны</h3><p id="match-result"></p></div>
+  <div class="match-actions"><button id="match-reset" class="quiet">Начать заново</button><button id="match-next" class="primary" hidden>Следующий раунд</button></div>
+</section>
+</section>
+<section id="profile-view" hidden>
+<div class="profile-grid profile-stack-stage">
+<div class="profile-stack-page profile-stack-root" data-stack-page="root">
+<div class="profile-hero"><div><h1>Профиль</h1></div><span class="local-badge">На устройстве</span></div>
+<div class="profile-stats" aria-label="Ваша библиотека"><div><strong id="profile-book-count">0</strong><span>Книг</span></div><div><strong id="profile-word-count">0</strong><span>Слов</span></div><div><strong id="profile-mark-count">0</strong><span>Закладок</span></div></div>
+<section id="reading-activity" class="reading-activity" aria-labelledby="reading-activity-heading">
+  <div class="reading-activity-head"><h2 id="reading-activity-heading">Активность чтения</h2><p class="reading-activity-count"><span data-reading-days></span> · 7 недель</p></div>
+  <div class="reading-activity-content">
+    <div class="reading-activity-grid" role="grid" aria-labelledby="reading-activity-heading" aria-describedby="reading-activity-keys" data-reading-grid></div>
+    <p id="reading-activity-keys" class="sr-only">Используйте стрелки для перехода между днями.</p>
+    <div class="reading-activity-detail"><time data-reading-date></time><span data-reading-duration></span></div>
+  </div>
+  <div class="reading-activity-legend" aria-label="От меньшего времени чтения к большему"><span>Меньше</span><i data-level="0" aria-hidden="true"></i><i data-level="1" aria-hidden="true"></i><i data-level="2" aria-hidden="true"></i><i data-level="3" aria-hidden="true"></i><i data-level="4" aria-hidden="true"></i><span>Больше</span></div>
+  <p class="reading-activity-note">Только время чтения, записанное на этом устройстве.</p>
+</section>
+<section class="profile-row-group" aria-labelledby="profile-config">
+  <h2 id="profile-config">Настройки</h2>
+  <ul>
+    <li><a class="profile-stack-row" href="#profile/languages" data-profile-open="languages"><i class="profile-row-icon" data-icon="languages" aria-hidden="true"></i><span class="profile-row-label">Языки</span><span class="profile-row-value" id="profile-language-summary" aria-hidden="true"></span><i class="profile-row-forward" aria-hidden="true"></i></a></li>
+    <li><a class="profile-stack-row" href="#profile/appearance" data-profile-open="appearance"><i class="profile-row-icon" data-icon="theme" aria-hidden="true"></i><span class="profile-row-label">Оформление</span><span class="profile-row-value" id="profile-theme-summary" aria-hidden="true"></span><i class="profile-row-forward" aria-hidden="true"></i></a></li>
+    <li><a class="profile-stack-row" href="#profile/feedback" data-profile-open="feedback"><i class="profile-row-icon" data-icon="speaker" aria-hidden="true"></i><span class="profile-row-label">Звук и отклик</span><span class="profile-row-value" id="profile-sound-summary" aria-hidden="true"></span><i class="profile-row-forward" aria-hidden="true"></i></a></li>
+    <li><a class="profile-stack-row" href="#profile/ai" data-profile-open="ai"><i class="profile-row-icon" data-icon="lock" aria-hidden="true"></i><span class="profile-row-label">ИИ-подсказки</span><span class="profile-row-value" id="profile-byok-summary" aria-hidden="true"></span><i class="profile-row-forward" aria-hidden="true"></i></a></li>
+  </ul>
+</section>
+<section class="profile-row-group" aria-labelledby="profile-data">
+  <h2 id="profile-data">Данные</h2>
+  <ul>
+    <li><a class="profile-stack-row" href="#profile/dictionaries" data-profile-open="dictionaries"><i class="profile-row-icon" data-icon="vault" aria-hidden="true"></i><span class="profile-row-label">Словари</span><i class="profile-row-forward" aria-hidden="true"></i></a></li>
+    <li><a class="profile-stack-row" href="#profile/storage" data-profile-open="storage"><i class="profile-row-icon icon-glyph" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 14 5.5 7h13L20 14M4 14h16v4H4zm3 2h.01"/><path d="M10 16h6"/></svg></i><span class="profile-row-label">Хранилище</span><i class="profile-row-forward" aria-hidden="true"></i></a></li>
+    <li><a class="profile-stack-row" href="#profile/backups" data-profile-open="backups"><i class="profile-row-icon" data-icon="download" aria-hidden="true"></i><span class="profile-row-label">Резервная копия</span><i class="profile-row-forward" aria-hidden="true"></i></a></li>
+  </ul>
+</section>
+</div>
+<section class="profile-stack-page" data-stack-page="languages" aria-labelledby="languages-heading" hidden>
+  <header class="profile-stack-head"><a href="#profile" class="profile-stack-back" data-profile-up aria-label="Назад в профиль"><i data-icon="back" aria-hidden="true"></i><span>Профиль</span></a><h1 id="languages-heading" tabindex="-1"><span class="profile-page-title">Языки</span></h1></header>
+  <div id="language-settings" class="settings-card profile-stack-body"><p>Если в книге указан язык, Folio использует его. Для остальных книг действует ваш выбор.</p>
+  <div class="language-selectors">
+    <label>Язык чтения<select data-lang-source></select></label><label>Язык значений и перевода<select data-lang-target></select></label>
+  </div><dl class="language-info" aria-live="polite"><div><dt>Слова</dt><dd data-lang-dictionary></dd></div><div><dt>Абзацы</dt><dd data-lang-paragraphs></dd></div></dl>
+  <p class="muted">Готовый перевод из книги или парного файла сохраняется на языке издания.</p><a href="#profile/dictionaries">Скачать или импортировать словарь</a>
+  </div>
+</section>
+<section class="profile-stack-page" data-stack-page="appearance" aria-labelledby="appearance-heading" hidden>
+  <header class="profile-stack-head">
+    <a href="#profile" class="profile-stack-back" data-profile-up aria-label="Назад в профиль"><i data-icon="back" aria-hidden="true"></i><span>Профиль</span></a>
+    <h1 id="appearance-heading" tabindex="-1"><span class="profile-page-title">Оформление</span></h1>
+    <details class="help-disclosure"><summary aria-label="О цвете акцента"><span aria-hidden="true">?</span></summary><div class="help-copy"><p>Цвет подстраивается под тему для читаемости.</p></div></details>
+  </header>
+  <div class="settings-card appearance-settings profile-stack-body"><label class="preference-line choice-line"><i class="pref-icon" data-icon="theme"></i><span>Тема</span><select id="profile-theme"><option value="light">Светлая</option><option value="night">Ночная</option><option value="paper">Бумага</option></select></label>
+    <label class="preference-line choice-line"><i class="pref-icon" data-icon="type"></i><span>Шрифт</span><select id="profile-font"><option value="noto-serif">Noto Serif</option></select></label>
+    <label class="size-line"><span>Размер текста</span><output id="profile-size-output" for="profile-size">21 px</output><input id="profile-size" aria-label="Размер текста" type="range" min="17" max="30" step="1"></label>
+    <details class="palette-picker"><summary><span>Цвет акцента</span><i aria-hidden="true"></i><output id="accent-value">#79503A</output><b aria-hidden="true"></b></summary>
+      <div class="palette-options"><div class="accent-swatches" id="accent-swatches" role="group" aria-label="Готовые цвета"></div><label class="color-field">Свой цвет <input type="color" id="custom-accent" value="#79503a"></label></div>
+    </details>
+    <div class="type-preview"><span class="eyebrow">Предпросмотр</span><p lang="en">One word at a time.</p><p lang="ru">Слово за словом.</p><p lang="kk">Әр сөздің өз мәні бар.</p></div></div>
+</section>
+<section class="profile-stack-page feedback-settings" data-stack-page="feedback" aria-labelledby="feedback-heading" hidden>
+  <header class="profile-stack-head">
+    <a href="#profile" class="profile-stack-back" data-profile-up aria-label="Назад в профиль"><i data-icon="back" aria-hidden="true"></i><span>Профиль</span></a>
+    <h1 id="feedback-heading" tabindex="-1"><span class="profile-page-title">Звук и отклик</span></h1>
+    <details class="help-disclosure"><summary aria-label="О звуке и вибрации"><span aria-hidden="true">?</span></summary><div class="help-copy"><p>Звук и тактильный отклик можно настроить независимо. Сигнал звучит только после действия в упражнении или при проверке звука.</p></div></details>
+  </header>
+  <div class="settings-card feedback-settings profile-stack-body">
+    <section data-voice-controls aria-label="Голос чтения"></section><label class="preference-line"><i class="pref-icon" data-icon="speaker"></i><span>Звуки упражнений</span><input id="pref-sound" class="folio-switch" type="checkbox" role="switch"></label>
+    <div class="feedback-preview"><button id="pref-sound-test" type="button" class="quiet" disabled>Проверить звук</button><p id="pref-sound-test-status" role="status"></p></div>
+    <label class="preference-line"><i class="pref-icon" data-icon="haptic"></i><span>Вибрация</span><input id="pref-haptics" class="folio-switch" type="checkbox" role="switch" aria-describedby="pref-haptic-note"></label>
+    <p id="pref-haptic-note" class="feedback-note"></p>
+  </div>
+</section>
+<section class="profile-stack-page" data-stack-page="ai" aria-labelledby="byok-heading" hidden>
+  <header class="profile-stack-head">
+    <a href="#profile" class="profile-stack-back" data-profile-up aria-label="Назад в профиль"><i data-icon="back" aria-hidden="true"></i><span>Профиль</span></a>
+    <h1 id="byok-heading" tabindex="-1"><span class="profile-page-title">ИИ-подсказки</span></h1>
+  </header>
+  <div id="byok-settings" class="settings-card profile-stack-body byok-settings"></div>
+</section>
+<section class="profile-stack-page" data-stack-page="dictionaries" aria-labelledby="dictionaries-heading" hidden>
+  <header class="profile-stack-head">
+    <a href="#profile" class="profile-stack-back" data-profile-up aria-label="Назад в профиль"><i data-icon="back" aria-hidden="true"></i><span>Профиль</span></a>
+    <h1 id="dictionaries-heading" tabindex="-1"><span class="profile-page-title">Словари</span></h1>
+    <details class="help-disclosure"><summary aria-label="Как работают словари"><span aria-hidden="true">?</span></summary><div class="help-copy"><p>Словари хранятся в этом браузере. Установленные источники не отправляют слова или текст книги в сеть. Размер набора указан без транспортного сжатия: трафик может быть меньше, а место на устройстве зависит от браузера. Чтобы заново открыть Folio, нужно подключение.</p></div></details>
+  </header>
+  <div class="settings-card dictionary-settings profile-stack-body"><p>Коснитесь слова в книге: Folio поищет перевод и другие значения в местных источниках.</p>
+  <div id="dictionary-bundle" class="dictionary-bundle"><div class="language-selectors"><label>Язык книги<select id="bundle-language"></select></label><label>Язык словаря<select id="bundle-target"></select></label></div><h3 id="bundle-title">Словари для чтения</h3><p id="bundle-note" class="muted">Проверяем установленные источники…</p><button id="bundle-install" class="primary" hidden>Скачать словари</button></div>
+  <div id="dictionary-task" class="dictionary-task" hidden><progress aria-label="Загрузка словарей" max="1" value="0"></progress><p class="muted" data-task-copy></p><button data-dict-cancel class="quiet">Отменить</button></div>
+  <p id="dictionary-status" role="status" class="muted"></p>
+  <details id="dictionary-catalog" class="dictionary-advanced"><summary>Управление источниками</summary>
+    <label class="field">Язык значений <select id="dictionary-target"><option value="ru">Русский</option><option value="en">Английский</option><option value="de">Немецкий</option><option value="fr">Французский</option><option value="es">Испанский</option></select></label>
+    <label class="field">Предпочитаемый источник <select id="active-dictionary"><option value="">Автоматически · все источники</option></select></label>
+    <p class="muted">При равных совпадениях предпочтительный источник показывается первым. Если перевода нет, Folio может показать определение на языке оригинала.</p><div id="dictionary-packs"></div>
+  </details><details class="dictionary-advanced"><summary>Импорт своего словаря</summary><div class="help-area"><p class="muted">TSV, FreeDict TEI/XML, StarDict ZIP</p><details class="help-disclosure "><summary aria-label="Форматы словарей"><span aria-hidden="true">?</span></summary><div class="help-copy"><p>TSV: в первой колонке слово, во второй перевод или определение. FreeDict: распакованный TEI/XML. StarDict: поддерживаемый ZIP.</p></div></details></div><div class="dictionary-languages"><label>Из <select id="dict-source-language"><option value="en">Английский</option><option value="ru">Русский</option><option value="kk">Казахский</option><option value="de">Немецкий</option><option value="fr">Французский</option><option value="es">Испанский</option></select></label><label>В <select id="dict-target-language"><option value="ru">Русский</option><option value="en">Английский</option><option value="de">Немецкий</option><option value="fr">Французский</option><option value="es">Испанский</option></select></label></div><label class="file-field"><strong>Файл словаря</strong><input id="dict-file" type="file" accept=".tsv,.txt,.tei,.xml,.zip,application/zip"></label><button id="dictionary-import" class="quiet">Установить из файла</button></details></div>
+</section>
+<section class="profile-stack-page" data-stack-page="storage" aria-labelledby="storage-heading" hidden>
+  <header class="profile-stack-head">
+    <a href="#profile" class="profile-stack-back" data-profile-up aria-label="Назад в профиль"><i data-icon="back" aria-hidden="true"></i><span>Профиль</span></a>
+    <h1 id="storage-heading" tabindex="-1"><span class="profile-page-title">Хранилище</span></h1>
+  </header>
+  <div class="settings-card profile-stack-body storage-settings">
+    <div id="profile-storage-meter"></div>
+    <section id="profile-translation-storage" aria-labelledby="translation-storage-title">
+      <h2 id="translation-storage-title">Модели перевода</h2>
+      <dl class="translation-storage-list"><div><dt>Английский → русский</dt><dd data-model-target="ru">—</dd></div><div><dt>Английский → хинди</dt><dd data-model-target="hi">—</dd></div></dl>
+    </section>
+    <p id="local-storage-status" class="muted" role="status"></p>
+  </div>
+</section>
+<section class="profile-stack-page" data-stack-page="backups" aria-labelledby="backup-heading" hidden>
+  <header class="profile-stack-head">
+    <a href="#profile" class="profile-stack-back" data-profile-up aria-label="Назад в профиль"><i data-icon="back" aria-hidden="true"></i><span>Профиль</span></a>
+    <h1 id="backup-heading" tabindex="-1"><span class="profile-page-title">Резервная копия</span></h1>
+    <details class="help-disclosure "><summary aria-label="Что входит в резервную копию"><span aria-hidden="true">?</span></summary><div class="help-copy"><p>Книги, прогресс, закладки, встречи со словами и настройки. Установленные словари не входят. Автоматической синхронизации нет.</p></div></details>
+  </header>
+  <div class="settings-card backup-card profile-stack-body"><p>Копия содержит текст книг. Страницы комиксов остаются на этом устройстве.</p><div class="backup-actions"><button id="export-backup" class="icon-button icon-action" aria-label="Скачать резервную копию" title="Скачать резервную копию"><i data-icon="download"></i></button><button id="open-backup" class="quiet">Восстановить из файла</button></div></div>
+</section>
+</div></section>
+</div>
+<section id="reader" hidden aria-label="Чтение книги"><header class="reader-header"><button class="icon-button" id="reader-back" aria-label="Назад из книги"><i data-icon="back"></i></button><button id="chapter-open" class="reading-title" aria-label="Открыть оглавление"><strong id="book-title"></strong><span id="chapter-title"></span></button><button type="button" class="icon-button" id="reader-listen" aria-label="Слушать книгу" title="Слушать книгу"><i data-icon="headphones"></i></button><button class="icon-button" id="reader-bookmark" aria-label="Сохранить закладку" aria-pressed="false"><i data-icon="bookmark"></i></button><button class="icon-button" id="reader-prefs" aria-label="Настройки чтения" title="Настройки чтения"><i data-icon="sliders"></i></button></header>
+<div class="translation-wrap"><div class="ribbon-meta"><span id="ribbon-label">ПЕРЕВОД</span><div class="ribbon-controls"><button id="local-translation-open" type="button" class="sync-button" hidden>Перевести</button><button id="sync-translation" class="sync-button" aria-label="Вернуть перевод к текущему абзацу">К абзацу ↻</button></div></div><div id="translation-ribbon" tabindex="0" role="region" aria-label="Строка перевода. Прокрутка влево и вправо. Home к текущему абзацу." aria-describedby="ribbon-help"><div id="translation-track"></div></div><p id="ribbon-help" class="sr-only">Стрелки листают перевод. Home возвращает к текущему абзацу.</p></div>
+<div id="reading-scroll" tabindex="0" aria-label="Оригинал книги"><article id="reading-article"><div class="chapter-heading"><p id="chapter-meta" class="eyebrow"></p><h1 id="chapter-heading" tabindex="-1"></h1></div><div id="passage"></div><div class="chapter-navigation"><button id="previous-chapter" class="quiet">Предыдущая глава</button><button id="next-chapter" class="primary">Следующая глава</button></div><details class="help-disclosure reader-help"><summary aria-label="Источник перевода"><span aria-hidden="true">?</span></summary><div class="help-copy"><p class="reading-note" id="reading-note"></p></div></details></article></div><footer class="reading-footer"><span id="reading-progress"></span><button class="quiet" id="translation-full">Перевод абзаца</button></footer><div class="progress-rail" aria-hidden="true"><div id="progress-fill"></div></div></section>
+<dialog id="comic-ocr-dialog" aria-labelledby="comic-ocr-heading">
+  <button type="button" data-sheet-handle aria-label="Закрыть панель" autofocus></button>
+  <div class="dialog-heading"><h2 id="comic-ocr-heading">Язык этой страницы</h2></div>
+  <form id="comic-ocr-form">
+    <select id="comic-ocr-language" aria-label="Язык распознавания"></select>
+    <button id="comic-ocr-start" class="primary" type="submit">Распознать</button>
+  </form>
+</dialog>
+<dialog id="comic-import-dialog" aria-labelledby="comic-import-heading">
+  <button type="button" data-sheet-handle aria-label="Закрыть панель" autofocus></button>
+  <div class="dialog-heading"><h2 id="comic-import-heading">Импорт комикса</h2></div>
+  <label class="file-field"><strong>CBZ, PDF или изображения</strong><input type="file" id="comic-files" multiple accept=".cbz,.zip,.pdf,.jpg,.jpeg,.png,.webp,application/zip,application/pdf,image/jpeg,image/png,image/webp"></label>
+  <label class="field">Язык текста<select id="comic-language"><option value="eng">Английский</option><option value="jpn">Японский</option><option value="jpn_vert">Японский · вертикальный</option><option value="kor">Корейский</option><option value="rus">Русский</option><option value="kaz">Казахский</option></select></label>
+  <div class="comic-import-actions"><button id="comic-import-start" class="primary" type="button" disabled>Импортировать</button><button id="comic-import-cancel" class="quiet" type="button" hidden>Отменить</button></div>
+  <p class="muted comic-import-status" id="comic-import-status" role="status"></p>
+</dialog>
+<dialog id="preferences" aria-labelledby="prefs-heading"><button class="prefs-sheet-handle" type="button" data-prefs-handle aria-label="Закрыть настройки чтения" autofocus></button><div class="dialog-heading prefs-heading"><h2 id="prefs-heading">Настройки чтения</h2></div><label class="field">Размер текста <output id="font-output">21 px</output><input id="font-size" type="range" min="17" max="30" step="1"></label><label class="field">Тема<select id="reading-theme"><option value="light">Светлая</option><option value="night">Ночная</option><option value="paper">Бумага</option></select></label><label class="field">Шрифт<select id="reading-font"><option value="noto-serif">Noto Serif</option></select></label><section data-voice-controls aria-label="Голос чтения"></section><label class="reading-autosave"><span>Автодобавление слов</span><input id="reading-auto-save" class="folio-switch" type="checkbox" role="switch" aria-describedby="reading-auto-save-note" checked></label><p id="reading-auto-save-note" class="muted">Сохранять в словарь при открытии перевода.</p></dialog>
+<dialog id="contents-dialog" aria-labelledby="contents-heading"><button type="button" data-sheet-handle aria-label="Закрыть панель" autofocus></button><div class="dialog-heading"><h2 id="contents-heading">Оглавление</h2></div><div id="starter-edition" class="muted" hidden></div><div id="chapter-list"></div><h3>Закладки</h3><div id="bookmarks-list"></div><h3>Слова в книге</h3><p class="muted" id="reading-book-stats"></p></dialog>
+<dialog id="word-dialog" class="word-dialog word-quick" aria-labelledby="word-sheet-heading">
+  <button type="button" data-sheet-handle aria-label="Закрыть панель" autofocus></button>
+  <div class="word-quick-head">
+    <div id="word-content"><h2 id="word-sheet-heading"></h2><p class="word-lookup" aria-live="polite" aria-atomic="true"></p></div>
+    <button type="button" id="system-dictionary-toggle" class="icon-button" aria-label="Словарь устройства" title="Словарь устройства" aria-expanded="false" aria-controls="system-dictionary-hint" hidden><i data-icon="lookup"></i></button>
+  </div>
+  <p id="system-dictionary-hint" class="system-dictionary-hint muted" hidden></p>
+  <div class="word-meta-row"><p class="word-study-mini" id="word-study-mini"></p><button id="word-senses-toggle" class="word-details-button" aria-expanded="false" aria-controls="word-senses" hidden></button></div>
+  <div class="word-quick-actions">
+    <button id="word-context-toggle" class="primary" aria-expanded="false" aria-controls="word-context">В контексте</button>
+    <button id="word-speech" type="button" class="icon-button" aria-describedby="word-speech-status" aria-label="Произнести слово" title="Произнести слово"><i data-icon="speaker"></i></button>
+    <button id="word-save" type="button" class="icon-button" aria-label="Слово в моём словаре" aria-pressed="false" title="Добавить в словарь"><i data-icon="myDictionary"></i><span class="dictionary-saved-dot" aria-hidden="true"></span></button>
+  </div>
+  <p id="word-speech-status" class="word-speech-status" role="status" aria-atomic="true"></p>
+  <div id="word-speech-guide" class="word-speech-guide muted" hidden><span></span><a href="https://support.apple.com/ru-ru/111798" target="_blank" rel="noreferrer noopener">Инструкция Apple</a></div>
+  <p id="word-save-status" class="sr-only" role="status"></p>
+  <div id="word-dict-hint" class="word-dict-hint" hidden><p class="muted" id="word-install-note"></p><button id="word-install" class="quiet">Скачать словари</button></div>
+  <div id="word-dict-task" class="dictionary-task" hidden><progress aria-label="Загрузка словарей" max="1" value="0"></progress><p class="muted" data-task-copy></p><button data-dict-cancel class="quiet">Отменить</button></div>
+  <p id="word-dict-status" class="muted" role="status"></p>
+  <section id="word-senses" class="word-senses" hidden aria-label="Словарные значения"></section>
+  <section id="word-context" hidden aria-label="Контекст слова"></section>
+</dialog>
+<dialog id="translation-dialog" aria-labelledby="translation-heading"><button type="button" data-sheet-handle aria-label="Закрыть панель" autofocus></button><div class="dialog-heading"><h2 id="translation-heading">Текущий абзац</h2></div><div id="full-translation"></div><div id="local-translation-section" hidden><p class="muted" id="local-translation-status" role="status"></p><progress id="local-translation-progress" aria-label="Загрузка модели" max="1" value="0" hidden></progress><button type="button" class="primary" id="local-translation-start">Перевести</button></div></dialog>
+<dialog id="import-dialog" class="import-dialog" aria-labelledby="import-heading"><button type="button" data-sheet-handle aria-label="Закрыть панель" autofocus></button><div class="dialog-heading"><h2 id="import-heading">Добавить книгу</h2></div><div class="help-area import-formats"><p>EPUB, PDF, TXT или снимок страницы.</p><details class="help-disclosure "><summary aria-label="Поддерживаемые форматы книг"><span aria-hidden="true">?</span></summary><div class="help-copy"><p>Книга не отправляется на сервер. Из PDF Folio извлекает текстовый слой. Для сканов и надписей на изображениях включите распознавание. Вёрстка и иллюстрации не сохраняются. Лимиты: EPUB и PDF до 24 МБ, TXT в UTF‑8 до 3 МБ, PNG и JPEG до 16 МБ. До 1000 страниц PDF, из них до 150 с распознаванием. Файлы с защитой не принимаются.</p></div></details></div><label class="file-field drop-field" data-file-field="original"><span class="drop-core" aria-hidden="true"><span class="drop-fill"></span><svg class="drop-ring" viewBox="0 0 72 72" fill="none" stroke-width="3"><circle class="drop-track" cx="36" cy="36" r="33"/><circle class="drop-arc" cx="36" cy="36" r="33" stroke-dasharray="47 160"/></svg><span class="drop-arrow"><i data-icon="upload"></i></span><svg class="drop-check" viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg></span><span class="file-copy"><strong>Оригинал</strong><span id="original-file-label">Книга или снимок страницы</span></span><span class="file-pick">Выбрать</span><span class="drop-chip" aria-hidden="true"></span><input type="file" id="original-file" aria-label="Оригинал книги" accept=".epub,.pdf,.txt,.png,.jpg,.jpeg,application/epub+zip,application/pdf,text/plain,image/png,image/jpeg"></label><label class="file-field drop-field" data-file-field="translation"><span class="drop-core" aria-hidden="true"><span class="drop-fill"></span><svg class="drop-ring" viewBox="0 0 72 72" fill="none" stroke-width="3"><circle class="drop-track" cx="36" cy="36" r="33"/><circle class="drop-arc" cx="36" cy="36" r="33" stroke-dasharray="47 160"/></svg><span class="drop-arrow"><i data-icon="upload"></i></span><svg class="drop-check" viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg></span><span class="file-copy"><strong>Перевод <small>по желанию</small></strong><span id="translation-file-label">Файл той же книги</span></span><span class="file-pick">Выбрать</span><span class="drop-chip" aria-hidden="true"></span><input type="file" id="translation-file" aria-label="Файл перевода" accept=".epub,.pdf,.txt,.png,.jpg,.jpeg,application/epub+zip,application/pdf,text/plain,image/png,image/jpeg"></label><p class="muted">Берите файлы одного издания: абзацы сопоставляются по порядку, не по смыслу.</p><section id="ocr-panel" class="ocr-panel" aria-label="Распознавание текста" hidden>
+<label class="check-field ocr-toggle"><input id="pdf-ocr" type="checkbox" aria-controls="ocr-settings"><span>Распознать сканы и надписи в PDF</span></label>
+<div id="ocr-settings" hidden>
+<div class="ocr-languages">
+<label id="ocr-original-field" hidden>Язык оригинала<select id="ocr-original" aria-label="Язык распознавания оригинала"></select></label>
+<label id="ocr-translation-field" hidden>Язык перевода<select id="ocr-translation" aria-label="Язык распознавания перевода"></select></label>
+</div>
+<p id="ocr-note">Файл остаётся на устройстве. Для одного языка нужно загрузить около 6–7 МБ. <span id="ocr-pdf-limit">До 150 страниц с распознаванием за раз; длинный скан разделите на части. </span>Оставьте вкладку открытой.</p>
+</div></section>
+<div class="import-actions"><button id="preview-import" class="primary">Предпросмотр</button><button id="cancel-import" class="quiet" hidden>Отменить</button></div>
+<p id="import-status" role="status" aria-atomic="true"></p><progress id="import-progress" aria-label="Выполнение текущего этапа" max="1" hidden></progress>
+<button id="retry-ocr" class="quiet" hidden>Настроить распознавание</button><div id="import-preview" hidden></div><div id="import-confirm" hidden><label class="check-field"><input type="checkbox" id="alignment-check"><span>Примеры проверены. Смысловое совпадение не подтверждено.</span></label><button id="save-import" class="primary">Добавить в библиотеку</button></div></dialog>
+<dialog id="backup-dialog" aria-labelledby="backup-dialog-heading"><button type="button" data-sheet-handle aria-label="Закрыть панель" autofocus></button><div class="dialog-heading"><h2 id="backup-dialog-heading">Восстановить копию</h2></div><p>Книги и слова добавятся. Текущий прогресс не заменится.</p><label class="file-field"><strong>Копия Folio (.json)</strong><input type="file" id="backup-file" accept=".json,application/json"></label><label class="check-field"><input type="checkbox" id="backup-prefs"><span>Применить оформление из копии</span></label><p id="backup-preview" class="muted" role="status"></p><button id="restore-backup" class="primary" disabled>Восстановить</button></dialog><dialog id="review-dialog" class="review-dialog" aria-labelledby="review-heading">
+  <button type="button" data-sheet-handle aria-label="Свернуть карточки"></button>
+  <header class="review-header">
+    <span class="review-header-icon"><i data-icon="flashcards" aria-hidden="true"></i></span>
+    <h2 id="review-heading" tabindex="-1">Флеш-карты</h2>
+  </header>
+  <div id="review-question">
+    <div class="review-track">
+      <progress id="review-meter" value="0" max="1" aria-label="Пройдено карточек"></progress>
+      <span id="review-position"></span>
+    </div>
+    <div class="review-card">
+      <p class="review-face" id="review-face">Слово</p>
+      <h3 id="review-word" tabindex="-1"></h3>
+      <p class="review-prompt" id="review-prompt">Вспомните значение, не подглядывая.</p>
+      <div class="review-answer" id="review-answer" hidden>
+        <p class="review-face">Значение</p>
+        <p id="review-gloss" role="status"></p>
+      </div>
+    </div>
+    <div id="review-grade" class="review-actions review-grade" hidden>
+      <button type="button" id="review-no" class="quiet"><i data-icon="repeat" aria-hidden="true"></i> Не вспомнил</button>
+      <button type="button" id="review-yes" class="primary"><i data-icon="check" aria-hidden="true"></i> Вспомнил</button>
+    </div>
+    <button type="button" id="review-reveal" class="primary"><i data-icon="flashcards" aria-hidden="true"></i> Показать значение</button>
+    <button type="button" id="review-skip" class="quiet">Пропустить</button>
+  </div>
+  <div id="review-empty" class="review-done" hidden>
+    <span class="review-done-icon"><i data-icon="check" aria-hidden="true"></i></span>
+    <h3 id="review-done-heading" tabindex="-1">Карточки закончились</h3>
+    <p id="review-result" role="status"></p>
+    <div id="review-breakdown"></div>
+    <button type="button" id="review-done" class="primary">Готово</button>
+  </div>
+</dialog>
+<dialog id="reading-goal-dialog" aria-labelledby="reading-goal-title">
+  <button type="button" data-sheet-handle aria-label="Закрыть панель" autofocus></button>
+  <div class="dialog-heading"><h2 id="reading-goal-title">Дневная цель</h2></div>
+  <form id="reading-goal-form" class="reading-goal-form">
+    <label for="reading-goal-minutes">Минут чтения в день</label>
+    <input id="reading-goal-minutes" type="number" min="1" max="240" step="1" inputmode="numeric" required>
+    <p id="reading-goal-status" role="status" hidden></p>
+    <button type="submit" class="primary">Сохранить</button>
+  </form>
+</dialog>
+<div id="toast" role="status" aria-live="polite"></div><script type="module" src="profile-stack.js"></script><script type="module" src="app.js"></script></body></html>

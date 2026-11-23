@@ -1,0 +1,102 @@
+/* Practice deliberately reuses Folio's accent, theme and native sheets. */
+#practice-menu{display:grid;gap:12px;max-width:760px;container:practice-menu / inline-size}
+#practice-menu .lesson-feature{margin:0;max-width:none;border-radius:21px;background:linear-gradient(135deg,color-mix(in srgb,var(--accent) 7%,var(--surface)) 0,var(--surface) 56%);box-shadow:0 2px 0 color-mix(in srgb,var(--ink) 6%,transparent)}
+#practice-menu .lesson-emblem{width:49px;height:49px;flex:none}
+#practice-menu .lesson-feature-heading>div{min-width:0}
+#practice-menu .lesson-feature-heading h2{overflow-wrap:anywhere}
+#practice-menu .lesson-feature-copy{color:var(--muted);margin:13px 0 11px}
+#practice-menu .lesson-scope{align-items:center;margin-top:10px;padding:9px 0 11px}
+#practice-menu .lesson-scope>div{flex:1 1 12rem;min-width:0}
+#lesson-scope-label{display:block;font-size:.88rem;font-weight:680}
+#lesson-scope-note{margin:3px 0 0;color:var(--muted);font-size:.81rem;line-height:1.4}
+#practice-menu .lesson-scope .quiet{border:1px solid var(--line);background:var(--surface);padding-inline:12px}
+#practice-menu .lesson-scope .quiet[aria-expanded=true]{color:var(--accent);border-color:var(--accent)}
+.lesson-scope :is(span,p),.lesson-finish h2{overflow-wrap:anywhere}
+.practice-formats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.practice-formats .practice-mode{
+  grid-template-columns:auto minmax(0,1fr) auto;grid-template-rows:minmax(46px,1fr) auto;
+  gap:9px 11px;align-items:start;padding:15px;margin:0;border-radius:17px;min-width:0;background:var(--surface);
+}
+.practice-formats .mode-icon{width:43px;height:43px;border:1px solid color-mix(in srgb,var(--accent) 21%,var(--line));border-radius:12px}
+.practice-formats .mode-icon svg{width:24px;height:24px;stroke-width:1.65}
+.practice-formats .practice-mode-match .mode-icon{background:var(--subtle);color:var(--ink);border-color:var(--line)}
+.practice-mode-copy{min-width:0;grid-column:2}
+.practice-mode-copy h2{font-size:1.05rem;line-height:1.24;margin:0 0 3px;overflow-wrap:anywhere}
+.practice-mode-copy p,.practice-mode-status p{margin:0;color:var(--muted);font-size:.84rem;line-height:1.4;overflow-wrap:anywhere}
+.practice-mode-count{border-radius:8px;padding:3px 7px;background:var(--soft);color:var(--accent);font-size:.79rem;font-weight:720;font-variant-numeric:tabular-nums}
+.practice-formats .practice-mode>button{
+  grid-column:2 / -1;justify-self:start;text-align:start;max-width:100%;white-space:normal;
+  min-height:44px;border:1px solid var(--line);background:var(--subtle);padding:8px 11px;
+}
+.practice-formats .practice-mode>button:disabled{opacity:.65;color:var(--muted)}
+.practice-mode-status{grid-column:1 / -1}
+.practice-mode-status:has(p:empty):has(a[hidden]){display:none}
+@container practice-menu (min-width:39rem){
+  #practice-menu .lesson-feature{
+    display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px 20px;align-items:start;
+  }
+  #practice-menu .lesson-feature>:not(.lesson-primary,.lesson-scope){grid-column:1 / -1}
+  #practice-menu .lesson-feature-copy{margin:0}
+  #practice-menu .lesson-scope{grid-column:1;margin:0;padding:0;border:0}
+  #practice-menu .lesson-primary{grid-column:2;width:auto;min-width:0;align-self:center}
+  #practice-menu .lesson-feature:has(#lesson-picker:not([hidden])) .lesson-primary{grid-column:1 / -1;justify-self:end}
+}
+@container practice-menu (max-width:34rem){
+  .practice-formats{grid-template-columns:minmax(0,1fr);gap:9px}
+  .practice-formats .practice-mode{padding:12px 14px;gap:5px 10px}
+}
+.practice-view:has(#match-game:not([hidden]))>.practice-heading{display:none}
+#match-game{margin:clamp(10px,4vw,29px) auto 0}
+#match-game .match-top h2{overflow-wrap:anywhere}
+#match-game .match-board h3{font-weight:680}
+#match-game .match-top .icon-button{border:1px solid var(--line)}
+@media(hover:hover) and (pointer:fine){
+  #practice-menu .lesson-scope .quiet:hover,.practice-formats .practice-mode>button:hover:not(:disabled){background:var(--soft);color:var(--accent)}
+}
+/* Spacious but never fixed-height: a long dictionary gloss or large text setting can scroll. */
+#review-dialog{width:min(500px,calc(100vw - 24px));padding:22px;border-radius:23px;background:var(--surface);overflow-y:auto;overscroll-behavior:contain}
+.review-header{display:grid;grid-template-columns:auto minmax(0,1fr);gap:10px;align-items:center;margin:0 0 13px}
+.review-header h2{font-size:clamp(1.18rem,4.7vw,1.5rem);line-height:1.15;margin:0;letter-spacing:-.025em}
+.review-header-icon,.review-done-icon{display:grid;place-items:center;width:40px;height:40px;background:var(--soft);color:var(--accent);border-radius:12px}
+.review-header-icon svg{width:22px;height:22px}
+.review-track{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:10px;margin-bottom:12px;color:var(--muted);font-size:.81rem;font-weight:650;font-variant-numeric:tabular-nums}
+#review-meter{display:block;appearance:none;-webkit-appearance:none;border:0;width:100%;height:6px;border-radius:6px;background:var(--line);color:var(--accent)}
+#review-meter::-webkit-progress-bar{background:var(--line);border-radius:6px}
+#review-meter::-webkit-progress-value{background:var(--accent);border-radius:6px}
+#review-meter::-moz-progress-bar{background:var(--accent);border-radius:6px}
+.review-card{position:relative;isolation:isolate;display:grid;align-content:center;text-align:center;min-height:190px;gap:9px;padding:24px 18px;margin:0 3px 17px;background:color-mix(in srgb,var(--accent) 5%,var(--surface));border:1px solid var(--line);border-radius:18px;box-shadow:0 2px 0 color-mix(in srgb,var(--ink) 9%,transparent)}
+.review-card::after{content:"";position:absolute;z-index:-1;inset:auto 7px -6px;height:8px;border:1px solid var(--line);border-top:0;border-radius:0 0 12px 12px;pointer-events:none}
+.review-card[data-revealed]{background:var(--surface)}
+.review-face{font-size:.72rem;font-weight:690;letter-spacing:.09em;text-transform:uppercase;color:var(--accent);margin:0}
+#review-word{font:600 clamp(1.58rem,7vw,2.45rem)/1.18 var(--reading-font);letter-spacing:-.015em;margin:0;overflow-wrap:anywhere}
+.review-prompt{margin:1px 0 0;color:var(--muted);font-size:.9rem;line-height:1.5}
+.review-answer{border-top:1px solid var(--line);margin-top:5px;padding-top:14px}
+#review-gloss{font:550 clamp(1rem,5vw,1.23rem)/1.44 Inter,system-ui,sans-serif;color:var(--ink);background:none;padding:0;margin:5px 0 0;overflow-wrap:anywhere}
+#review-question button,#review-done{min-height:46px;font-size:.92rem;white-space:normal}
+#review-reveal,#review-skip,#review-done{width:100%}
+#review-reveal,.review-grade button{display:inline-flex;gap:7px;justify-content:center;align-items:center;border-radius:11px}
+.review-grade{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.review-grade button{min-width:0;padding-inline:8px}
+#review-question .quiet{color:var(--ink)}
+#review-no{border:1px solid var(--line);background:var(--subtle)}
+#review-skip{margin-top:2px;background:none;color:var(--muted)!important}
+#review-question button .icon-glyph svg{width:16px;height:16px}
+.review-done{display:grid;justify-items:center;gap:11px;text-align:center;padding:13px 0 0}
+.review-done-icon{width:53px;height:53px;border-radius:16px}
+.review-done h3{font-size:clamp(1.2rem,5vw,1.48rem);letter-spacing:-.02em;margin:0}
+#review-result{margin:0;color:var(--muted);font-size:.94rem}
+#review-breakdown{display:flex;justify-content:center;flex-wrap:wrap;gap:6px}
+#review-breakdown:empty{display:none}
+.review-stat{display:grid;gap:2px;min-width:74px;padding:7px 10px;border-radius:10px;background:var(--subtle);color:var(--muted);font-size:.75rem}
+.review-stat strong{font-size:1rem;color:var(--ink)}
+#review-done{margin-top:5px}
+.practice-mode-copy:focus,#review-word:focus,#review-heading:focus,#review-done-heading:focus{outline:none}
+@media(max-width:700px),(pointer:coarse) and (max-height:540px){
+  #review-dialog{width:calc(100% - var(--safe-left) - var(--safe-right));max-width:540px;padding:9px 16px calc(11px + var(--safe-bottom));border-radius:22px 22px 0 0}
+  .review-card{min-height:158px;padding:20px 14px}
+}
+@supports not (container-type:inline-size){
+  @media(max-width:550px){.practice-formats{grid-template-columns:minmax(0,1fr);gap:9px}.practice-formats .practice-mode{padding:12px 14px;gap:5px 10px}}
+}
+@media(max-height:520px){.review-card{min-height:116px;padding-block:12px;gap:5px}.review-header{margin-bottom:7px}}
+@media(forced-colors:active){.practice-formats .mode-icon,.review-header-icon,.review-done-icon{border:1px solid ButtonText}.review-card{border-color:CanvasText}}

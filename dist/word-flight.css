@@ -1,0 +1,19 @@
+#word-save{position:relative;transition:background-color 165ms ease,border-color 165ms ease,color 165ms ease}
+#word-save[aria-pressed=true]:not([data-arriving]){
+  background:var(--soft);border-color:var(--accent);color:var(--accent)
+}
+.dictionary-saved-dot{
+  position:absolute;inset-block-end:5px;inset-inline-end:5px;width:12px;height:12px;
+  border-radius:50%;background:var(--accent);color:var(--on-accent);opacity:0;transform:scale(.65);
+  display:grid;place-items:center;transition:opacity 150ms ease,transform 170ms ease
+}
+.dictionary-saved-dot::after{content:"";width:5px;height:3px;border:solid currentColor;border-width:0 0 1.5px 1.5px;transform:translateY(-.5px) rotate(-45deg)}
+#word-save[aria-pressed=true]:not([data-arriving]) .dictionary-saved-dot{opacity:1;transform:scale(1)}
+.word-flight{
+  position:fixed;inset:auto;box-sizing:border-box;margin:0;max-width:min(60vw,18rem);width:max-content;
+  overflow:hidden;white-space:nowrap;text-overflow:ellipsis;border:1px solid var(--accent);border-radius:7px;
+  padding:1px 7px;background:var(--surface);color:var(--accent);opacity:0;pointer-events:none;
+  font:650 clamp(.9rem,4vw,1.3rem)/1.25 var(--reading-font);transform-origin:center;z-index:4
+}
+.word-flight-inline{position:absolute}
+@media(forced-colors:active){.dictionary-saved-dot{forced-color-adjust:none;background:Highlight;color:HighlightText}}

@@ -1,0 +1,25 @@
+/* DesignBookmark's quiet, stroke-free capsule using Folio's contrast-adjusted accent.
+   Transform only: leaving the native button and its layout/activation intact. */
+#lesson-start[data-command-button] {
+  min-height: 48px;
+  border: 0;
+  border-radius: 20px;
+  box-shadow: none;
+  transform: scale(var(--command-scale, 1));
+  transition: background-color 150ms ease;
+}
+#lesson-start[data-command-button]:active {opacity:1}
+#lesson-start[data-command-button]:disabled {transform:none}
+@media (hover:hover) and (pointer:fine) {
+  #lesson-start[data-command-button]:hover:not(:disabled) {
+    filter:none;
+    background-color:color-mix(in srgb,var(--accent) 92%,var(--ink));
+  }
+}
+@media (prefers-reduced-motion:reduce) {
+  #lesson-start[data-command-button] {transform:none;transition:none}
+}
+@media (forced-colors:active) {
+  #lesson-start[data-command-button] {border:1px solid ButtonText}
+  #lesson-start[data-command-button]:disabled {border-color:GrayText}
+}

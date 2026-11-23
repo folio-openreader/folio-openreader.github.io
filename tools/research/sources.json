@@ -1,0 +1,37 @@
+{
+  "28123": {
+    "repo": "elifesciences/elife-article-xml",
+    "ref": "3a9242e8b9f9be0df7d3ef209a21a041d064870f",
+    "path": "articles/elife-28123-v1.xml",
+    "blob": "fe7fb55970d6e41711788da20bebc6d8802249a5",
+    "file": "28123.jats"
+  },
+  "73097": {
+    "repo": "elifesciences/elife-article-xml",
+    "ref": "3a9242e8b9f9be0df7d3ef209a21a041d064870f",
+    "path": "articles/elife-73097-v2.xml",
+    "blob": "a6736eda5f14fbbf1bc578e281ee7668dc878753",
+    "file": "73097.jats"
+  },
+  "74816": {
+    "repo": "elifesciences/elife-article-xml",
+    "ref": "3a9242e8b9f9be0df7d3ef209a21a041d064870f",
+    "path": "articles/elife-74816-v2.xml",
+    "blob": "45da0f73442a03a4ff3d3d1bd9765d6c439ebdec",
+    "file": "74816.jats"
+  },
+  "75515": {
+    "repo": "elifesciences/elife-article-xml",
+    "ref": "3a9242e8b9f9be0df7d3ef209a21a041d064870f",
+    "path": "articles/elife-75515-v1.xml",
+    "blob": "ccd72a80ac72ed5971c568c817a1aedd4c2f2b75",
+    "file": "75515.jats"
+  },
+  "00861": {
+    "repo": "openjournals/joss-papers",
+    "ref": "9bc052c2c9d93494940a9b8ddb75dce7d41ef0dd",
+    "path": "joss.00861/10.21105.joss.00861.pdf",
+    "blob": "1715ce969079fa23328927ec1894dee3529dbe23",
+    "file": "00861.pdf"
+  }
+}

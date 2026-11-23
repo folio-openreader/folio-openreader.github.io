@@ -1,0 +1,27 @@
+/* BYOK remains inside the profile stack; no styles affect native reader sheets. */
+.byok-settings{display:grid;gap:12px}
+.byok-settings [hidden]{display:none!important}
+.byok-lead,.byok-privacy,.byok-status,.byok-active-provider,.byok-provider-host,.byok-model-hint{margin:0}
+.byok-lead{font-size:1rem;line-height:1.45}
+.byok-privacy{font-size:.89rem;line-height:1.45}
+.byok-connect,.byok-connected{display:grid;gap:12px;border-top:1px solid var(--line);padding-top:13px}
+.byok-field{display:grid;gap:6px;min-width:0;font-size:.88rem;font-weight:650}
+.byok-field select,.byok-field input{box-sizing:border-box;width:100%;min-width:0;min-height:46px;margin:0;color:var(--ink);font-size:1rem;border:1px solid var(--line);border-radius:10px;background-color:var(--bg)}
+.byok-field input{padding:0 12px;font:500 1rem system-ui,sans-serif}
+.byok-active-provider{display:flex;align-items:center;gap:8px;font-weight:700;color:var(--ink)}
+.byok-active-provider::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--success,var(--accent))}
+.byok-provider-host,.byok-model-hint{font-size:.83rem;line-height:1.45;overflow-wrap:anywhere}
+.byok-links,.byok-actions{display:flex;align-items:center;flex-wrap:wrap;gap:5px 11px}
+.byok-links>a{display:inline-flex;align-items:center;min-height:44px;color:var(--accent);font-size:.85rem;text-decoration:underline;text-underline-offset:3px}
+.byok-actions>button,.byok-disconnect{min-height:44px}
+.byok-actions>button{min-width:0}
+.byok-disconnect{justify-self:start;color:var(--error,var(--ink))}
+.byok-status{min-height:1.35em;color:var(--muted);font-size:.88rem;line-height:1.42}
+.byok-status[data-error]{color:var(--error,var(--ink))}
+.byok-status:empty{display:none}
+.word-ai-hint{border-top:1px solid var(--line);margin-top:12px;padding-top:10px}
+.word-ai-hint>button{min-height:44px}
+.word-ai-hint>p{margin:.35rem 0;font-size:.83rem}
+.word-ai-status:empty{display:none}
+.word-ai-hint .word-ai-answer{background:var(--subtle);border-radius:12px;padding:.65rem .75rem;color:var(--ink);white-space:pre-wrap;overflow-wrap:anywhere}
+.word-ai-hint [hidden]{display:none!important}

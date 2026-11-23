@@ -1,0 +1,22 @@
+/* All native modal sheets share a swipe grip and an animated exit. */
+dialog [data-sheet-handle],#preferences [data-prefs-handle]{
+  display:grid;place-items:center;width:76px;min-height:44px;padding:0;margin:-14px auto 0;
+  border:0;border-radius:12px;background:transparent;color:var(--muted);
+  touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;
+  cursor:grab;-webkit-tap-highlight-color:transparent;
+}
+dialog [data-sheet-handle]::before,#preferences [data-prefs-handle]::before{content:"";width:34px;height:4px;border-radius:4px;background:currentColor;opacity:.65}
+:where(html:not([data-pointer-ui])) :is(dialog [data-sheet-handle],#preferences [data-prefs-handle]):focus-visible{outline:2px solid var(--focus,var(--accent));outline-offset:-7px}
+dialog [data-sheet-handle]:hover,#preferences [data-prefs-handle]:hover{background:transparent}
+dialog [data-sheet-handle]:active,#preferences [data-prefs-handle]:active{cursor:grabbing;transform:none}
+dialog[open][data-sheet-dragging]{animation:none;transform:translateY(var(--sheet-drag-y,0px))}
+dialog[open][data-sheet-exiting]{animation:none}
+html dialog[open][data-sheet-exiting]::backdrop{animation:sheet-backdrop-out 240ms ease-out both}
+@keyframes sheet-backdrop-out{from{opacity:1}to{opacity:0}}
+#preferences .prefs-heading{margin-block-start:0}
+@media(max-width:700px){dialog [data-sheet-handle],#preferences [data-prefs-handle]{margin-top:-8px}}
+@media(prefers-reduced-motion:reduce){dialog[open][data-sheet-dragging]{transform:none}}
+@media(forced-colors:active){dialog [data-sheet-handle]::before,#preferences [data-prefs-handle]::before{background:ButtonText;opacity:1}}
+#preferences .reading-autosave{display:flex;justify-content:space-between;align-items:center;gap:14px;min-height:44px;padding-top:5px;font-weight:600;cursor:pointer}
+#preferences .reading-autosave input{flex:none}
+#preferences #reading-auto-save-note{font-size:.83rem;margin:0 0 6px}

@@ -1,0 +1,11 @@
+FreeDict + WikDict · eng-rus · 2025.11.23
+Maintainer and publisher: Karl Bartel. Base dictionary text: Wiktionary contributors, via the DBnary project, adapted by WikDict and distributed by FreeDict.
+https://www.wiktionary.org/ | https://kaiko.getalp.org/about-dbnary/ | https://www.wikdict.com/ | https://freedict.org/
+Original editable TEI: https://download.freedict.org/dictionaries/eng-rus/2025.11.23/freedict-eng-rus-2025.11.23.src.tar.xz
+Official checksums: https://freedict.org/freedict-database.json
+Source archive SHA-512: fdee5ebdbe59c2a4293b875def3befdfddd990f95ecd10eb289eff22d815ed6d31267ca4695af66811ef368dd72b16342210475e044c995831e7931ce0e4bcfe
+Copyright: the respective Wiktionary and dictionary contributors. Source license as identified by its own TEI header: Creative Commons Attribution-ShareAlike 3.0 Unported.
+https://creativecommons.org/licenses/by-sa/3.0/ | https://creativecommons.org/licenses/by-sa/3.0/legalcode
+
+This Folio adaptation, including all part-*.json files in this directory, is distributed under the same CC BY-SA 3.0 Unported license. No endorsement is implied. The accompanying LICENSE.txt is verbatim from the source package.
+Changes: converted the selected TEI dictionary to normalized UTF-8 JSON key/sense groups; preserved source spelling, sense-specific translations, glosses and available pronunciations; expanded POS labels; unwrapped Wiktionary text links; collapsed duplicate variants; moved explicitly archaic/obsolete senses after current senses; added normalized lookup indexing and immutable shards. Number of source articles: 62,181. Number of distinct case-normalized lookup headwords: 57,076. The original is not a token-by-token or context-aware machine translator. No OCR, AI translation or private texts are used to build this pack.

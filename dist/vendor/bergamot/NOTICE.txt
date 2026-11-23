@@ -1,0 +1,13 @@
+Bergamot Translator 0.4.9 (MPL 2.0), unmodified Web Worker, JavaScript glue and WASM from @browsermt/bergamot-translator on npm.
+Corresponding source and build instructions: https://github.com/browsermt/bergamot-translator/tree/8cc5d0495479c9ec56eafafd6bcd7fb5b929ca98
+npm release: https://www.npmjs.com/package/@browsermt/bergamot-translator/v/0.4.9
+
+EN→RU models: Mozilla Translations production model 2.1, base-memory, Release Android. Model files are hosted with Folio and downloaded to the device on demand. The model binary is split for static hosting; gzip-decompress the .fpack files and concatenate model.0.bin through model.3.bin in order to reconstruct it.
+License (MPL 2.0) and sources: https://github.com/mozilla/translations/blob/main/README.md
+Registry: https://storage.googleapis.com/moz-fx-translations-data--303e-prod-translations-data/db/models.json
+Folio checks each model file against its published SHA-256 and expected length.
+
+Original Mozilla file SHA-256 values (attachment IDs in the registry above):
+model.enru.intgemm.alphas.bin 184cb5cda528eeefc0f75f5d0035d787b71d74af135e3c5608d01ae02ecfb920
+lex.50.50.enru.s2t.bin 4d91839726b960e70b6d05c53d0cffd16262832b1c0e1ea99d66f412dcc6a239
+vocab.enru.spm 56ee63e14e8cb926c394242adc3ed7cc602644c3d33058cff2ce2959d52a6258

@@ -1,0 +1,118 @@
+/* Folio shell only. The reader never mounts a separate navigation surface. */
+.nav-dock{position:relative;isolation:isolate;display:flex;align-items:center;gap:2px;padding:3px;background:var(--subtle);border:1px solid var(--line);border-radius:23px;max-width:100%}
+.nav-dock .nav-current{position:absolute;z-index:0;display:none;pointer-events:none;background:var(--surface);background:color-mix(in srgb,var(--surface) 72%,var(--soft));border:1px solid var(--line);border-color:color-mix(in srgb,var(--line) 82%,var(--accent));border-radius:20px;box-shadow:0 1px 3px #00000012;transform-origin:0 0}
+.nav-dock[data-traveller] .nav-current{display:block}
+.home-nav .nav-dock button{z-index:1;display:inline-flex;align-items:center;min-height:44px;gap:7px;border-radius:20px;color:var(--muted);font-weight:590;transition:color 145ms ease-out,background-color 145ms ease-out}
+.home-nav .nav-dock button:is(.active,:hover){background:transparent}
+.home-nav .nav-dock button.active{color:var(--accent)}
+.home-nav .nav-dock:not([data-traveller]) button.active{background:var(--surface)}
+.home-nav .nav-dock .nav-name{font:inherit;color:inherit}
+.home-nav #word-count{font-variant-numeric:tabular-nums;margin-inline-start:2px}
+.home-nav .nav-dock button:focus-visible{outline-offset:-3px}
+.home-nav .nav-dock button:active{transform:none;opacity:1}
+@media(max-width:700px){
+  /* The fixed dock can grow when a name wraps at an enlarged text size. */
+  html:has(.shell:not([hidden])){scroll-padding-block-end:calc(var(--safe-bottom) + max(74px,2.6rem + 27px))}
+  .shell{padding-block-end:calc(var(--safe-bottom) + max(96px,2.6rem + 46px))}
+  .home-nav{padding:5px max(6px,var(--safe-right)) calc(5px + var(--safe-bottom)) max(6px,var(--safe-left));background:var(--bg)}
+  .nav-dock{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));align-items:stretch;width:100%;max-width:540px;padding:3px;gap:2px;border-radius:23px}
+  .home-nav .nav-dock button{display:grid;grid-template:18px auto / minmax(0,1fr);justify-items:center;justify-content:stretch;align-content:start;width:100%;max-width:none;min-height:45px;min-width:0;gap:3px;padding:5px 2px;white-space:normal;font-size:.73rem;line-height:1.14}
+  .home-nav .nav-dock .nav-name{align-self:start;max-width:100%;overflow-wrap:anywhere;text-wrap:balance}
+  .home-nav .nav-dock .icon-glyph{display:inline-flex}
+  .home-nav .nav-dock .icon-glyph svg{width:18px;height:18px}
+}
+@media(max-width:360px){
+  .nav-dock{grid-template-columns:minmax(44px,1fr) minmax(44px,1.18fr) repeat(3,minmax(44px,1fr))}
+  .home-nav .nav-dock button{font-size:.66rem;padding-inline:0}
+}
+@media(hover:hover) and (pointer:fine){
+  .home-nav .nav-dock button:not(.active):hover{color:var(--ink);background:color-mix(in srgb,var(--surface) 55%,transparent)}
+}
+.profile-stack{display:grid;align-content:start;gap:16px;min-width:0}
+.profile-grid{gap:16px}
+.profile-grid .settings-card{padding:clamp(15px,2.8vw,23px)}
+.profile-grid .settings-card h2{font-size:1.17rem;line-height:1.22}
+.profile-grid .settings-card .help-area{min-height:42px}
+.profile-grid .settings-card .help-area h2{margin:0 0 8px;padding-block:8px 0}
+.preference-line,.size-line,.palette-picker>summary{display:grid;min-height:49px;align-items:center;gap:10px;min-width:0;border-block-end:1px solid var(--line);font-weight:540;font-size:.94rem;line-height:1.4}
+.preference-line{grid-template-columns:30px minmax(0,1fr) auto;cursor:pointer}
+.preference-line>span{overflow-wrap:anywhere}
+.preference-line:last-child{border:0}
+.preference-line .pref-icon{display:grid;place-items:center;width:29px;height:29px;color:var(--muted);background:var(--subtle);border-radius:9px}
+.preference-line .pref-icon svg{width:17px;height:17px}
+.preference-line:active .pref-icon{color:var(--accent);background:var(--soft)}
+.feedback-settings{padding-block-end:10px!important}
+.folio-switch{--track:42px;--track-h:25px;--knob:19px;display:inline-grid;align-items:center;appearance:none;-webkit-appearance:none;position:relative;justify-self:end;box-sizing:border-box;inline-size:var(--track);block-size:var(--track-h);margin:0;padding:0 2px;border:1px solid transparent;border-radius:99px;background:var(--muted);background:color-mix(in srgb,var(--surface) 12%,var(--muted));vertical-align:middle;cursor:pointer;accent-color:var(--accent);transition:background 160ms ease,border-color 160ms ease}
+.folio-switch::before{content:"";display:block;box-sizing:border-box;inline-size:var(--knob);block-size:var(--knob);border-radius:50%;background:white;box-shadow:0 1px 3px #0003;transform:translateX(0);transition:transform 180ms cubic-bezier(.21,.93,.24,1.06),background 160ms ease}
+.folio-switch:checked{background:var(--accent);border-color:var(--accent)}
+.folio-switch:checked::before{background:var(--switch-on-knob,var(--on-accent));transform:translateX(calc(var(--track) - var(--track-h)))}
+@media(prefers-reduced-motion:no-preference){
+  :is(.preference-line,.lesson-sound-setting):active .folio-switch:not(:checked)::before{transform:translateX(1.5px) scaleX(1.13)}
+  :is(.preference-line,.lesson-sound-setting):active .folio-switch:checked::before{transform:translateX(calc(var(--track) - var(--track-h) - 1.5px)) scaleX(1.13)}
+}
+/* On platforms implementing the HTML switch API, use the actual, uncovered
+   native control at its intrinsic size; its containing label is the large target. */
+html[data-native-switch] .folio-switch[switch]{display:inline-block;appearance:auto;-webkit-appearance:auto;inline-size:auto;block-size:auto;min-inline-size:0;padding:0;background:revert;border:revert;border-radius:revert;transition:none}
+html[data-native-switch] .folio-switch[switch]::before{content:none}
+.choice-line{grid-template-columns:30px minmax(0,1fr) minmax(0,auto)}
+.choice-line select{display:block;width:auto;justify-self:end;min-width:0;max-width:100%;min-height:44px;margin:0;padding:6px 20px 6px 2px;background-color:transparent;color:var(--muted);border:0;font-family:inherit;font-size:1rem;text-align:end;cursor:pointer}
+.size-line{grid-template-columns:minmax(0,1fr) auto;gap:0 8px;padding-top:13px}
+.size-line output,.palette-picker output{font-variant-numeric:tabular-nums;font-size:.84rem;font-weight:500;color:var(--muted)}
+.size-line input{grid-column:1/-1;width:100%;height:33px;margin:0;accent-color:var(--accent);cursor:pointer}
+.palette-picker>summary{grid-template-columns:minmax(0,1fr) auto auto auto;gap:7px;padding:2px 3px 2px 0;cursor:pointer;list-style:none}
+.palette-picker summary::-webkit-details-marker{display:none}
+.palette-picker summary>i{width:13px;height:13px;border-radius:50%;background:var(--accent)}
+.palette-picker summary>b{width:7px;height:7px;border:solid var(--muted);border-width:0 1.5px 1.5px 0;margin-inline-start:3px;transform:rotate(45deg);transition:transform 150ms ease-out}
+.palette-picker[open] summary>b{transform:rotate(225deg)}
+.palette-options .color-field{justify-content:space-between;margin:0}
+.palette-options{padding-top:5px}
+.palette-options .accent-swatches{gap:0}
+@media(prefers-reduced-motion:no-preference){.palette-picker[open] .palette-options{animation:settings-in 145ms var(--ease-out)}}
+@keyframes settings-in{from{opacity:.75;transform:translateY(-3px)}}
+.appearance-settings .type-preview{background:var(--subtle);padding:12px 14px;margin:12px 0 0}
+.appearance-settings .type-preview .eyebrow{font-size:.74rem;text-transform:none;letter-spacing:0;color:var(--muted)}
+.appearance-settings .type-preview p{margin:4px 0;color:var(--ink)}
+.lesson-bar{grid-template-columns:auto minmax(0,1fr) auto auto}
+.lesson-sound-setting{display:flex;align-items:center;justify-content:center;gap:7px;min-width:44px;min-height:44px;cursor:pointer;color:var(--muted)}
+.lesson-sound-setting:has(input:checked){color:var(--accent)}
+.lesson-sound-setting .icon-glyph svg{width:17px;height:17px}
+.lesson-sound-setting .folio-switch{--track:34px;--track-h:21px;--knob:15px}
+@media(max-width:420px){
+  .profile-stack{gap:12px}.profile-grid{gap:12px}
+  .lesson-bar{gap:7px}
+  .lesson-sound-setting{gap:4px}
+}
+@media(forced-colors:active){
+  .nav-dock .nav-current{background:Canvas;border:2px solid Highlight;box-shadow:none}
+  .nav-dock:not([data-traveller]) button.active{background:Highlight;color:HighlightText;forced-color-adjust:none}
+  .home-nav .nav-dock button:focus-visible{outline-color:ButtonText}
+  .folio-switch:not([switch]),html:not([data-native-switch]) .folio-switch{forced-color-adjust:none;background:Canvas;border-color:ButtonText}
+  .folio-switch::before{background:ButtonText}
+  .folio-switch:checked:not([switch]),html:not([data-native-switch]) .folio-switch:checked{background:Highlight;border-color:Highlight}
+  .folio-switch:checked::before{background:HighlightText}
+}
+
+
+.feedback-settings .feedback-preview{padding-block:8px 12px;border-block-end:1px solid var(--line)}
+.feedback-settings .feedback-preview button{min-height:44px}
+.feedback-settings .feedback-preview p,.feedback-settings .feedback-note{margin:0;color:var(--muted);font-size:.82rem;line-height:1.45;overflow-wrap:anywhere}
+.feedback-settings .feedback-preview p:not(:empty){margin-top:5px}
+.feedback-settings .feedback-note{padding-block:8px 3px}
+.feedback-settings .preference-line:has(input:disabled){cursor:default}
+.feedback-settings .folio-switch:disabled{opacity:.55;cursor:default}
+
+/* Outcome cues: the selected paragraph, destination status, and matching checkmarks. */
+[data-outcome-cue=bookmark]{
+  outline:2px solid var(--accent);outline-offset:4px;border-radius:.35rem;
+  animation:folio-landmark 1s ease-out both;
+}
+[data-stage-filter][data-outcome-cue=stage],.word-stage-badge[data-outcome-cue=stage]{
+  outline:2px solid var(--accent);outline-offset:1px;
+  animation:folio-landmark .6s ease-out both;
+}
+.match-tile-mark[data-outcome-cue=pair]{animation:folio-pair .28s cubic-bezier(.18,.9,.26,1.25) both}
+@keyframes folio-landmark{0%{outline-color:transparent}20%,70%{outline-color:var(--accent)}100%{outline-color:transparent}}
+@keyframes folio-pair{0%{transform:scale(.55);opacity:.4}100%{transform:none;opacity:1}}
+@media(prefers-reduced-motion:reduce){
+  [data-outcome-cue=bookmark],[data-outcome-cue=stage],.match-tile-mark[data-outcome-cue=pair]{animation:none}
+}

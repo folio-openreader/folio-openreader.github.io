@@ -1,0 +1,10 @@
+/* Only the family used by visible text is downloaded. Inter is already bundled. */
+@font-face{font-family:"Noto Serif";src:url("vendor/reading-fonts/noto-serif.woff2") format("woff2");font-display:swap;font-style:normal;font-weight:400}
+@font-face{font-family:"Noto Serif Display";src:url("vendor/reading-fonts/noto-serif-display.woff2") format("woff2");font-display:swap;font-style:normal;font-weight:400}
+@font-face{font-family:"DejaVu Serif";src:url("vendor/reading-fonts/dejavu-serif.woff2") format("woff2");font-display:swap;font-style:normal;font-weight:400}
+@font-face{font-family:"DejaVu Serif Condensed";src:url("vendor/reading-fonts/dejavu-serif-condensed.woff2") format("woff2");font-display:swap;font-style:normal;font-weight:400}
+@font-face{font-family:"Open Sans";src:url("vendor/reading-fonts/open-sans.woff2") format("woff2");font-display:swap;font-style:normal;font-weight:400}
+@font-face{font-family:"Noto Sans";src:url("vendor/reading-fonts/noto-sans.woff2") format("woff2");font-display:swap;font-style:normal;font-weight:400}
+@font-face{font-family:"DejaVu Sans";src:url("vendor/reading-fonts/dejavu-sans.woff2") format("woff2");font-display:swap;font-style:normal;font-weight:400}
+@font-face{font-family:"Noto Sans Display";src:url("vendor/reading-fonts/noto-sans-display.woff2") format("woff2");font-display:swap;font-style:normal;font-weight:400}
+@font-face{font-family:"Noto Sans Mono";src:url("vendor/reading-fonts/noto-sans-mono.woff2") format("woff2");font-display:swap;font-style:normal;font-weight:400}

@@ -1,0 +1,10 @@
+FreeDict eng-spa 2025.11.23. Modified by Folio on 2026-11-22.
+
+Wiktionary contributors → DBnary → WikDict (Karl Bartel) → FreeDict. https://www.wiktionary.org/ · https://kaiko.getalp.org/about-dbnary/ · https://www.wikdict.com/ · https://freedict.org/. Source and the Folio adaptation distributed under Creative Commons Attribution-ShareAlike 3.0 Unported. Converted TEI English headwords and Spanish-marked translations, POS, pronunciations and associated English glosses into a local index. Dropped unusable/markup-only translations, kept valid senses distinct, normalized keys, deduplicated readings and moved expressly obsolete/archaic readings after current ones.
+
+Original source: https://download.freedict.org/dictionaries/eng-spa/2025.11.23/freedict-eng-spa-2025.11.23.src.tar.xz
+SHA-512: 622e8fec6c4178cb4c21e4577701c5325670f825331b07a185b4c6b810603c337e80429738a97581f68f668667910e7ad36f27332eaee2828f1f906537852fe3
+Publisher checksums: https://freedict.org/freedict-database.json
+License: https://creativecommons.org/licenses/by-sa/3.0/ (verbatim LICENSE.txt accompanies this pack).
+
+64,258 source articles; 58,939 distinct normalized lookup headwords. Data-only dictionary pack. Not a sentence translator. No endorsement implied.

@@ -1,0 +1,23 @@
+Folio optional offline translation pack: English to Hindi (Mozilla en-hi 1.0).
+Mozilla registry release: tiny, Release. Source weights, vocabulary, and
+lexical shortlist are MPL-2.0 (see ../LICENSE.txt). Links to upstream source
+data and training pipeline:
+https://github.com/mozilla/translations
+https://storage.googleapis.com/moz-fx-translations-data--303e-prod-translations-data/db/models.json
+https://firefox.settings.services.mozilla.com/v1/buckets/main/collections/translations-models/records
+
+These files are gzip-compressed and the model is split for delivery; the
+reassembled raw model and other original bytes are unchanged. Original
+uncompressed binary URLs and SHA-256:
+model (17141051 bytes)
+https://firefox-settings-attachments.cdn.mozilla.net/main-workspace/translations-models/32ad63e2-0283-4c87-8fa8-d843c322c87b.bin
+SHA-256: 18682fa6aa1c1b2f78a6fcbcb354755094d623e65436ef7821720c5213e11a49
+
+lex (3504820 bytes)
+https://firefox-settings-attachments.cdn.mozilla.net/main-workspace/translations-models/e69b3f71-49b1-4e61-83f5-2abf46666476.bin
+SHA-256: b473f6fe41cdb7c1dbeeb714fc50314feab77b0af2b2da6f7830ee14492dd847
+
+vocab (925360 bytes)
+https://firefox-settings-attachments.cdn.mozilla.net/main-workspace/translations-models/5d4cb145-1f61-4913-973f-d7643c06b917.spm
+SHA-256: 8017cbf812bae400794c424699b89de90db06ac7a4ca67a420013a9f68b270c1
+

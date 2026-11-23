@@ -1,0 +1,16 @@
+.ribbon-controls{display:flex;align-items:center;gap:8px;margin-inline-start:auto;flex:none}
+#local-translation-open{min-height:34px;padding-inline:9px;white-space:nowrap;border-radius:8px}
+#local-translation-open:hover{background:var(--soft)}
+#local-translation-progress{display:block;width:100%;margin:8px 0 12px;accent-color:var(--accent)}
+#local-translation-section{border-top:1px solid var(--line);padding-top:9px;margin-top:13px}
+#local-translation-status{margin:0 0 8px}
+#local-translation-status:empty{display:none}
+#full-translation .machine-source{font:inherit;font-size:.78rem;color:var(--muted);letter-spacing:.04em}
+#full-translation .machine-result{overflow-wrap:anywhere}
+@media(max-width:360px){.ribbon-meta{padding-inline:10px}.ribbon-controls{gap:3px}}
+#translation-track .machine-line{color:var(--accent);font:inherit;font-style:normal;white-space:nowrap}
+#profile-translation-storage{border-top:1px solid var(--line);margin-top:1rem;padding-top:.85rem}
+#translation-storage-title{font-size:1rem;margin:0 0 .35rem}
+.translation-storage-list{margin:0;display:grid;gap:.42rem}
+.translation-storage-list div{display:flex;justify-content:space-between;flex-wrap:wrap;gap:.15rem .7rem;min-width:0;font-size:.86rem}
+.translation-storage-list dd{margin:0;color:var(--muted);font-variant-numeric:tabular-nums}

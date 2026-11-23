@@ -1,0 +1,26 @@
+/* Kokonut-style hold confirmation, confined to the bulk word-removal dialog. */
+:is(#word-delete,#book-delete){width:min(460px,calc(100vw - 24px))}
+:is(#word-delete,#book-delete) .delete-summary{margin:0 0 7px;font-size:1rem;font-weight:700;overflow-wrap:anywhere}
+:is(#word-delete-note,#book-delete-note){margin:0 0 18px;color:var(--muted);font-size:.92rem;line-height:1.48}
+:is(#word-delete,#book-delete) [hidden]{display:none!important}
+.delete-actions{display:grid;grid-template-columns:minmax(0,1fr);align-items:stretch;gap:8px}
+:is(#word-delete,#book-delete) :is(.word-hold,.delete-confirm){min-height:44px;font-size:.9rem;line-height:1.22}
+.word-hold,.delete-confirm{position:relative;min-width:0;border:1px solid color-mix(in srgb,var(--error) 34%,var(--line));border-radius:12px;background:var(--error-bg);color:var(--error);font-weight:680;padding:9px 10px}
+.word-hold{display:grid;place-items:center;isolation:isolate;overflow:hidden;touch-action:pan-y pinch-zoom;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;transition:background-color 150ms ease,border-color 150ms ease,color 150ms ease}
+.word-hold-fill{position:absolute;inset:0;pointer-events:none;background:currentColor;opacity:.16;transform:scaleX(0);transform-origin:left center}
+.word-hold-label{display:grid;place-items:center;width:100%;position:relative;pointer-events:none}
+.word-hold-label>span{display:inline-flex;align-items:center;justify-content:center;gap:6px}
+.word-hold-label svg{width:17px;height:17px;flex:none;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.word-hold[data-phase=complete]{opacity:1;background:var(--error);color:var(--error-bg)}
+.word-hold[data-phase=complete] .word-hold-fill{visibility:hidden}
+.word-hold[data-phase=complete] .hold-check path{stroke-dasharray:1;animation:word-hold-draw .3s .1s cubic-bezier(.23,1,.32,1) both}
+@keyframes word-hold-draw{from{stroke-dashoffset:1}to{stroke-dashoffset:0}}
+.delete-status{font-size:.88rem;margin:9px 0 0;color:var(--muted)}
+.delete-status:empty{margin:0}
+@media(max-width:700px){:is(#word-delete,#book-delete){width:calc(100% - var(--safe-left) - var(--safe-right))}}
+@media(max-width:345px){.delete-actions{grid-template-columns:1fr}}
+@media(prefers-reduced-motion:reduce){
+  .word-hold-fill{visibility:hidden}
+  .word-hold[data-phase=complete] .hold-check path{animation:none}
+}
+@media(forced-colors:active){.word-hold-fill{forced-color-adjust:none;background:Highlight;opacity:.26}}

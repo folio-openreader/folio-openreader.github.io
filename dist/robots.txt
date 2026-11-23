@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://folio-openreader.github.io/sitemap.xml

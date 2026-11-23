@@ -1,0 +1,8 @@
+.library-import-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}
+.library-import-actions .library-import{margin:0;min-width:0}
+.library-import-actions .library-import strong,.library-import-actions .library-import small{overflow-wrap:normal}
+.comic-import-actions{display:flex;gap:8px;align-items:center}
+.comic-import-status:empty{display:none}
+.comic-storage-error{margin:24px auto;padding:12px 16px;max-width:32rem}
+.comic-mode .reading-footer{justify-content:space-between}
+@media(max-width:560px){.library-import-actions{grid-template-columns:minmax(0,1fr)}}

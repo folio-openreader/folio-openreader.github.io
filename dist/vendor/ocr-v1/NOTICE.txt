@@ -1,0 +1,29 @@
+Folio's offline OCR dependencies (unmodified upstream distributables)
+
+Tesseract.js 6.0.1 — https://github.com/naptha/tesseract.js
+Apache License 2.0. See LICENSE-TesseractJS.txt and worker.min.js.LICENSE.txt
+(third-party notices for the distributed worker's bundled dependencies).
+
+Tesseract.js-core 6.1.2 — https://github.com/naptha/tesseract.js-core
+Apache License 2.0; see LICENSE-Core.txt. The distributed LSTM-only JS files
+contain their own WebAssembly. Only the CPU-appropriate file is loaded.
+
+English, Russian and Kazakh data — https://github.com/naptha/tessdata
+Compressed 4.0.0_best_int integerized models from @tesseract.js-data/eng,
+@tesseract.js-data/rus, @tesseract.js-data/kaz, each at version 1.0.0.
+Upstream model source: https://github.com/tesseract-ocr/tessdata_best
+Apache License 2.0; see LICENSE-Models.txt and LICENSE-Data-Packaging.txt.
+The npm package wrappers also declare MIT; their author/license metadata are
+retained in the three adjacent *-package.json files. No model was retrained.
+
+Comic-only Japanese (horizontal and vertical) and Korean models:
+tesseract-ocr/tessdata_fast 4.1.0, https://github.com/tesseract-ocr/tessdata_fast/tree/4.1.0
+Apache License 2.0; original LICENSE is LICENSE-Tessdata-Fast.txt.
+Data contents are unmodified; compressed locally using gzip -n -9.
+Source files (tag 4.1.0, SHA-256 before gzip):
+https://raw.githubusercontent.com/tesseract-ocr/tessdata_fast/4.1.0/jpn.traineddata
+1f5de9236d2e85f5fdf4b3c500f2d4926f8d9449f28f5394472d9e8d83b91b4d
+https://raw.githubusercontent.com/tesseract-ocr/tessdata_fast/4.1.0/jpn_vert.traineddata
+bf1e2640954691797e2dc14f38533e601b59ee37958698ae0f0b81dc6f09c71b
+https://raw.githubusercontent.com/tesseract-ocr/tessdata_fast/4.1.0/kor.traineddata
+6b85e11d9bbf07863b97b3523b1b112844c43e713df8b66418a081fd1060b3b2
