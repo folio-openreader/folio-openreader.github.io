@@ -1,4 +1,4 @@
-import {narrator,playNeural,stopNeural} from './neural-voices.js';
+import {narrator,pauseNeural,playNeural,stopNeural} from './neural-voices.js';
 // Book text never leaves the device. Share the word reader's locale and Apple
 // fallback policy; never let another browser choose an unspecified default voice.
 import {localVoice,voicePreference,appleSpeechPlatform,nativeEnglish} from './word-speech.js';
@@ -23,7 +23,7 @@ export function createBookSpeech({host=window,onPosition=()=>{},onState=()=>{}}=
   try{synth=host.speechSynthesis;Utterance=host.SpeechSynthesisUtterance}catch{}
   const getVoices=()=>{try{return synth?.getVoices?.()||[]}catch{return []}};
   getVoices(); // warm up the voice list without submitting any book text
-  let book=null,c=0,p=0,offset=0,active=null,status='idle',timer,voice,lang,neural;
+  let book=null,c=0,p=0,offset=0,active=null,status='idle',timer,voice,lang,neural,resume;
   const playing=()=>status==='speaking'||status==='starting';
   function emit(s){status=s;onState(s,lang)}
   function clear(){host.clearTimeout?.(timer);timer=undefined}
@@ -31,8 +31,13 @@ export function createBookSpeech({host=window,onPosition=()=>{},onState=()=>{}}=
     const old=active;active=null;clear();
     if(old&&neural)stopNeural();else if(old)try{synth.cancel()}catch{}
   }
-  function stop(){interrupt();book=null;offset=0;if(status!=='idle')emit('idle')}
-  function pause(){if(!playing())return;interrupt();emit('paused')}
+  function stop(){interrupt();resume=null;book=null;offset=0;if(status!=='idle')emit('idle')}
+  function pause(){
+    if(!playing())return;
+    if(active&&neural){active=null;clear();resume=pauseNeural()||resume}
+    else interrupt();
+    emit('paused')
+  }
   function fail(s){interrupt();emit(s);return false}
   function advance(){
     if(host.document?.hidden){pause();return false}
@@ -53,9 +58,9 @@ export function createBookSpeech({host=window,onPosition=()=>{},onState=()=>{}}=
       let next=nextChunk(paras[p]?.text||'',chunk.end,92)?.text;
       if(!next)next=nextChunk(paras[p+1]?.text||'',0,92)?.text;
       timer=host.setTimeout(()=>{if(active===token)fail('unavailable')},60000);
-      return playNeural(host,{text:chunk.text,next,voice:neural,rate:voicePreference(host,lang).rate,
-        onstart(){if(active===token){clear();emit('speaking');timer=host.setTimeout(()=>{if(active===token)fail('unavailable')},120000)}},
-        onend(){if(active===token){active=null;clear();offset=chunk.end;advance()}},
+      return playNeural(host,{text:chunk.text,next,resume,voice:neural,rate:voicePreference(host,lang).rate,
+        onstart(){if(active===token){resume=null;clear();emit('speaking');timer=host.setTimeout(()=>{if(active===token)fail('unavailable')},120000)}},
+        onend(){if(active===token){resume=null;active=null;clear();offset=chunk.end;advance()}},
         onerror(s){if(active===token)fail(s)}});
     }
     let u;

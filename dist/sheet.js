@@ -116,7 +116,9 @@ export function installSheet(dialog,{opener,canDismiss=()=>true}={}){
     if(event==='pointerleave'&&handle.hasPointerCapture(e.pointerId))return;
     endDrag({rebound:true});
   });
-  handle.addEventListener('click',e=>{if(e.isTrusted&&e.detail===0){e.preventDefault();close('handle')}});
+  // A native click also covers a stationary touch/pen release. Pointer drags
+  // already suppress their trailing click before it can reach the handle.
+  handle.addEventListener('click',e=>{if(e.isTrusted){e.preventDefault();close('handle')}});
   handle.addEventListener('contextmenu',e=>{if(drag){e.preventDefault();endDrag({rebound:true})}});
   const stopDrag=()=>{outside=null;endDrag()};
   window.addEventListener('blur',stopDrag);

@@ -84,17 +84,27 @@ function workerMain(cacheName,files){
     }catch(e){self.postMessage({id:d.id,error:e?.message==='missing'?'missing':'unavailable'})}
   })};
 }
-let ctx=null,interrupt=null,worker=null,pending=new Map(),run=0,source=null,pre=null,serial=0,idle=0;
+let ctx=null,interrupt=null,worker=null,pending=new Map(),run=0,source=null,playhead=null,pre=null,serial=0,idle=0;
 function dropWorker(){
   clearTimeout(idle);worker?.terminate();worker=null;
   for(const p of pending.values())p.reject(Error('interrupted'));pending.clear();pre=null;
   if(!source&&ctx){const old=ctx;ctx=null;old.close().catch(()=>{})}
 }
 export function stopNeural(){
-  run++;interrupt=null;
+  run++;interrupt=null;playhead=null;
   if(source){source.onended=null;try{source.stop();source.disconnect()}catch{}source=null}
   if(pending.size)dropWorker();else {clearTimeout(idle);if(worker||ctx)idle=setTimeout(dropWorker,20000)}
   pre=null;
+}
+// Keep only the current decoded segment and its elapsed audio time. The
+// caller retains this snapshot; stop still releases the worker and lookahead.
+export function pauseNeural(){
+  let resume=null;
+  if(ctx&&source&&playhead){
+    const at=playhead.offset+Math.max(0,ctx.currentTime-playhead.startedAt);
+    resume={key:playhead.key,buffer:source.buffer,offset:Math.min(at,source.buffer.duration)};
+  }
+  stopNeural();return resume;
 }
 function generate(h,params){
   if(!worker){
@@ -107,19 +117,25 @@ function generate(h,params){
   return new Promise((resolve,reject)=>{const id=++serial;pending.set(id,{resolve,reject});worker.postMessage({...params,id})})
 }
 const key=x=>JSON.stringify([x.text,x.voice,x.rate]);
-export function playNeural(h,{text,voice,rate,next,onstart,onend,onerror}){
+export function playNeural(h,{text,voice,rate,next,resume,onstart,onend,onerror}){
   if(interrupt){const old=interrupt;stopNeural();old('interrupted')}
   const ticket=++run;interrupt=onerror;clearTimeout(idle);
   // Resume synchronously in the trusted click; decoding/synthesis happens later.
   try{const C=h.AudioContext||h.webkitAudioContext;ctx??=new C();const resumed=ctx.state==='running'?Promise.resolve():ctx.resume();
-    const current={text,voice,rate},buffer=pre?.key===key(current)?pre.buffer:generate(h,current);pre=null;
+    const current={text,voice,rate},currentKey=key(current),saved=resume?.key===currentKey?resume:null;
+    const buffer=saved?Promise.resolve():pre?.key===currentKey?pre.buffer:generate(h,current);pre=null;
     Promise.all([resumed,buffer]).then(([,d])=>{
       if(ticket!==run||h.document.hidden)return;
       if(ctx.state!=='running')throw Error('blocked');
-      const b=ctx.createBuffer(1,d.pcm.length,d.rate);b.copyToChannel(d.pcm,0);
+      let b=saved?.buffer;
+      if(!b){b=ctx.createBuffer(1,d.pcm.length,d.rate);b.copyToChannel(d.pcm,0)}
+      const offset=saved?.offset||0;
+      const finish=()=>{if(ticket!==run)return;source?.disconnect();source=null;playhead=null;interrupt=null;idle=setTimeout(dropWorker,20000);onend()};
+      if(offset>=b.duration){finish();return}
       source=ctx.createBufferSource();source.buffer=b;source.connect(ctx.destination);
-      source.onended=()=>{if(ticket!==run)return;source?.disconnect();source=null;interrupt=null;idle=setTimeout(dropWorker,20000);onend()};
-      source.start();onstart();
+      source.onended=finish;
+      const startedAt=ctx.currentTime;
+      source.start(startedAt,offset);playhead={key:currentKey,startedAt,offset};onstart();
       if(next&&ticket===run){const spec={text:next,voice,rate},buffer=generate(h,spec);buffer.catch(()=>{});pre={key:key(spec),buffer}}
     }).catch(e=>{if(ticket===run){stopNeural();onerror(e.message==='missing'?'missing':e.name==='NotAllowedError'||e.message==='blocked'?'blocked':'unavailable')}});
     return true;
