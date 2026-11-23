@@ -24,6 +24,19 @@
 @media(forced-colors:active){
   .catalog-switch .catalog-current,.catalog-switch:not([data-traveller]) button[aria-pressed=true]{border:2px solid Highlight}
 }
+/* The dictionary shares the catalogue's track and plate. Keep five cells in
+   one row; text zoom or long counts can widen them without clipping labels. */
+.catalog-switch.stage-filters{
+  grid-template-columns:repeat(5,minmax(max-content,1fr));gap:3px;margin:0;
+  overflow-x:auto;overscroll-behavior-x:contain;scrollbar-width:thin;
+}
+.catalog-switch.stage-filters button{
+  min-width:44px;align-content:center;gap:2px;padding:4px;
+  font-size:.8125rem;font-weight:610;line-height:1.15;white-space:nowrap;
+}
+.catalog-switch.stage-filters button:active{transform:none;opacity:1}
+.catalog-switch.stage-filters .icon-glyph,.catalog-switch.stage-filters .icon-glyph svg{width:17px;height:17px}
+.catalog-switch.stage-filters small{font-size:.75rem;font-weight:540;font-variant-numeric:tabular-nums}
 .research-section, .research-home {min-width:0}
 .research-home {margin-top:1.75rem}
 .research-home .section-title {display:flex;justify-content:space-between;align-items:center;gap:.5rem}

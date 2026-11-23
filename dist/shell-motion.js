@@ -2,12 +2,13 @@
 // always commit synchronously. A second pick starts at the plate's painted box.
 export function installNavMotion(dock,{indicator='.nav-current',keyAttribute='view'}={}) {
   const plate=dock.querySelector(indicator);
-  const buttons=[...dock.querySelectorAll('button[data-'+keyAttribute+']')];
+  const attribute='data-'+keyAttribute;
+  const buttons=[...dock.querySelectorAll('button['+attribute+']')];
   const reduce=window.matchMedia('(prefers-reduced-motion: reduce)');
   let key='',lastBox='',flight=null,pulse=null;
   function stop(){flight?.cancel();pulse?.cancel();flight=pulse=null}
   function select(next,{animate=false}={}) {
-    const target=buttons.find(b=>b.dataset[keyAttribute]===next);
+    const target=buttons.find(b=>b.getAttribute(attribute)===next);
     if(!target)return;
     const x=target.offsetLeft,y=target.offsetTop,w=target.offsetWidth,h=target.offsetHeight;
     if(!w||!h)return; // Reader, hidden ancestor, or detached.

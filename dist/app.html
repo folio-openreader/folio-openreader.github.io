@@ -74,7 +74,14 @@
 <div id="word-search-panel" class="word-search-panel" inert aria-hidden="true">
   <div><label class="search-field"><span class="sr-only">Поиск по словам</span><input type="search" id="word-search" placeholder="Поиск по словам" autocomplete="off" autocapitalize="none" spellcheck="false" enterkeyhint="search"></label></div>
 </div>
-<div class="study-filters"><div id="word-stage-filters" class="stage-filters" role="group" aria-label="Статус слов"><button type="button" data-stage-filter="all" aria-pressed="true"><span>Все</span><small data-stage-count="all">0</small></button><button type="button" data-stage-filter="new" aria-pressed="false"><i data-icon="zap"></i><span>Новое</span><small data-stage-count="new">0</small></button><button type="button" data-stage-filter="learning" aria-pressed="false"><i data-icon="openBook"></i><span>Учу</span><small data-stage-count="learning">0</small></button><button type="button" data-stage-filter="almost" aria-pressed="false"><i data-icon="flame"></i><span>Почти</span><small data-stage-count="almost">0</small></button><button type="button" data-stage-filter="known" aria-pressed="false"><i data-icon="check"></i><span>Знаю</span><small data-stage-count="known">0</small></button></div></div>
+<div id="word-stage-filters" class="catalog-switch stage-filters" role="group" aria-label="Статус слов">
+  <i class="catalog-current" aria-hidden="true"></i>
+  <button type="button" data-stage-filter="all" aria-pressed="true" aria-controls="saved-list"><i data-icon="list" aria-hidden="true"></i><span class="stage-filter-caption">Все <small data-stage-count="all">0</small></span></button>
+  <button type="button" data-stage-filter="new" aria-pressed="false" aria-controls="saved-list"><i data-icon="zap" aria-hidden="true"></i><span class="stage-filter-caption">Новое <small data-stage-count="new">0</small></span></button>
+  <button type="button" data-stage-filter="learning" aria-pressed="false" aria-controls="saved-list"><i data-icon="openBook" aria-hidden="true"></i><span class="stage-filter-caption">Учу <small data-stage-count="learning">0</small></span></button>
+  <button type="button" data-stage-filter="almost" aria-pressed="false" aria-controls="saved-list"><i data-icon="flame" aria-hidden="true"></i><span class="stage-filter-caption">Почти <small data-stage-count="almost">0</small></span></button>
+  <button type="button" data-stage-filter="known" aria-pressed="false" aria-controls="saved-list"><i data-icon="check" aria-hidden="true"></i><span class="stage-filter-caption">Знаю <small data-stage-count="known">0</small></span></button>
+</div>
 <p id="word-matches" class="muted" role="status"></p><p id="word-stage-feedback" class="sr-only" role="status"></p><div id="saved-list"></div><button class="quiet" id="words-more" hidden>Показать ещё</button>
 </section>
 <div class="word-selection" id="word-selection-tools" role="group" aria-label="Действия с выбранными словами" hidden>
