@@ -422,7 +422,13 @@ function renderWords({motion=false}={}){
   $('#word-matches').textContent=key||filter!=='all'?`Найдено: ${matches.length}`:'';
   $('#words-more').hidden=matches.length<=wordLimit;
   list.replaceChildren();
-  if(!matches.length){list.append(node('p',key?'Ничего не найдено.':filter!=='all'?'Пока нет слов с этим статусом.':'Нажмите слово в книге, чтобы начать изучение.','empty-state'));return}
+  if(!matches.length){
+    if(key||filter!=='all'){list.append(node('p',key?'Ничего не найдено.':'Пока нет слов с этим статусом.','empty-state'));return}
+    const empty=node('div',null,'empty-state wordbook-empty'),link=node('a','Выбрать книгу','wordbook-link');
+    link.href='#library';
+    empty.append(node('h2','Пока нет сохранённых слов'),node('p','Нажмите слово в книге, чтобы начать изучение.'),link);
+    list.append(empty);return
+  }
   const chunk=document.createDocumentFragment(),packId=state.prefs.dictionaryPack,target=state.prefs.dictionaryTarget,captions=[];
   for(const record of matches.slice(0,wordLimit)){
     const row=node('div',null,'saved-row'),info=node('div',null,'saved-main'),title=node('div',null,'word-row-title'),word=node('strong',record.word);

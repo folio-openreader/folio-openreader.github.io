@@ -236,7 +236,7 @@ export async function parsePdf(buffer, name = '', options={}) {
               try{await renderer.promise;}finally{signal.removeEventListener('abort',stop);}
               check();if(keep)maskRuns(ctx,view,layout);
               const regionHint=keep?{}:null;
-              if(engine.hasInk(canvas,regionHint)){
+              if(keep?engine.hasInk(canvas,regionHint):await engine.hasPageMarks(canvas,signal)){
                 if(++attempted>engine.OCR_PAGES) throw issue('Более 150 страниц требуют OCR. Разделите PDF на несколько частей.');
                 ocr??=engine.ocrSession(selected,signal,options.onProgress);
                 const r=await ocr.read(canvas,n,doc.numPages,keep && !regionHint.skip);check();
@@ -288,7 +288,7 @@ export async function parseImage(buffer,name='',options={}){
     const s=engine.viewportScale(b.width,b.height,1);
     canvas=engine.canvasAt(b.width*s,b.height*s);const ctx=canvas.getContext('2d');
     ctx.fillStyle='#fff';ctx.fillRect(0,0,canvas.width,canvas.height);ctx.drawImage(b,0,0,canvas.width,canvas.height);b.close();bitmap=null;
-    if(!engine.hasInk(canvas))throw engine.noOCRText();
+    if(!await engine.hasPageMarks(canvas,run.signal))throw engine.noOCRText();
     ocr=engine.ocrSession(selected,run.signal,options.onProgress);
     const r=await ocr.read(canvas,1,1);engine.check(run.signal);
     if(!r.paragraphs.length)throw engine.noOCRText();

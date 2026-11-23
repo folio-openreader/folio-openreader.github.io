@@ -1,12 +1,13 @@
+import {narrator,playNeural,stopNeural} from './neural-voices.js';
 // Book text never leaves the device. Share the word reader's locale and Apple
 // fallback policy; never let another browser choose an unspecified default voice.
 import {localVoice,voicePreference,appleSpeechPlatform,nativeEnglish} from './word-speech.js';
 
-export function nextChunk(text,offset) {
+export function nextChunk(text,offset,max=160) {
   // Bound native utterance length, and prefer ending a phrase to cutting a word.
   while(offset<text.length&&/\s/u.test(text[offset]))offset++;
   if(offset>=text.length)return null;
-  let end=Math.min(offset+160,text.length);
+  let end=Math.min(offset+max,text.length);
   if(end<text.length){
     const slice=text.slice(offset,end), stops=[...slice.matchAll(/[.!?。！？…](?:[”’»"']*)(?=\s|$)|[。！？]/gu)];
     const space=[...slice.matchAll(/\s+/gu)].at(-1),stop=stops.at(-1);
@@ -22,13 +23,13 @@ export function createBookSpeech({host=window,onPosition=()=>{},onState=()=>{}}=
   try{synth=host.speechSynthesis;Utterance=host.SpeechSynthesisUtterance}catch{}
   const getVoices=()=>{try{return synth?.getVoices?.()||[]}catch{return []}};
   getVoices(); // warm up the voice list without submitting any book text
-  let book=null,c=0,p=0,offset=0,active=null,status='idle',timer,voice,lang;
+  let book=null,c=0,p=0,offset=0,active=null,status='idle',timer,voice,lang,neural;
   const playing=()=>status==='speaking'||status==='starting';
   function emit(s){status=s;onState(s,lang)}
   function clear(){host.clearTimeout?.(timer);timer=undefined}
   function interrupt(){
     const old=active;active=null;clear();
-    if(old)try{synth.cancel()}catch{}
+    if(old&&neural)stopNeural();else if(old)try{synth.cancel()}catch{}
   }
   function stop(){interrupt();book=null;offset=0;if(status!=='idle')emit('idle')}
   function pause(){if(!playing())return;interrupt();emit('paused')}
@@ -39,12 +40,24 @@ export function createBookSpeech({host=window,onPosition=()=>{},onState=()=>{}}=
     while(c<book.chapters.length){
       const paragraphs=book.chapters[c].paragraphs;
       if(p>=paragraphs.length){c++;p=0;offset=0;moved=true;continue}
-      chunk=nextChunk(paragraphs[p]?.text||'',offset);
+      chunk=nextChunk(paragraphs[p]?.text||'',offset,neural?92:160);
       if(chunk)break;
       p++;offset=0;moved=true;
     }
     if(!chunk){book=null;emit('ended');return false}
     if(moved){onPosition({book,chapter:c,paragraph:p});if(!book||!playing())return false}
+    if(neural){
+      const token={};active=token;offset=chunk.start;
+      // At most one following segment on the worker, only in the same book language.
+      const paras=book.chapters[c].paragraphs;
+      let next=nextChunk(paras[p]?.text||'',chunk.end,92)?.text;
+      if(!next)next=nextChunk(paras[p+1]?.text||'',0,92)?.text;
+      timer=host.setTimeout(()=>{if(active===token)fail('unavailable')},60000);
+      return playNeural(host,{text:chunk.text,next,voice:neural,rate:voicePreference(host,lang).rate,
+        onstart(){if(active===token){clear();emit('speaking');timer=host.setTimeout(()=>{if(active===token)fail('unavailable')},120000)}},
+        onend(){if(active===token){active=null;clear();offset=chunk.end;advance()}},
+        onerror(s){if(active===token)fail(s)}});
+    }
     let u;
     try{
       u=new Utterance(chunk.text);u.rate=voicePreference(host,lang).rate;u.lang=voice?.lang||lang;if(voice)u.voice=voice;
@@ -78,7 +91,8 @@ export function createBookSpeech({host=window,onPosition=()=>{},onState=()=>{}}=
     if(event?.isTrusted!==true||host.document?.hidden||!source)return false;
     if(playing()){pause();return true}
     if(source!==book||chapter!==c||paragraph!==p){stop();book=source;c=chapter;p=paragraph;offset=0}
-    lang=language;
+    lang=language;neural=narrator(lang,voicePreference(host,lang).voice);
+    if(neural){emit('starting');return advance()}
     if(!synth||typeof synth.speak!=='function'||typeof Utterance!=='function')return fail('unsupported');
     if(!lang)return fail('unknown');
     const voices=getVoices();voice=localVoice(voices,lang,new Set(),voicePreference(host,lang).voice);

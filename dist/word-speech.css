@@ -14,3 +14,8 @@
 }
 #system-dictionary-toggle[aria-expanded=true]{background:var(--soft);border-color:var(--accent)}
 .system-dictionary-hint{margin:6px 0;border-inline-start:2px solid var(--line);padding-inline-start:9px}
+.voice-download{padding-top:.7rem;border-top:1px solid var(--line);display:grid;gap:.4rem}
+.voice-download[hidden]{display:none}
+.voice-download p{margin:0;color:var(--muted);font-size:.85rem;line-height:1.45}
+.voice-download [role=status]:empty{display:none}
+.voice-download button{justify-self:start;max-width:100%;min-height:44px;white-space:normal;text-align:start}

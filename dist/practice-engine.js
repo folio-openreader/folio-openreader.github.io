@@ -331,3 +331,43 @@ export function orderMatchTiles(pairs) {
   }
   return result;
 }
+
+// Session-only recovery helpers. A guided correction or retry never updates
+// the spaced-review ledger. Never mutate a lesson document or submitted answer.
+
+export function keepCorrectPairs(task, answer) {
+  if (task?.kind!=='match' || !answer || typeof answer!=='object') return {};
+  return Object.fromEntries(task.pairs.filter(p=>Object.hasOwn(answer,p.id)&&answer[p.id]===p.id)
+    .map(p=>[p.id,p.id]));
+}
+
+export function spellingClue(word, language) {
+  if (typeof word!=='string') return null;
+  const normalized=word.normalize('NFC');
+  let parts=Array.from(normalized);
+  // Use graphemes so a decomposed accent or a conjunct is not counted twice.
+  if (typeof Intl.Segmenter==='function') {
+    try {parts=Array.from(new Intl.Segmenter(language,{granularity:'grapheme'}).segment(normalized),x=>x.segment)} catch {}
+  }
+  const letters=parts.filter(p=>/\p{L}/u.test(p));
+  if (letters.length<2) return null; // A hint must not reveal a one-letter answer.
+  return {initial:letters[0],letters:letters.length};
+}
+
+export function missedPracticePages(pages, missed, random=Math.random) {
+  // Review only missed steps, in original order. For a choice, guarantee a
+  // different correct position so recalling a button location won't suffice.
+  return pages.flatMap((page,i)=>{
+    if (!missed.has(i)) return [];
+    const {task}=page;
+    if (task.kind==='match') {
+      const pairs=shuffle(task.pairs,random);
+      if(pairs.every((p,j)=>p===task.pairs[j])) pairs.push(pairs.shift());
+      return [{...page,task:{...task,pairs}}];
+    }
+    if (task.kind!=='choice'&&task.kind!=='cloze') return [page];
+    const options=shuffle(task.options,random),before=task.options.findIndex(o=>o.id===task.correctId);
+    if(options[before].id===task.correctId) options.push(options.shift());
+    return [{...page,task:{...task,options}}];
+  });
+}

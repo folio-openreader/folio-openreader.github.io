@@ -50,6 +50,31 @@ export function hasInk(canvas, regionHint=null) {
     return dark>=3;
   } finally {thumb.width=thumb.height=0;}
 }
+// A light, small caption may vanish in the 240px preview. For a full scan
+// or comic tile, skip recognition only when all rendered pixels are equal.
+// Checking bands bounds each readback; most nonblank pages take the thumbnail
+// fast path. Canvases here already have their background composited to white.
+export async function hasPageMarks(canvas,signal){
+  check(signal);
+  try{
+    if(hasInk(canvas))return true;
+    const ctx=canvas.getContext('2d'),w=canvas.width,h=canvas.height;
+    // At most ~256 KiB per buffer at our supported OCR resolutions.
+    const rows=Math.max(1,Math.floor(65536/w));
+    let first,checkpoint=performance.now();
+    for(let y=0;y<h;y+=rows){
+      check(signal);
+      const {data}=ctx.getImageData(0,y,w,Math.min(rows,h-y));
+      const pixels=new Uint32Array(data.buffer,data.byteOffset,data.byteLength/4);
+      if(y===0)first=pixels[0];
+      for(const pixel of pixels)if(pixel!==first)return true;
+      if(performance.now()-checkpoint>12 && y+rows<h){
+        await new Promise(done=>setTimeout(done,0));check(signal);checkpoint=performance.now();
+      }
+    }
+    return false;
+  }catch(e){check(signal);return true;} // optional preflight; let OCR decide
+}
 // On a mixed page, native glyphs are already masked. Crop the *actual*
 // remaining ink, not a heuristic "text area": a faint, colored or isolated
 // pixel is kept unless it is exactly opaque white. Never discard marks or

@@ -1,3 +1,4 @@
+import {narrator,playNeural,stopNeural} from './neural-voices.js';
 // Local-only word pronunciation. Native API calls never use a generic default:
 // the Web Speech specification permits remote default voices.
 function locale(tag){
@@ -56,7 +57,7 @@ export function createWordSpeech({host=window,publish=()=>{}}={}){
   function emit(next){status=next;publish({status:next,language:lang,apple:apple.mobile})}
   function voices(){try{return supported?(synth.getVoices()||[]):[]}catch{return []}}
   function cancel(){
-    const old=active;active=null;clearTimer();if(old){try{synth.cancel()}catch{}}
+    const old=active;active=null;clearTimer();if(old?.neural)stopNeural();else if(old){try{synth.cancel()}catch{}}
   }
   function reset(language=''){cancel();lang=language;failed=new Set();attemptedDefault=false;emit('idle')}
   function changed(){
@@ -70,10 +71,19 @@ export function createWordSpeech({host=window,publish=()=>{}}={}){
   function speak({text,language,event}){
     if(event?.isTrusted!==true||host.document?.hidden)return false;
     if(lang!==language)reset(language);
-    if(!supported){emit('unsupported');return false}
     if(!lang){emit('unknown');return false}
     if(typeof text!=='string'||!text.trim()||text.length>256)return false;
     cancel();
+    const selected=voicePreference(host,lang),name=narrator(lang,selected.voice);
+    if(name){
+      const token={neural:true};active=token;emit('starting');
+      const fail=s=>{if(active===token){cancel();emit(s)}};
+      timer=host.setTimeout(()=>fail('unavailable'),60000);
+      return playNeural(host,{text,voice:name,rate:selected.rate,onstart:()=>{
+        if(active===token){clearTimer();emit('speaking');timer=host.setTimeout(()=>fail('unavailable'),120000)}
+      },onend:()=>{if(active===token){active=null;clearTimer();emit('idle')}},onerror:fail});
+    }
+    if(!supported){emit('unsupported');return false}
     const list=voices();
     const pref=voicePreference(host,lang);
     let voice=localVoice(list,lang,failed,pref.voice),fallbackLang='';
@@ -135,7 +145,7 @@ export function wordSpeechMessage(status,language){
     case 'waiting':return 'Браузер ещё не показал локальные голоса. Подождите и нажмите ещё раз.';
     case 'ready':return 'Локальный голос готов. Нажмите значок звука ещё раз.';
     case 'missing':return label?'Нет доступного локального голоса: '+label+'.':'Нет доступного локального голоса.';
-    case 'unavailable':return 'Не удалось запустить голос. Проверьте громкость и нажмите ещё раз.';
+    case 'unavailable':return 'Не удалось запустить голос. Повторите или выберите другой голос в настройках чтения.';
     case 'blocked':return 'Браузер не разрешил воспроизведение. Нажмите значок звука ещё раз.';
     case 'interrupted':return 'Озвучивание прервано. Нажмите значок звука ещё раз.';
     default:return '';

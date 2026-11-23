@@ -1,0 +1,53 @@
+Folio / optional English neural voice pack (en-v1)
+=================================================
+Folio's MIT license covers its own code. The third-party components below retain their separate licenses. Redistribute these notices and the corresponding files with the voice pack. This pack contains no system voices, hosted TTS API or voice cloning.
+
+1. KittenTTS Nano 0.8 int8 model and supplied voice embeddings
+   KittenML. Apache License, Version 2.0, as identified by the model publisher.
+   en-v1/kitten_tts_nano_v0_8.onnx and en-v1/voices.npz are the byte-for-byte original files.
+   Source revision: https://huggingface.co/KittenML/kitten-tts-nano-0.8-int8/tree/84781d74e29ee25217551556398b42f80593a813
+   Original model card and license: licenses/KittenModelCard.md and licenses/Apache-2.0.txt.
+   The model card credits the StyleTTS 2 architecture. These are v0.8 weights, not KittenTTS 2.x.
+
+2. KittenTTS Web SDK / CEPhonemizer
+   KittenML. Apache License, Version 2.0 (licenses/Apache-2.0.txt). CEPhonemizer source bears its own 2024 Apache 2.0 headers. The rule DATA files are covered separately under (5).
+   Source: https://github.com/KittenML/KittenTTS-web/tree/c846fe92858f3447f4912226471f5a63983b3f94
+   Input: examples/html/assets/kittentts-web.js from that exact revision.
+   Input SHA-256: 6bbc1d35555d6c7f25dc9d69c9f870f5d436b6040a58240ab61c30d60126899c
+   FOLIO MODIFICATIONS (2026-11-23): removed the optional wasm-media-encoders MP3 module and embedded encoder, replaced encoding with an unavailable PCM-only stub, disabled generation telemetry and its endpoint, and added a prominent modification header. For the exact reproducible edits see tools/voices/prepare-sdk.py in the source distribution. Folio uses PCM/WAV output. The optional MP3 binaries are NOT distributed here.
+   Upstream CEPhonemizer is compiled via Emscripten; its C++ sources are in vendor/cephonemizer/ and build flags in scripts/build-cephonemizer.cjs.
+
+   Supplemental compiler and C/C++ runtime notices (the SDK does not specify the exact emcc build): licenses/Emscripten-upstream.txt (MIT or NCSA, plus Node portions), licenses/Musl-upstream.txt (MIT and component exceptions), licenses/Libcxx-upstream.txt and licenses/Libcxxabi-upstream.txt (LLVM licenses, including exceptions). Reference notice texts:
+Emscripten: https://raw.githubusercontent.com/emscripten-core/emscripten/4.0.23/LICENSE
+Musl: https://raw.githubusercontent.com/emscripten-core/emscripten/4.0.23/system/lib/libc/musl/COPYRIGHT
+Libcxx: https://raw.githubusercontent.com/llvm/llvm-project/llvmorg-20.1.8/libcxx/LICENSE.TXT
+Libcxxabi: https://raw.githubusercontent.com/llvm/llvm-project/llvmorg-20.1.8/libcxxabi/LICENSE.TXT
+
+3. ONNX Runtime Web 1.26.0 / ONNX Runtime common and native dependencies
+   Copyright (c) Microsoft Corporation. MIT; accompanying third-party terms apply to their respective components.
+   The SDK includes ORT's wasm JS bundle; the two separate en-v1/ort-wasm-simd-threaded.* runtime files are unchanged from npm onnxruntime-web@1.26.0, dist/.
+   Original package: https://registry.npmjs.org/onnxruntime-web/-/onnxruntime-web-1.26.0.tgz
+   Npm SHA-512 (base64): LbRr/8zZt2xilI2smrVQGGKINo0U46i8qJp+UXyMBGfqN7KjnH1BiwCwLwyNIVV4i9CKFv7Sf4PwLKWnT8/bEA==
+   Include licenses/ONNX-Runtime-MIT.txt and licenses/ONNX-ThirdPartyNotices.txt. Microsoft's web npm tarball does not ship these as standalone files; this copy is from Microsoft's same-version published ORT 1.26.0 binary distribution (not all listed components are present in the web build):
+   https://pypi.org/project/onnxruntime/1.26.0/#files
+   Notice source: onnxruntime-1.26.0-cp311-cp311-win_arm64.whl, SHA-256 cd920e45b730e4a87833e2910d8ca375aaca9da6ccc09e24bce463b3356d637f.
+
+4. Pako 2.1.0 (inflation of the voice archive)
+   Pako project: https://github.com/nodeca/pako/tree/2.1.0
+   Package: https://registry.npmjs.org/pako/-/pako-2.1.0.tgz
+   The SDK includes pako (MIT AND Zlib). See the original complete licenses and credits in licenses/Pako-MIT.txt and licenses/Pako-Zlib-notice.txt.
+
+5. eSpeak NG English pronunciation rule and dictionary SOURCE DATA
+   en-v1/en_rules and en-v1/en_list are unmodified, human-editable upstream source, not compiled dictionaries. They are distributed separately from the app's MIT code and the SDK; these two files remain licensed under GNU GPL version 3 or, at your option, any later version. The corresponding source for each is the distributed file itself.
+   Full license: licenses/eSpeak-NG-GPL-3.0.txt. Retain the original headers and this notice.
+   Original source: https://github.com/espeak-ng/espeak-ng/tree/59eb19938f12e30881c81d86ce4a7de25414c9f4/dictsource
+   en_rules credits Jonathan Duddington (2005-2014) and Reece H. Dunn (2016-2017); en_list is from the eSpeak NG project. The source bytes match the pinned upstream files exactly.
+
+SHA-256 of shipped runtime and assets:
+24eb79018ed6253c10682096de672ce9265c1fe15c3e19e7f754d57a0fcd9790  en-v1/en_list
+8e75e9341ea735cc514b29a7d3a95c6c241c1cc176ad43e5699b8f7f66ab3194  en-v1/en_rules
+1a43fb758d228c8c69bc999ad7a111de6fb58356b4eaf91dfda3639ffe326b2d  en-v1/kitten.js
+f7b0afcbee92870b32b8e0276d855b954dc25470c9f051b376ac7eee537c76fc  en-v1/kitten_tts_nano_v0_8.onnx
+2de262ca1fe2d6e0ef9236bf77632fa01de232ce7b6a33071c37637ee53f4669  en-v1/ort-wasm-simd-threaded.mjs
+040d52ce5066707a10d45cb9500c35e70a9c2fb33c4fb63428da9ae45b956b97  en-v1/ort-wasm-simd-threaded.wasm
+8aa7cee235abb0739cb51e6559685f65a4dacd95568833d05699b1633f519b3f  en-v1/voices.npz

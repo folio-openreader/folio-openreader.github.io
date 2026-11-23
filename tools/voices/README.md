@@ -1,0 +1,9 @@
+# Optional English pack
+
+The seven runtime files are immutable within this version. The app ships their uncompressed byte counts and SHA-256 hashes in `dist/neural-assets.js`. Do not fetch mutable upstream resources from a user's browser. New upstream or local build bytes require review, a new pack cache version and updated checksums, licenses, and tests.
+
+The SDK was prepared from KittenML/KittenTTS-web commit `c846fe92858f3447f4912226471f5a63983b3f94`, using its precompiled `examples/html/assets/kittentts-web.js`. To reproduce the PCM-only modification, run `python tools/voices/prepare-sdk.py /path/to/the/pinned/bundle.js dist/voices/en-v1/kitten.js`. This hard-fails for every other input. Assets, model and dependency provenance are listed in [NOTICE](../../dist/voices/NOTICE.txt).
+
+QA: On a non-cross-origin-isolated managed x86 Chromium, two original English paragraph samples synthesized 18.33 seconds of Bella audio in 10.00 seconds and 13.21 seconds of Jasper in 7.28 seconds, after a 1.82 second engine start. The final PCM-only build was separately exercised through Folio’s UI, word reader and two-paragraph controller. Page fetches were disabled for the latter test after installation; the worker only accepts its own in-process blob URLs. Test a recent physical iPhone/installed Safari PWA for throughput, first audio, memory, audio unlock/interruptions, and quality before claiming mobile benchmarks or promising gapless reading. Page load itself still follows Folio's existing caching behavior: installing voices alone does not make the entire site boot offline. The browser may reclaim storage.
+
+No credentials, login, remote voice synthesis, backend, GPU, SharedArrayBuffer, cross-origin isolation or persistent storage permission is required. The current baseline does require WebAssembly SIMD, a worker, Web Audio and Cache Storage. A slower or unsupported device can use its native voice instead.

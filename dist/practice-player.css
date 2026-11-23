@@ -96,3 +96,22 @@
 .lesson-check-contact>.lesson-native-tick{position:absolute;width:1px;height:1px;padding:0;overflow:hidden;clip-path:inset(50%);pointer-events:none}
 .lesson-check-contact>.lesson-touch-target{position:absolute;inset:0;border-radius:13px;touch-action:auto;cursor:pointer;user-select:none;-webkit-user-select:none}
 @media(prefers-reduced-motion:no-preference){.lesson-check-contact:has(>.lesson-touch-target:active)>.lesson-primary{transform:translateY(2px)}}
+
+/* Keep feedback discoverable after a retry, without colour alone. */
+.lesson-reveal{display:flex;justify-content:center;width:100%;min-height:44px;margin-top:4px}
+.lesson-reveal[hidden]{display:none}
+.lesson-verdict[data-outcome=hint],.lesson-verdict[data-outcome=shown]{background:var(--subtle);color:var(--ink)}
+.lesson-finish .lesson-source-note{margin:0}
+.lesson-finish .lesson-follow-up{min-height:44px}
+.lesson-prompt{white-space:pre-line}
+@media(prefers-reduced-motion:no-preference){
+  #lesson-stage>.lesson-task,#lesson-stage>.lesson-finish{animation:lesson-stage-in 180ms ease-out both}
+  .lesson-verdict:not(:empty)>*{animation:lesson-verdict-in 150ms ease-out both}
+  @keyframes lesson-stage-in{from{opacity:.72;transform:translateY(4px)}to{opacity:1;transform:none}}
+  @keyframes lesson-verdict-in{from{opacity:.6}to{opacity:1}}
+}
+@media(forced-colors:active){
+  .lesson-verdict:not(:empty){border:1px solid CanvasText}
+  .lesson-answer[data-grade=yes]{border-style:double}
+  .lesson-answer[data-grade=no]{border-style:dotted}
+}

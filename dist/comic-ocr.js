@@ -1,6 +1,6 @@
 // Comic OCR stays in the browser. The selected, fixed local model is the only
 // language asset requested. Original page Blobs never enter a network request.
-import { check, canvasAt, ocrSession } from './ocr-engine.js';
+import { check, canvasAt, hasPageMarks, ocrSession } from './ocr-engine.js';
 import { comicImageHeader, COMIC_LIMITS as L } from './comic-import.js';
 import { COMIC_OCR_LANGUAGES } from './comic-languages.js';
 export { COMIC_OCR_LANGUAGES };
@@ -209,6 +209,11 @@ export async function recognizeComicPage(blob,{language='eng',signal,onProgress}
       // sparse horizontal lines instead of treating artwork as one text block.
       if(vertical){ctx.translate(0,tile.w);ctx.rotate(-Math.PI/2);}
       ctx.drawImage(source.image,0,tile.top,source.width,tile.end-tile.top,0,0,tile.w,tile.h);
+      if(!await hasPageMarks(canvas,signal)){
+        // White spacer tiles are common between panels. Start no worker for a
+        // fully blank page and preserve the source coordinate grid for others.
+        canvas.width=canvas.height=0;canvas=null;continue;
+      }
       const raw=await session.read(canvas,i+1,tiles.length);
       check(signal);
       const found=comicTSVLayout(raw.tsv,tile,language,raw.text);
