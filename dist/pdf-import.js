@@ -9,6 +9,11 @@ const issue = message => new ImportIssue(message);
 const tooBig = () => issue('В PDF слишком много страниц или текста. Разделите книгу на части и попробуйте снова.');
 const protectedBook = () => issue('Этот PDF защищён или зашифрован. Выберите доступную вам незашифрованную версию.');
 const unsupported = () => issue('Не удалось запустить обработчик PDF. Откройте Folio в современном браузере или импортируйте TXT.');
+const ocrModuleUnavailable=()=>Object.assign(issue('Не удалось загрузить локальное распознавание. Подключитесь к интернету, перезагрузите Folio и повторите предпросмотр.'),{code:'OCR_MODEL_UNAVAILABLE'});
+// Dynamic import has no typed network error. Match the load-specific TypeError
+// from Chromium, Firefox and WebKit, not exceptions evaluating the module.
+const ocrModuleDidNotLoad=e=>e instanceof TypeError &&
+  /^(?:Failed to fetch dynamically imported module(?:: .+)?|error loading dynamically imported module(?:: .+)?|Importing a module script failed\.?)$/i.test(e.message);
 const noText = () => Object.assign(issue('В PDF нет читаемого текстового слоя. Попробуйте импорт с OCR.'),{code:'PDF_NO_TEXT'});
 const cache = new Map();
 function assets(key) {
@@ -300,8 +305,17 @@ export async function parsePdf(buffer, name = '', options={}) {
               capped.push(n);if(keep)paragraphs=collector.columns();
               needs=false;
             }
+            if(needs && !unavailable && !engine){
+              try{engine=await import('./ocr-engine.js');}
+              catch(e){
+                check();
+                if(!automatic||!ocrModuleDidNotLoad(e))throw e;
+                unavailable=ocrModuleUnavailable();
+                if(keep)paragraphs=collector.columns();
+              }
+              check();
+            }
             if(needs && !unavailable){
-              engine??=await import('./ocr-engine.js');check();
               const b=page.getViewport({scale:1});
               const view=page.getViewport({scale:engine.viewportScale(b.width,b.height)});
               canvas=engine.canvasAt(view.width,view.height);const ctx=canvas.getContext('2d');
@@ -354,7 +368,7 @@ export async function parsePdf(buffer, name = '', options={}) {
       }
       const warnings=['Импортирован текст по страницам, без изображений. В колонках и таблицах проверьте порядок чтения.'];
       if(engine) explainOcr(meta,warnings);
-      if(unavailable)warnings.push('Не удалось загрузить локальное распознавание. Доступный текст сохранён в предпросмотре. Для сканов подключитесь к интернету и повторите.');
+      if(unavailable)warnings.push('Не удалось загрузить локальное распознавание. Доступный текст сохранён в предпросмотре. Для сканов подключитесь к интернету, перезагрузите Folio и повторите предпросмотр.');
       if(capped.length)warnings.push('Достигнут предел в 150 страниц с распознаванием. Если нужен весь текст сканов, разделите PDF на части и повторите.');
       if(skipped.length)warnings.push('Пропущены страницы без читаемого текста ('+skipped.length+'): '+numbers(skipped));
       return {format:'PDF',title:trimMeta(info?.Title)||trimMeta(name.replace(/\.pdf$/i,''))||'Без названия',author:trimMeta(info?.Author),language,chapters,warnings,...(attempted||options.ocr===true?{ocr:meta}:{})};
