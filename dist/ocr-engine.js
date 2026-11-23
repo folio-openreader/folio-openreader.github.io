@@ -24,7 +24,7 @@ export function viewportScale(w,h,scale=3){
 export function canvasAt(width,height) {
   const canvas=document.createElement('canvas');
   canvas.width=Math.max(1,Math.floor(width)); canvas.height=Math.max(1,Math.floor(height));
-  if (!canvas.getContext('2d')) throw error('Браузер не поддерживает обработку изображения.');
+  if (!canvas.getContext('2d')) throw Object.assign(error('Браузер не поддерживает обработку изображения.'),{code:'OCR_CANVAS_UNAVAILABLE'});
   return canvas;
 }
 // Thumbnail check from the syllabus parser; bound *both* axes for unusual page shapes.
@@ -186,7 +186,7 @@ function sameBytes(a,b){
 }
 // Positioned comic recognition is opt-in. It uses untouched full tile coordinates
 // and never shares PDF paragraph filtering, crop geometry, or the repeat cache.
-export function ocrSession(selected, signal, onProgress, {positioned=false}={}) {
+export function ocrSession(selected, signal, onProgress, {positioned=false,preserveLoadDeadline=false}={}) {
   let previous=null;
   let worker,seq=0,current=null,ready=false,closed=false, page=0,total=0;
   const emit=(stage,progress)=>onProgress?.({stage,page,total,progress});
@@ -200,7 +200,7 @@ export function ocrSession(selected, signal, onProgress, {positioned=false}={}) 
     if(closed||!worker) throw ocrFailed();
     return new Promise((resolve,reject)=>{
       const id=String(++seq);
-      const timer=setTimeout(()=>{if(current?.id===id){current=null;close();reject(error('Локальное OCR не ответило вовремя. Попробуйте более чёткий скан меньшего размера.'));}},90_000);
+      const timer=setTimeout(()=>{if(current?.id===id){current=null;close();reject(Object.assign(error('Локальное OCR не ответило вовремя. Попробуйте более чёткий скан меньшего размера.'),{code:'OCR_JOB_TIMEOUT'}));}},90_000);
       current={id,action,resolve:value=>{clearTimeout(timer);resolve(value);},reject:e=>{clearTimeout(timer);reject(e);}};
       try{worker.postMessage({workerId:'folio',jobId:id,action,payload},transfer);}catch{current.reject(ocrFailed());current=null;}
     });
@@ -227,7 +227,7 @@ export function ocrSession(selected, signal, onProgress, {positioned=false}={}) 
         await run('initialize',{langs:selected.join('+'),oem:1,config:{}});
         await run('setParameters',{params:{tessedit_pageseg_mode:positioned?'11':'3',preserve_interword_spaces:'1',user_defined_dpi:'220'}});
         ready=true;
-      }catch(e){check(signal);throw Object.assign(ocrFailed(),{code:'OCR_MODEL_UNAVAILABLE'});}
+      }catch(e){check(signal);if(e?.name==='AbortError'||(preserveLoadDeadline&&e?.code==='OCR_JOB_TIMEOUT'))throw e;throw Object.assign(ocrFailed(),{code:'OCR_MODEL_UNAVAILABLE'});}
     }
     check(signal);
     const recognize=async (target,role)=>{

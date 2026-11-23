@@ -18,8 +18,12 @@ if(!isMainThread){
     objects.push('<< /Type /XObject /Subtype /Image /Width 4 /Height 4 /ColorSpace /DeviceGray /BitsPerComponent 8 /Length '+raster.length+' >>\nstream\n'+raster+'\nendstream');
     const pages=[];
     for(const type of types){
+      const rasterized=type==='mixed'||type==='scan';
+      const filledDrawings='q 1 0 0 1 @ 250 cm 0 0 m 18 4 12 16 20 30 c 25 40 5 42 2 29 c 11 20 3 5 0 0 c h f Q\n';
+      const vector=type==='vector-outline'?Array.from({length:7},(_,i)=>filledDrawings.replace('@',String(45+65*i))).join(''):
+        type==='vector-border'?'72 430 350 60 re S\n':'';
       const content=(type==='scan'?'':'BT /F1 12 Tf 72 700 Td (The native text is still readable.) Tj ET\n')+
-        (type==='native'?'':'q 120 0 0 120 80 200 cm /Picture Do Q\n');
+        (rasterized?'q 120 0 0 120 80 200 cm /Picture Do Q\n':'')+vector;
       pages.push(objects.length+1);
       objects.push('<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R >> /XObject << /Picture 4 0 R >> >> /Contents '+(objects.length+2)+' 0 R >>',
         '<< /Length '+content.length+' >>\nstream\n'+content+'endstream');
@@ -76,10 +80,24 @@ if(!isMainThread){
       assert.equal(requests,prev+1,'one failed load per import, not once per raster page');
     }
     fault=chromium;
+    const beforeVectors=requests;
+    yes((await run(['vector-outline'])).chapters,0);
+    yes((await run(['vector-border'],{ocr:'thorough'})).chapters,0);
+    assert.equal(requests,beforeVectors,'auto leaves vector shapes alone; simple strokes do not start manual OCR');
+    const optional=await run(['vector-outline','vector-outline'],{ocr:'thorough'});
+    yes(optional.chapters,0);yes(optional.chapters,1);
+    assert.match(optional.warnings.join(' '),/контуров временно недоступно.*1, 2/);
+    assert.equal(requests,beforeVectors+1,'one failed load per optional module, not per outlined page');
+    const beforeRequired=requests;
+    await assert.rejects(run(['vector-outline','scan'],{ocr:'thorough'}),e=>e.code!=='OCR_MODEL_UNAVAILABLE');
+    assert.equal(requests,beforeRequired+2,'optional failure does not bypass the later required scan path');
     await assert.rejects(run(['scan']),{code:'OCR_MODEL_UNAVAILABLE',message:/перезагрузите Folio/});
     await assert.rejects(run(['mixed'],{ocr:'thorough'}),e=>e.code!== 'OCR_MODEL_UNAVAILABLE');
     fault=()=>new TypeError('engine config is not a function');
     await assert.rejects(run(['mixed']),e=>e.code!== 'OCR_MODEL_UNAVAILABLE');
+    await assert.rejects(run(['vector-outline'],{ocr:'thorough'}));
+    fault=()=>new DOMException('cancelled','AbortError');
+    await assert.rejects(run(['vector-outline'],{ocr:'thorough'}),{name:'AbortError'});
     fault=()=>new SyntaxError('missing export');
     await assert.rejects(run(['mixed']),e=>e.code!== 'OCR_MODEL_UNAVAILABLE');
     fault=()=>new DOMException('cancelled','AbortError');
