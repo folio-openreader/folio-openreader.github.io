@@ -58,16 +58,22 @@ const needsSpace = (a,b) => !/[\s\-‐‑\u00AD]$/u.test(a) && !/^[\s,.;:!?，�
 function pageCollector(totals,layout) {
   let firstAnchor=null;
   let line = null, prev = null, parts = [], paragraphs = [];
+  let pairs=[];
+  const replacements=new Map();
   const finishPara = () => {
     if (parts.length) {
       const text = parts.join('').trim();
       if (text && readable(text)) {
         if (++totals.paragraphs > LIMIT.paragraphs) throw tooBig();
+        if(pairs){
+          const split=separateColumnPairs(pairs);
+          if(split)replacements.set(paragraphs.length,split);
+        }
         paragraphs.push(text);
         if(layout) layout.anchors.push(firstAnchor);
       }
     }
-    parts = []; firstAnchor=null;
+    parts = []; firstAnchor=null; pairs=[];
   };
   const finishLine = () => {
     if (!line) return;
@@ -81,6 +87,16 @@ function pageCollector(totals,layout) {
         if (Math.abs(step) > 1.65*h || step < -0.6*h || shift > Math.max(h*.9, 8) ||
             Math.abs(shift) > 6*h || Math.abs(line.h-prev.h) > .24*h ||
             line.ux*prev.ux + line.uy*prev.uy < .95) finishPara();
+      }
+      if(pairs){
+        if(line.sides?.length===2 && pairs.length<128){
+          const [left,right]=line.sides;
+          // Slice the original text at its geometric gap, retaining the
+          // exact same spelling, punctuation and explicit intra-line spaces.
+          left.text=line.parts.slice(0,right.part).join('').trim();
+          right.text=line.parts.slice(right.part).join('').trim();
+          pairs.push({h:line.h,y:line.y,sides:line.sides});
+        }else pairs=null;
       }
       if (layout && !parts.length) firstAnchor=[line.x,line.y];
       if (parts.length && needsSpace(parts.at(-1),text)) parts.push(' ');
@@ -101,16 +117,61 @@ function pageCollector(totals,layout) {
       const scale = Math.hypot(a,b) || 1, ux = a/scale, uy = b/scale;
       const h = Math.max(1,Math.abs(item.height || 0),Math.hypot(c,d));
       if (line && Math.abs((x-line.x)*line.uy - (y-line.y)*line.ux) > Math.max(h,line.h)*.55) finishLine();
-      if (!line) line = {x,y,h,ux,uy,parts:[],lastEnd:null};
+      if (!line) line = {x,y,h,ux,uy,parts:[],lastEnd:null,sides:[]};
       const pos = x*ux+y*uy;
+      if(line.sides && str.trim()){
+        const column=line.sides.at(-1),end=x+item.width;
+        if(item.dir!=='ltr' || Math.abs(uy)>.015 || ux<.999 || !Number.isFinite(end) ||
+           item.width<=0 || Math.abs(y-line.y)>.15*line.h || Math.abs(h-line.h)>.16*line.h ||
+           (column && x<column.end-.25*h))line.sides=null;
+        else if(!column || x-column.end>Math.max(24,2*h)){
+          if(line.sides.length===2)line.sides=null;
+          else line.sides.push({part:line.parts.length,x,end});
+        }else column.end=Math.max(end,column.end);
+      }
       if (line.parts.length && item.dir === 'ltr' && line.lastEnd !== null && pos-line.lastEnd > h*.18 &&
           needsSpace(line.parts.at(-1),str)) line.parts.push(' ');
       line.parts.push(str);
       line.lastEnd = pos + (item.width || 0);
       if (item.hasEOL) finishLine();
     },
-    finish() { finishLine(); finishPara(); return paragraphs; }
+    finish() { finishLine(); finishPara(); return paragraphs; },
+    columns(){
+      if(!replacements.size || totals.paragraphs+replacements.size>LIMIT.paragraphs)return paragraphs;
+      totals.paragraphs+=replacements.size;
+      return paragraphs.flatMap((text,i)=>replacements.get(i)??[text]);
+    }
   };
+}
+// Some PDF generators emit L1,R1,L2,R2 in one paragraph despite a wide gutter.
+// Correct only a repeated, aligned pair of horizontal text runs when BOTH
+// sides have independent prose wrapping. Otherwise retain publisher order.
+function separateColumnPairs(rows){
+  if(rows.length<3)return null;
+  const {h,y,sides:[left,right]}=rows[0], columns=['',''], continuations=[0,0];
+  let endOfLeft=-Infinity,startOfRight=Infinity,prevY=y,prev=[];
+  if(right.x-left.x<15*h)return null;
+  for(const {h:height,y,sides} of rows){
+    if(Math.abs(height-h)>.16*h || (prev.length&&(prevY-y<.82*h||prevY-y>1.65*h)))return null;
+    prevY=y;
+    endOfLeft=Math.max(endOfLeft,sides[0].end);startOfRight=Math.min(startOfRight,sides[1].x);
+    if(startOfRight-endOfLeft<Math.max(24,2*h))return null;
+    for(const [i,start] of [left.x,right.x].entries()){
+      const {x,end,text}=sides[i];
+      if(Math.abs(x-start)>Math.min(8,.7*h) || end-x<8*h ||
+         !proseLine(text))return null;
+      if(prev.length && /[\p{L}\p{M},;]$/u.test(prev[i]) && /^\p{Ll}/u.test(text))continuations[i]++;
+      if(columns[i] && needsSpace(columns[i],text))columns[i]+=' ';
+      columns[i]+=text;
+    }
+    prev=sides.map(s=>s.text);
+  }
+  return continuations.every(n=>n>=2)?columns:null;
+}
+function proseLine(text){
+  let words=0;
+  for(const match of text.matchAll(/[\p{L}\p{M}]{2,}/gu)){if(++words===4)return true;}
+  return false;
 }
 const trimMeta = val => typeof val==='string' ? clean(val).trim().slice(0,240) : '';
 function nativeDamaged(paragraphs){
@@ -216,6 +277,7 @@ export async function parsePdf(buffer, name = '', options={}) {
           }catch(e){check();if(!engine||e instanceof ImportIssue)throw e; if(layout){layout.runs=[];layout.nativeError=true;}}
           finally{reader?.releaseLock();}
           let paragraphs=collector.finish();
+          if(!engine)paragraphs=collector.columns();
           if(engine){
             // Text-only imports never use a damage verdict or OCR coordinates.
             const keep=paragraphs.length>0 && !layout.nativeError && !nativeDamaged(paragraphs);
@@ -226,6 +288,7 @@ export async function parsePdf(buffer, name = '', options={}) {
               if(ops.fnArray.length>350000) throw tooBig();
               needs=ops.fnArray.some(op=>images.has(op));
             }
+            if(!needs)paragraphs=collector.columns();
             if(needs){
               const b=page.getViewport({scale:1});
               const view=page.getViewport({scale:engine.viewportScale(b.width,b.height)});
