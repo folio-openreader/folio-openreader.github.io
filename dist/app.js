@@ -73,6 +73,7 @@ const glyphs={
   speaker:'M4 9h4l4-4v14l-4-4H4z M16 9a4 4 0 0 1 0 6m2.5-8.5a7.5 7.5 0 0 1 0 11',
   upload:'M12 19V5m-6 6 6-6 6 6',
   selectWords:'M3.5 7.5l1.8 1.8L9 5.5M3.5 15.5l1.8 1.8 3.7-3.8M12 8h8.5M12 16h8.5',
+  list:'M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01',
   search:'M15.8 10a5.8 5.8 0 1 1-11.6 0 5.8 5.8 0 0 1 11.6 0zm-1.6 4.2L20 20',
   trash:'M4 6h16M9 6V3h6v3M6 6l1 14h10l1-14M10 10v6m4-6v6',
   lookup:'M11 5a4 4 0 0 0-3-1H3v14h5a4 4 0 0 1 3 1V5zm0 0a4 4 0 0 1 3-1h5v3m-3.6 11.1-1.4.5a4 4 0 0 0-3 1m10-7.1a3.6 3.6 0 1 1-7.2 0 3.6 3.6 0 0 1 7.2 0zm-1.1 2.6L22 18',
@@ -393,15 +394,29 @@ function renderHomePanel(){
       measures.total?'Пока нет слов, которые пора повторить.':'Сохраните слова при чтении, чтобы собрать карточки.';
   }
 }
-function renderWords(){
+const wordStageFilters=$('#word-stage-filters');
+const wordStageButtons=$$('[data-stage-filter]');
+const wordStageMotion=installNavMotion(wordStageFilters,{indicator:'.catalog-current',keyAttribute:'stage-filter'});
+function revealWordStageButton(button){
+  if(!button?.matches('button[data-stage-filter]')||wordStageFilters.scrollWidth<=wordStageFilters.clientWidth)return;
+  const bounds=wordStageFilters.getBoundingClientRect(),cell=button.getBoundingClientRect();
+  const left=bounds.left+wordStageFilters.clientLeft,right=left+wordStageFilters.clientWidth;
+  // Reveal only inside the filter control, without moving the page.
+  if(cell.left<left)wordStageFilters.scrollLeft+=cell.left-left;
+  else if(cell.right>right)wordStageFilters.scrollLeft+=cell.right-right;
+}
+wordStageFilters.addEventListener('focusin',e=>revealWordStageButton(e.target));
+
+function renderWords({motion=false}={}){
   const measures=learningStats(learning,Date.now());
   $('#word-count').textContent=measures.total;
   paintWordSelection(measures.total);
   $('#study-summary').textContent=measures.total?`${wordCountText(measures.total)} · ${measures.known} знаю`:'Слова из ваших книг';
-  for(const b of $$('[data-stage-filter]')){
+  for(const b of wordStageButtons){
     const status=b.dataset.stageFilter,n=status==='all'?measures.total:measures[status];
     b.setAttribute('aria-pressed',String(status===wordFilter));b.querySelector('small').textContent=n;
   }
+  wordStageMotion.select(wordFilter,{animate:motion});
   const list=$('#saved-list'),key=searchKey($('#word-search').value),filter=wordFilter;
   const matches=Object.values(learning.words).filter(r=>(filter==='all'||stage(r)===filter)&&(!key||searchKey(r.word).includes(key)||(!state.prefs.dictionaryPack&&state.prefs.dictionaryTarget==='ru'&&searchKey(baseForStudy(r)?.[0]||'').includes(key))));
   $('#word-matches').textContent=key||filter!=='all'?`Найдено: ${matches.length}`:'';
@@ -1780,7 +1795,10 @@ document.addEventListener('keydown',e=>{
   else return;
   e.preventDefault();
 });
-$$('[data-stage-filter]').forEach(b=>b.onclick=()=>{wordFilter=b.dataset.stageFilter;wordLimit=48;renderWords()});
+for(const b of wordStageButtons)b.onclick=e=>{
+  wordFilter=b.dataset.stageFilter;wordLimit=48;renderWords({motion:e.detail>0});
+  revealWordStageButton(b);
+};
 $('#words-more').onclick=()=>{const old=wordLimit;wordLimit+=48;renderWords();$$('#saved-list .saved-row')[old]?.querySelector('input,button')?.focus()};
 $('#word-selection-toggle').onclick=()=>{
   if(selectingWords)exitWordSelection();else selectingWords=true;

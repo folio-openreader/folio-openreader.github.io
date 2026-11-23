@@ -78,17 +78,8 @@ body.reading .reader-header{background:var(--surface)}
 .word-search-panel .search-field{max-width:none;padding:4px 4px 14px;margin-inline:-4px}
 .word-search-panel input{min-height:44px;font-size:16px}
 .word-search-panel input:focus-visible{outline-offset:-3px}
-.study-filters{max-width:none;display:flex;flex-direction:column;align-items:stretch}
 .search-field input{color:var(--ink);background:var(--subtle);border:1px solid var(--line);padding:10px 13px}
 .search-field input::placeholder{color:var(--muted);opacity:1}
-.stage-filters{display:flex;flex-wrap:wrap;gap:6px}
-.stage-filters button{
-  display:flex;align-items:center;gap:6px;min-height:44px;padding:0 9px;
-  border-radius:10px;border:1px solid var(--line);background:var(--surface);font-size:14px;font-weight:610;
-}
-.stage-filters .icon-glyph svg{width:16px;height:16px;stroke-width:1.9}
-.stage-filters [aria-pressed=true]{background:var(--soft);border-color:var(--accent);color:var(--accent)}
-.stage-filters small{font-size:12px;line-height:1;color:var(--muted);font-variant-numeric:tabular-nums}
 #word-matches{margin:7px 0;min-height:0}
 #word-matches:empty{display:none}
 #saved-list{display:grid;gap:8px;margin-top:12px}
@@ -168,7 +159,7 @@ body.reading .reader-header{background:var(--surface)}
 .match-actions{display:flex;gap:8px;flex-wrap:wrap;justify-content:space-between}
 .match-actions .quiet{background:var(--subtle);padding-inline:13px}
 @media (hover:hover) and (pointer:fine){
-  .stage-filters button:not([aria-pressed=true]):hover,.match-tile:not(:disabled):not([aria-pressed=true]):not([data-miss]):hover{background:var(--subtle)}
+  .match-tile:not(:disabled):not([aria-pressed=true]):not([data-miss]):hover{background:var(--subtle)}
 
 }
 @media(max-width:700px){
@@ -193,8 +184,6 @@ body.reading .reader-header{background:var(--surface)}
   html[data-vv-keyboard] .home-nav{visibility:hidden}
 }
 @media(max-width:360px){
-  .stage-filters button{padding-inline:7px;font-size:13px;gap:3px;}
-  .stage-filters .icon-glyph svg{width:13px;height:13px}
   .saved-row{padding-inline:8px;gap:6px}
   .saved-row .word-row-actions{gap:4px}
 }
