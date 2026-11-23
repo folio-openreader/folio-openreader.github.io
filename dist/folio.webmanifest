@@ -7,8 +7,8 @@
   "start_url": "./app.html",
   "scope": "./",
   "display": "standalone",
-  "theme_color": "#ffffff",
-  "background_color": "#ffffff",
+  "theme_color": "#f4efdf",
+  "background_color": "#f4efdf",
   "icons": [
     {
       "src": "icons/folio-192.png",

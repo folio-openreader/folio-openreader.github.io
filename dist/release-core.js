@@ -16,12 +16,14 @@ export const ACCENTS = [
   {value:'#89501d', label:'Терракота'},
   {value:'#69439c', label:'Слива'},
 ];
-export const DEFAULT_PREFS = Object.freeze({size:21, theme:'light', font:DEFAULT_READING_FONT, accent:ACCENTS[0].value, readingLanguage:'en', languageSetup:'unset', dictionaryTarget:'ru', dictionaryPack:'', autoSaveWords:true, haptics:true, practiceSound:false, iphoneCheckHaptic:false});
-const THEMES = {
-  light:{surface:'#ffffff',bg:'#ffffff',ink:'#000000'},
-  paper:{surface:'#fcf8ec',bg:'#f4efdf',ink:'#36342d'},
-  night:{surface:'#171717',bg:'#101010',ink:'#f5f5f5'},
-};
+export const DEFAULT_PREFS = Object.freeze({size:21, theme:'paper', font:DEFAULT_READING_FONT, accent:ACCENTS[0].value, readingLanguage:'en', languageSetup:'unset', dictionaryTarget:'ru', dictionaryPack:'', autoSaveWords:true, haptics:true, practiceSound:false, iphoneCheckHaptic:false});
+export const THEMES = Object.freeze({
+  light:{surface:'#ffffff',bg:'#ffffff',ink:'#000000',scheme:'light'},
+  paper:{surface:'#fcf8ec',bg:'#f4efdf',ink:'#36342d',scheme:'light'},
+  linen:{surface:'#f0f2ea',bg:'#e4e9de',ink:'#243126',subtle:'#dfe6d9',scheme:'light'},
+  ink:{surface:'#202f37',bg:'#17242b',ink:'#ebf1f0',subtle:'#263943',scheme:'dark'},
+  night:{surface:'#171717',bg:'#101010',ink:'#f5f5f5',scheme:'dark'},
+});
 export const BACKUP_LIMIT = 50 * 1024 * 1024;
 const HEX=/^#[0-9a-f]{6}$/i, BOOK_ID=/^book-[0-9a-f-]{36}$/i;
 const object=value=>typeof value==='object'&&value!==null&&!Array.isArray(value);
@@ -31,7 +33,7 @@ export function sanitizePrefs(raw={}) {
   const p=object(raw)?raw:{};
   return {
     size:typeof p.size==='number'&&Number.isFinite(p.size)?bounded(Math.round(p.size),17,30):DEFAULT_PREFS.size,
-    theme:['light','paper','night'].includes(p.theme)?p.theme:DEFAULT_PREFS.theme,
+    theme:typeof p.theme==='string'&&Object.hasOwn(THEMES,p.theme)?p.theme:DEFAULT_PREFS.theme,
     font:normalizeReadingFont(p.font),
     accent:HEX.test(p.accent||'')?p.accent.toLowerCase():DEFAULT_PREFS.accent,
     autoSaveWords:p.autoSaveWords!==false,
@@ -49,12 +51,12 @@ function mix(a,b,p) {const x=channels(a),y=channels(b);return '#'+x.map((v,i)=>M
 function luma(hex){return channels(hex).map(x=>x/255).map(x=>x<=.04045?x/12.92:((x+.055)/1.055)**2.4).reduce((sum,v,i)=>sum+v*[.2126,.7152,.0722][i],0)}
 export function contrast(a,b){const l=[luma(a),luma(b)].sort((x,y)=>y-x);return (l[0]+.05)/(l[1]+.05)}
 export function accentPalette(prefs) {
-  const p=sanitizePrefs(prefs),t=THEMES[p.theme],toward=p.theme==='night'?'#ffffff':'#000000';
+  const p=sanitizePrefs(prefs),t=THEMES[p.theme],dark=t.scheme==='dark',toward=dark?'#ffffff':'#000000';
   let accent=p.accent;
-  for(let i=0;i<=100;i++){accent=mix(p.accent,toward,i/100);if(Math.min(contrast(accent,t.bg),contrast(accent,t.surface))>=4.9)break}
+  for(let i=0;i<=100;i++){accent=mix(p.accent,toward,i/100);if(Math.min(contrast(accent,t.bg),contrast(accent,t.surface),contrast(accent,t.subtle||t.surface))>=4.9)break}
   const onAccent=contrast(accent,'#ffffff')>=4.5?'#ffffff':'#000000';
-  const soft=mix(t.surface,accent,p.theme==='night'?.18:.09);
-  return {accent,onAccent,soft,selection:mix(t.surface,accent,p.theme==='night'?.27:.18),focus:accent,themeColor:t.bg};
+  const soft=mix(t.surface,accent,dark?.18:.09);
+  return {accent,onAccent,soft,selection:mix(t.surface,accent,dark?.27:.18),focus:accent,themeColor:t.bg};
 }
 export function searchKey(text) {return String(text).normalize('NFKC').toLocaleLowerCase().replaceAll('ё','е').trim()}
 export function sanitizeSaved(words) {

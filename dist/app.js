@@ -5,7 +5,7 @@ import {isComic,comicBook,booksOnly,putComic,readComicPage,dropComic,comicOCRCha
 import {COMIC_OCR_OPTIONS,comicPageModel,comicModelTag} from './comic-languages.js';
 import {demoChapters, dictionary} from './data.js';
 import {parseBook, pairBooks, singleBook} from './importers.js';
-import {DEMO_ID, ACCENTS, DEFAULT_PREFS, BACKUP_LIMIT, contrast, accentPalette, sanitizeOcr, sanitizePrefs, sanitizeSaved, safePosition, searchKey, serializeBackup, parseBackup} from './release-core.js';
+import {DEMO_ID, ACCENTS, DEFAULT_PREFS, THEMES, BACKUP_LIMIT, contrast, accentPalette, sanitizeOcr, sanitizePrefs, sanitizeSaved, safePosition, searchKey, serializeBackup, parseBackup} from './release-core.js';
 import {bootMobileViewport} from './mobile-viewport.js';
 import {READING_FONTS, populateReadingFontPicker, readingFontStack} from './reading-fonts.js';
 import {cancelMotion, revealMotion, outcomeCue} from './motion.js';
@@ -46,7 +46,7 @@ const readingActivity=installReadingActivity($('#reading-activity'),readingHome.
 const wordFlight=makeWordFlight($('#word-dialog'),$('#word-save'));
 const byokSession=createByokSession();
 const byokSettings=installByokSettings($('#byok-settings'),byokSession,{providers:BYOK_PROVIDERS,summary:$('#profile-byok-summary')});
-let cancelAiWordHint=null;
+let aiWordHint=null;
 const glyphs={
   research:'M4 3h11l5 5v13H4z M14 3v6h6M8 16l3-3 2 2 3-4',
   comicBook:'M3 4h18v16H3z M13 4v16M3 12h10m0 3h8',
@@ -78,6 +78,7 @@ const glyphs={
   trash:'M4 6h16M9 6V3h6v3M6 6l1 14h10l1-14M10 10v6m4-6v6',
   lookup:'M11 5a4 4 0 0 0-3-1H3v14h5a4 4 0 0 1 3 1V5zm0 0a4 4 0 0 1 3-1h5v3m-3.6 11.1-1.4.5a4 4 0 0 0-3 1m10-7.1a3.6 3.6 0 1 1-7.2 0 3.6 3.6 0 0 1 7.2 0zm-1.1 2.6L22 18',
   download:'M12 3v12m-5-5 5 5 5-5M5 16v4h14v-4',
+  aiSpark:'M9 2c.7 5 2 6.3 7 7-5 .7-6.3 2-7 7-.7-5-2-6.3-7-7 5-.7 6.3-2 7-7zm9 12c.4 2.9 1.1 3.6 4 4-2.9.4-3.6 1.1-4 4-.4-2.9-1.1-3.6-4-4 2.9-.4 3.6-1.1 4-4z',
 };
 const iconAlias={vault:'book-open',openBook:'book-open',practice:'dumbbell',person:'user'};
 function iconMarkup(name){return `<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">${lingotIcons[iconAlias[name]||name]||`<path d="${glyphs[name]||glyphs.book}"/>`}</svg>`;}
@@ -975,7 +976,7 @@ function toggleWordSaved(event){
   $('#word-count').textContent=Object.keys(learning.words).length;
 }
 function resetWordContext(){
-  cancelAiWordHint?.();cancelAiWordHint=null;
+  aiWordHint?.dispose();aiWordHint=null;
   const context=$('#word-context'),toggle=$('#word-context-toggle'),dialog=$('#word-dialog');
   context.hidden=true;context.replaceChildren();toggle.textContent='В контексте';toggle.setAttribute('aria-expanded','false');dialog.removeAttribute('data-expanded');
 }
@@ -983,6 +984,12 @@ function toggleWordContext(event){
   const anchor=wordAnchor;if(!anchor)return;
   const context=$('#word-context'),toggle=$('#word-context-toggle'),dialog=$('#word-dialog');
   if(!context.hidden){resetWordContext();return}
+  openWordContext(event);
+}
+function openWordContext(event){
+  const anchor=wordAnchor;if(!anchor)return;
+  const context=$('#word-context'),toggle=$('#word-context-toggle'),dialog=$('#word-dialog');
+  if(!context.hidden)return;
   const {text,translation,token,offset,sourceLanguage:sourceLanguageTag,translatedLanguage,alignment}=anchor;
   const original=node('p',null,'word-original');
   if(sourceLanguageTag)original.lang=sourceLanguageTag;
@@ -1009,7 +1016,7 @@ function toggleWordContext(event){
   const connection=byokSession.snapshot(),provider=BYOK_PROVIDERS.find(p=>p.id===connection?.provider);
   if(provider&&connection.model){
     const language=sourceLanguage(token,sourceLanguageTag);
-    cancelAiWordHint=mountAiWordHint(context,{anchor,sourceLanguage:language,targetLanguage:state.prefs.dictionaryTarget,connection:{...connection,providerLabel:provider.label},
+    aiWordHint=mountAiWordHint(context,{anchor,sourceLanguage:language,targetLanguage:state.prefs.dictionaryTarget,connection:{...connection,providerLabel:provider.label},
       request:(hint,options)=>requestAiWordHint(byokSession,connection,hint,options).finally(()=>byokSettings.refresh())});
   }
   context.hidden=false;dialog.setAttribute('data-expanded','');toggle.textContent='Свернуть контекст';toggle.setAttribute('aria-expanded','true');
@@ -1039,7 +1046,7 @@ async function showWord(button,event){
     if(existed)attachStage(button,record);else syncWordMark(wordAnchor,record);
   }
   setActiveParagraph(pi,true);clearTimeout(seenTimer);resetWordContext();$('#word-sheet-heading').textContent=button.textContent;
-  $('#word-sheet-heading').lang=source||'';resetSystemDictionary();wordSavedState();
+  $('#word-sheet-heading').lang=source||'';wordSavedState();
   $('#word-senses').hidden=true;$('#word-senses-toggle').setAttribute('aria-expanded','false');
   dictUI.hideHint();
   const language=sourceLanguage(word,source),target=state.prefs.dictionaryTarget;
@@ -1073,6 +1080,8 @@ function sayWord(event){
 }
 function applyPrefs(){
   const p=state.prefs=sanitizePrefs(state.prefs),palette=accentPalette(p),style=document.documentElement.style;
+  document.documentElement.dataset.theme=p.theme;
+  $('meta[name="color-scheme"]').content=THEMES[p.theme].scheme;
   document.body.classList.toggle('night',p.theme==='night');document.body.classList.toggle('paper',p.theme==='paper');
   const bodyStyle=document.body.style;for(const [property,value] of [['--accent',palette.accent],['--on-accent',palette.onAccent],['--soft',palette.soft],['--focus',palette.focus],['--selection',palette.selection]])bodyStyle.setProperty(property,value);
   // Switch knobs are non-text indicators: white can stay on a vivid accent
@@ -1209,18 +1218,23 @@ const ocrLanguageChoices=[['eng','Английский'],['rus','Русский'
 const isPdf=file=>/\.pdf$/i.test(file?.name||'');
 const isImage=file=>/\.(?:png|jpe?g)$/i.test(file?.name||'');
 const getFile=role=>$('#'+role+'-file').files[0];
+const ocrRecovery=new Set();
+const preferredOcr=role=>[({en:'eng',ru:'rus',kk:'kaz'})[knownLanguage(role==='original'?state.prefs.readingLanguage:state.prefs.dictionaryTarget)]||(role==='original'?'eng':'rus')];
 for(const role of importRoles){
-  const select=$('#ocr-'+role);
+  const select=$('#ocr-'+role),automatic=node('option','Автоматически');automatic.value='';select.append(automatic);
   for(const [code,label] of ocrLanguageChoices){const option=node('option',label);option.value=code;select.append(option)}
-  select.value=({en:'eng',ru:'rus',kk:'kaz'})[role==='original'?state.prefs.readingLanguage:state.prefs.dictionaryTarget]||(role==='original'?'eng':'rus');
 }
 function syncOcrControls(){
-  const hasPdf=importRoles.some(role=>isPdf(getFile(role)));
-  const enabled=$('#pdf-ocr').checked;
-  const needsOcr=role=>isImage(getFile(role))||(enabled&&isPdf(getFile(role)));
-  $('#ocr-panel').hidden=!hasPdf&&!importRoles.some(role=>isImage(getFile(role)));
-  $('.ocr-toggle').hidden=!hasPdf;$('#ocr-pdf-limit').hidden=!hasPdf||!enabled;$('#ocr-settings').hidden=!importRoles.some(needsOcr);
-  for(const role of importRoles)$('#ocr-'+role+'-field').hidden=!needsOcr(role);
+  const hasSettings=role=>isImage(getFile(role))||(isPdf(getFile(role))&&ocrRecovery.has(role));
+  const panel=$('#ocr-panel');
+  panel.hidden=!importRoles.some(hasSettings);
+  if(panel.hidden)panel.open=false;
+  $('#ocr-pdf-limit').hidden=!importRoles.some(role=>isPdf(getFile(role))&&ocrRecovery.has(role));
+  for(const role of importRoles)$('#ocr-'+role+'-field').hidden=!hasSettings(role);
+}
+function resetOcrSettings(){
+  ocrRecovery.clear();$('#ocr-panel').open=false;
+  for(const role of importRoles)$('#ocr-'+role).value='';
 }
 function finishImportJob(){
   importJob=null;$('#preview-import').disabled=false;$('#cancel-import').hidden=true;
@@ -1237,7 +1251,7 @@ function cancelImport(){
 }
 function showImportProgress(role,update){
   const {stage,page,total,progress}=update;
-  const label=({text:'Извлекаем текст',render:'Готовим изображение',load:'Подготавливаем распознавание',recognize:'Распознаём текст'})[stage]||'Читаем файл';
+  const label=({text:'Извлекаем текст',render:'Готовим изображение',load:'Загружаем модель для распознавания на устройстве',recognize:'Распознаём текст'})[stage]||'Читаем файл';
   const pageLabel=Number.isInteger(page)&&page>0?' · стр. '+page+(Number.isInteger(total)&&total>0?' из '+total:''):'';
   const bar=$('#import-progress');bar.hidden=false;
   const p=Number.isFinite(progress)?Math.max(0,Math.min(1,progress)):null;
@@ -1284,11 +1298,11 @@ function renderImportPreview(a,b,event){
   if(b){const r=previewBook.alignmentReport;warnings.unshift(`По порядку сопоставлено ${r.matchedCount} из ${r.originalCount} абзацев оригинала. Без пары: ${r.unmatchedOriginal} в оригинале, ${r.unmatchedTranslation} в переводе. Смысл не проверен.`);if(!r.paragraphCountsMatch||!r.chapterCountsMatch)warnings.unshift('Структуры файлов различаются. Несовпавшие главы останутся без перевода.')}
   else warnings.unshift('Готовый перевод не добавлен.');
   warnings.forEach(w=>box.append(node('p',w,'warning')));
-  const textOnlyRole=a.format==='PDF'&&!a.ocr?'original':b?.format==='PDF'&&!b.ocr?'translation':null;
-  if(textOnlyRole){
-    const change=node('button','Распознать сканы и надписи в PDF','quiet');
-    change.type='button';change.onclick=()=>setupOcr(textOnlyRole);
-    box.append(node('p','Сейчас из PDF взят только текстовый слой. Если часть текста осталась на изображении, попробуйте распознавание.','muted'),change);
+  for(const [role,parsed] of [['original',a],['translation',b]]){
+    if(!parsed||!['PDF','PNG','JPEG'].includes(parsed.format))continue;
+    const suffix=b?' ('+(role==='original'?'оригинал':'перевод')+')':'';
+    const change=node('button',(parsed.format==='PDF'?'Дополнительное распознавание':'Изменить язык распознавания')+suffix+'…','quiet');
+    change.type='button';change.onclick=()=>setupOcr(role);box.append(change);
   }
   appendOcrReview(box,a,'original');appendOcrReview(box,b,'translation');
   // Do not allocate a copy of a whole book to show three examples.
@@ -1307,9 +1321,13 @@ async function previewImport(event){
   $('#preview-import').disabled=true;$('#cancel-import').hidden=false;$('#import-preview').setAttribute('aria-busy','true');
   importStatus('Читаем книгу…','loading');setBookTiles('reading');
   let role='original';
-  const read=file=>parseBook(file,{ocr:isImage(file)||$('#pdf-ocr').checked,languages:$('#ocr-'+role).value.split('+'),signal:controller.signal,onProgress:update=>{
-    if(sequence===importSequence&&!controller.signal.aborted)showImportProgress(role,update);
-  }});
+  const read=file=>{
+    const choice=$('#ocr-'+role).value;
+    return parseBook(file,{ocr:ocrRecovery.has(role)?'thorough':'auto',languages:choice?choice.split('+'):undefined,
+      preferredLanguages:preferredOcr(role),signal:controller.signal,onProgress:update=>{
+      if(sequence===importSequence&&!controller.signal.aborted)showImportProgress(role,update);
+    }});
+  };
   try{
     const a=await read(original);if(sequence!==importSequence)return;
     role='translation';const b=translation?await read(translation):null;if(sequence===importSequence)renderImportPreview(a,b,event);
@@ -1317,15 +1335,20 @@ async function previewImport(event){
     if(sequence!==importSequence)return;
     previewBook=null;setBookTiles('selected');dropMotions.get($('#'+role+'-file'))?.state('rejected');
     importStatus((translation?(role==='original'?'Оригинал: ':'Перевод: '):'')+(e.message||'Не удалось прочитать файл.'),'error');
-    if(isPdf(getFile(role))&&!$('#pdf-ocr').checked&&(e.code==='PDF_NO_TEXT'||/OCR/i.test(e.message||''))){$('#retry-ocr').hidden=false;$('#retry-ocr').dataset.role=role}
+    if((isPdf(getFile(role))||isImage(getFile(role)))&&['OCR_NO_TEXT','OCR_MODEL_UNAVAILABLE'].includes(e.code)){$('#retry-ocr').hidden=false;$('#retry-ocr').dataset.role=role}
   }finally{if(sequence===importSequence)finishImportJob()}
 }
 $('#cancel-import').onclick=cancelImport;
-$('#pdf-ocr').onchange=()=>{invalidateImport();setBookTiles('selected')};
 for(const role of importRoles)$('#ocr-'+role).onchange=()=>{invalidateImport();setBookTiles('selected')};
-function setupOcr(role){$('#pdf-ocr').checked=true;invalidateImport();setBookTiles('selected');$('#ocr-'+role).focus()}
+function setupOcr(role){
+  if(!importRoles.includes(role)||importJob)return;
+  if(isPdf(getFile(role)))ocrRecovery.add(role);
+  invalidateImport();setBookTiles('selected');$('#ocr-panel').open=true;
+  importStatus('При необходимости выберите язык и повторите предпросмотр.');
+  $('#ocr-'+role).focus();
+}
 $('#retry-ocr').onclick=()=>setupOcr($('#retry-ocr').dataset.role);
-async function saveImport(event){if(!previewBook||$('#import-dialog').hasAttribute('data-saving'))return;if(previewBook.alignment==='positional-unverified'&&!$('#alignment-check').checked)return;$('#save-import').disabled=true;$('#import-dialog').setAttribute('data-saving','');const book={...previewBook,id:'book-'+crypto.randomUUID(),createdAt:Date.now()};for(const key of ['ocr','translationOcr'])if(book[key])book[key]=sanitizeOcr(book[key]);try{await dbAction('readwrite',s=>s.put(book));books.push(book);previewBook=null;$('#import-dialog').close();$('#original-file').value='';$('#translation-file').value='';fileTile($('#original-file'));fileTile($('#translation-file'));$('#pdf-ocr').checked=false;invalidateImport();toast('Книга добавлена.');openBook(book.id,undefined,{motion:!!event?.detail,focus:!event?.detail,trigger:'continue'})}catch(e){toast(e.name==='QuotaExceededError'?'Недостаточно памяти браузера для книги. Освободите место или выберите меньший файл.':e.message);$('#save-import').disabled=false}finally{$('#import-dialog').removeAttribute('data-saving')}}
+async function saveImport(event){if(!previewBook||$('#import-dialog').hasAttribute('data-saving'))return;if(previewBook.alignment==='positional-unverified'&&!$('#alignment-check').checked)return;$('#save-import').disabled=true;$('#import-dialog').setAttribute('data-saving','');const book={...previewBook,id:'book-'+crypto.randomUUID(),createdAt:Date.now()};for(const key of ['ocr','translationOcr'])if(book[key])book[key]=sanitizeOcr(book[key]);try{await dbAction('readwrite',s=>s.put(book));books.push(book);previewBook=null;$('#import-dialog').close();$('#original-file').value='';$('#translation-file').value='';fileTile($('#original-file'));fileTile($('#translation-file'));resetOcrSettings();invalidateImport();toast('Книга добавлена.');openBook(book.id,undefined,{motion:!!event?.detail,focus:!event?.detail,trigger:'continue'})}catch(e){toast(e.name==='QuotaExceededError'?'Недостаточно памяти браузера для книги. Освободите место или выберите меньший файл.':e.message);$('#save-import').disabled=false}finally{$('#import-dialog').removeAttribute('data-saving')}}
 // Touch pans are native. Only actual ribbon scrolling indicates exploration.
 const ribbon=$('#translation-ribbon');
 ribbon.addEventListener('pointerdown',e=>{
@@ -1369,8 +1392,8 @@ function installFileTiles(){
     const input=label.querySelector('input'),fx=installDropMotion(label);dropMotions.set(input,fx);
     input.onchange=e=>{
       const issue=bookFileError(input.files[0]);
-      if(issue){input.value='';fileTile(input,{animate:false});invalidateImport();fx.state('rejected');importStatus(issue,'error');return}
-      fileTile(input,{animate:!!(e.isTrusted&&lastPointerInput)});invalidateImport();
+      if(issue){input.value='';fileTile(input,{animate:false});resetOcrSettings();invalidateImport();fx.state('rejected');importStatus(issue,'error');return}
+      fileTile(input,{animate:!!(e.isTrusted&&lastPointerInput)});resetOcrSettings();invalidateImport();
     };
     label.addEventListener('pointerdown',()=>fx.press(),{passive:true});
     label.addEventListener('dragover',e=>{if(!hasFiles(e))return;e.preventDefault();e.dataTransfer.dropEffect='copy';fx.drag(e)});
@@ -1379,11 +1402,11 @@ function installFileTiles(){
       if(!hasFiles(e))return;e.preventDefault();const files=e.dataTransfer.files,file=files[0];
       const issue=files.length>1?'Добавьте по одному файлу.':bookFileError(file);
       if(issue||!file){invalidateImport();setBookTiles('selected');fx.leave();fx.state('rejected');if(issue)importStatus(issue,'error');return}
-      try{const data=new DataTransfer();data.items.add(file);input.files=data.files;fileTile(input,{dropped:true});invalidateImport()}
+      try{const data=new DataTransfer();data.items.add(file);input.files=data.files;fileTile(input,{dropped:true});resetOcrSettings();invalidateImport()}
       catch{invalidateImport();setBookTiles('selected');fx.leave();fx.state('rejected');importStatus('Нажмите «Выбрать», чтобы добавить файл.','error')}
     })
   }
-  $('#import-dialog').addEventListener('close',()=>{if($('#import-dialog').open)return;invalidateImport();for(const fx of dropMotions.values())fx.settle()});
+  $('#import-dialog').addEventListener('close',()=>{if($('#import-dialog').open)return;resetOcrSettings();invalidateImport();for(const fx of dropMotions.values())fx.settle()});
 }
 $('#reading-scroll').addEventListener('scroll',onReadingScroll,{passive:true});$('#sync-translation').onclick=syncTranslation;$('#passage').onclick=e=>{const b=e.target.closest('[data-word]');if(b)showWord(b,e)};$('#reader-back').onclick=e=>{history.replaceState(null,'','#'+readerReturn);showHome(readerReturn,{motion:e.detail>0,focus:e.detail===0})};$('#previous-chapter').onclick=()=>switchChapter(chapter-1);$('#next-chapter').onclick=()=>switchChapter(chapter+1);$('#chapter-open').onclick=()=>{renderContents();$('#contents-dialog').showModal()};$('#reader-bookmark').onclick=()=>{capturePosition();const list=state.bookmarks[current.id]||=[];const i=list.findIndex(p=>p.chapter===chapter&&p.paragraph===paragraph);if(i>=0){list.splice(i,1);toast('Закладка удалена')}else{list.push({...state.positions[current.id]});toast('Абзац сохранён в закладках')}saveState();updateBookmark()};$('#translation-full').onclick=()=>openLocalDialog(currentLocalTarget());$('#word-save').onclick=toggleWordSaved;
 const wordSpeech=createWordSpeech({publish:({status,language,apple})=>{
@@ -1434,19 +1457,45 @@ for(const type of ['wheel','touchmove'])listenScroll.addEventListener(type,()=>b
 listenScroll.addEventListener('pointerdown',e=>{if(e.target===listenScroll&&e.pointerType==='mouse')bookSpeech.pause()});
 listenScroll.addEventListener('keydown',e=>{if(['ArrowDown','ArrowUp','PageDown','PageUp','Home','End',' '].includes(e.key))bookSpeech.pause()});
 $('#word-speech').onclick=sayWord;
-const systemDictionary=$('#system-dictionary-toggle'),systemDictionaryHint=$('#system-dictionary-hint');
-const appleMobile=/iPhone|iPad|iPod/i.test(navigator.userAgent)||(/Mac/i.test(navigator.platform)&&navigator.maxTouchPoints>1);
-systemDictionary.hidden=!appleMobile&&!/Macintosh/i.test(navigator.userAgent);
-systemDictionaryHint.textContent=appleMobile
-  ?'Удержите слово в заголовке и выберите «Найти» или «Перевести» в меню iOS, если пункт доступен.'
-  :'В Safari нажмите на слово в заголовке с Ctrl и выберите «Найти» или «Перевести», если пункт доступен.';
-function resetSystemDictionary(){
-  systemDictionaryHint.hidden=true;systemDictionary.setAttribute('aria-expanded','false');
+// This is a navigation/disclosure action, never a provider request. The
+// existing context pane has a separate, explicit and cancellable send button.
+const returnFromAi=$('#byok-return-reader');
+function clearAiReaderReturn(){
+  if(location.hash==='#profile/ai')return;
+  returnFromAi.hidden=true;returnFromAi.removeAttribute('href');
 }
-systemDictionary.onclick=()=>{
-  const open=systemDictionaryHint.hidden;
-  systemDictionaryHint.hidden=!open;systemDictionary.setAttribute('aria-expanded',String(open));
-  if(open)revealMotion(systemDictionaryHint,'panel');
+window.addEventListener('hashchange',clearAiReaderReturn);
+returnFromAi.addEventListener('click',event=>{
+  if(event.defaultPrevented||event.button!==0||event.metaKey||event.ctrlKey||event.shiftKey||event.altKey)return;
+  window.addEventListener('hashchange',()=>{
+    if(!$('#reader').hidden)$('#reading-scroll').focus({preventScroll:true});
+  },{once:true});
+});
+$('#word-ai-entry').onclick=event=>{
+  if(!wordAnchor||!current||!$('#word-dialog').open)return;
+  const connection=byokSession.snapshot();
+  if(!connection?.model||!BYOK_PROVIDERS.some(provider=>provider.id===connection.provider)){
+    returnFromAi.href='#read/'+encodeURIComponent(current.id);
+    returnFromAi.hidden=false;
+    location.hash='profile/ai';
+    showHome('profile');
+    // profile-stack handles the route on hashchange; focus only afterwards.
+    window.addEventListener('hashchange',()=>{
+      if(location.hash==='#profile/ai')$('#byok-heading').focus({preventScroll:true});
+    },{once:true});
+    return;
+  }
+  // Keep the pane accessible if the selected word cannot be sent (unknown
+  // source language, malformed token, or text without usable context).
+  openWordContext(event);
+  if(aiWordHint){aiWordHint.focus();return}
+  const context=$('#word-context');
+  let notice=context.querySelector('.word-ai-unavailable');
+  if(!notice){
+    notice=node('p','Для этого слова не удалось подготовить контекст.','word-ai-unavailable muted');
+    notice.tabIndex=-1;notice.setAttribute('role','status');context.append(notice);
+  }
+  notice.focus();
 };
 document.addEventListener('visibilitychange',()=>{if(document.hidden){wordSpeech.reset();bookSpeech.pause()}else wordSpeech.warm()});
 window.addEventListener('pagehide',cancelSpeech);

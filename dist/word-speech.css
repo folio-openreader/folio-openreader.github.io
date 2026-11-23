@@ -9,11 +9,14 @@
 
 /* Leave text selectable so Safari can offer the system's lookup menu. */
 #word-sheet-heading{-webkit-user-select:text;user-select:text;-webkit-touch-callout:default}
-#system-dictionary-toggle{
+#word-ai-entry{
   flex:0 0 44px;align-self:flex-start;border:1px solid var(--line);color:var(--accent);
 }
-#system-dictionary-toggle[aria-expanded=true]{background:var(--soft);border-color:var(--accent)}
-.system-dictionary-hint{margin:6px 0;border-inline-start:2px solid var(--line);padding-inline-start:9px}
+#word-ai-entry:active{background:var(--soft);border-color:var(--accent)}
+#byok-return-reader:not([hidden]){
+  display:inline-flex;align-items:center;min-block-size:44px;margin-block:0 8px;
+  color:var(--accent);text-decoration:underline;text-underline-offset:2px;
+}
 .voice-download{padding-top:.7rem;border-top:1px solid var(--line);display:grid;gap:.4rem}
 .voice-download[hidden]{display:none}
 .voice-download p{margin:0;color:var(--muted);font-size:.85rem;line-height:1.45}

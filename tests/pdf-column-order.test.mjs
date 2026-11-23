@@ -74,6 +74,9 @@ if(!isMainThread){
     const run=async (layout,opts)=>(await parsePdf(fixture(layout),'Reading order.pdf',opts)).chapters[0].paragraphs;
     assert.deepEqual(await run({},{}),columns);
     assert.deepEqual(await run({},{ocr:true}),columns);
+    const automatic=await parsePdf(fixture(),'Automatic native.pdf',{ocr:'auto',onProgress:p=>assert.equal(p.stage,'text')});
+    assert.deepEqual(automatic.chapters[0].paragraphs,columns);
+    assert.equal(automatic.ocr,undefined);
     assert.deepEqual(await run({mode:'columns'},{}),columns);
     assert.deepEqual(await run({plain:true},{}),[title,left.join(' '),foot]);
     const l=['The Lake weather office reports clear skies.','The Forest weather office reports snowfall.',
