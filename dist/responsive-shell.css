@@ -4,6 +4,8 @@
 .wordbook-empty p{margin:0;line-height:1.55}
 .wordbook-link{display:inline-flex;align-items:center;min-height:44px;color:var(--accent);font-weight:650;text-decoration:underline;text-underline-offset:.2em}
 
+#words-view .stage-filters{max-width:none}
+
 /* Between the phone dock and a single full masthead, give navigation its own row. */
 @media(min-width:701px) and (max-width:959px){
  .home-header:has(.reading-mini){display:grid;grid-template-columns:1fr auto;grid-template-areas:'brand goal' 'nav nav';gap:14px}
@@ -50,12 +52,10 @@
  #library-view .library-import small{font-size:.74rem}
  #library-view .starter-shelf{margin-top:1.4rem;padding-top:1.25rem}
  #library-view>.library-import-actions+.catalog-switch{margin-block-start:0}
- #words-view:not([hidden]){display:grid;grid-template-columns:minmax(20rem,.78fr) minmax(0,1.22fr);align-items:start;column-gap:clamp(1.5rem,4.5vw,4.5rem);row-gap:1.25rem;max-width:none;padding-top:clamp(1.6rem,3vw,2.75rem)}
+ #words-view:not([hidden]){display:grid;grid-template-columns:minmax(0,1fr);align-items:start;row-gap:1.25rem;max-width:none;padding-top:clamp(1.6rem,3vw,2.75rem)}
  #words-view .words-heading-row{grid-column:1/-1;align-items:center;margin:0;padding:0 0 1.2rem;border-bottom:1px solid var(--line)}
  #words-view .wordbook-filters,#words-view .wordbook-results{min-width:0}
- #words-view .wordbook-label{display:block;margin:0 0 .75rem;font:650 .86rem/1.4 Inter,system-ui,sans-serif;letter-spacing:0;color:var(--muted)}
  #words-view .study-filters,#words-view #saved-list{margin:0}
- #words-view #word-stage-filters{max-width:100%}
  #words-view #words-more{margin-top:.8rem}
 }
 @media(min-width:701px) and (max-width:959px){
