@@ -185,7 +185,7 @@ const legacyBookmark=Number(storedValue('folio-bookmark'));if(storedValue('folio
 let storageWarning='',backupDraft=null,backupSequence=0,restoring=false;
 let lexicon=null,lexiconPending=null,selectedWordSequence=0,importingDictionary=false;
 let paragraphObserver=null,importSequence=0;
-let books=[demo],current=null,chapter=0,paragraph=0,selectedWord='',wordAnchor=null,previewBook=null,db=null,toastTimer,saveTimer,frame=0,suppressScroll=false,ribbonManual=false,drag=null;
+let books=[demo],current=null,chapter=0,paragraph=0,selectedWord='',wordAnchor=null,previewBook=null,db=null,toastTimer,saveTimer,suppressScroll=false,ribbonManual=false,drag=null;
 const starterSource=createStarterSource();
 let starterIntent=0;
 const starterShelf=installStarterShelf($('#starter-shelf'),{
@@ -200,7 +200,7 @@ async function openStarterBook(id,options={}){
   if(!book){
     book=await starterSource.loadBook(id);
     if(intent!==starterIntent||location.hash!==url)return;
-    try{await dbAction('readwrite',store=>store.put(book));}
+    try{await dbAction('readwrite',store=>store.put(book));await localTranslator.restoreScope(id)}
     catch{toast('Книга открылась, но браузер не смог сохранить её на устройстве.');}
     if(!books.some(b=>b.id===id))books.push(book);
   }
@@ -271,7 +271,7 @@ async function openEditorialBook(id,options={}){
   if(!book){
     book=await editorial[kind].loadBook(id);
     if(intent!==editorialIntent||location.hash!==url)return;
-    try{await dbAction('readwrite',store=>store.put(book))}
+    try{await dbAction('readwrite',store=>store.put(book));await localTranslator.restoreScope(id)}
     catch{toast('Текст открылся, но не сохранился на устройстве.')}
     if(!books.some(b=>b.id===id))books.push(book);
   }
@@ -286,7 +286,7 @@ async function deleteBook(book){
   if(book.id===DEMO_ID||!books.some(b=>b.id===book.id))throw new Error('Book unavailable');
   if(isComic(book))await dropComic(db,book.id,book.comicPages.length);else await dbAction('readwrite',store=>store.delete(book.id));
   books=books.filter(b=>b.id!==book.id);
-  delete state.positions[book.id];delete state.bookmarks[book.id];
+  delete state.positions[book.id];delete state.bookmarks[book.id];await forgetLocalBook(book.id);
   if(state.lastBook===book.id)state.lastBook=DEMO_ID;
   saveState();renderPersonalShelf();
 }
@@ -758,23 +758,38 @@ function wordNodes(text){
   });
   return fragment;
 }
-function renderChapter(position={chapter,paragraph:0,fraction:0},{bookmark=false}={}){listenButton.hidden=isComic(current);if(isComic(current)){void renderComicPage(position,{bookmark});return}const epoch=++renderEpoch;suppressScroll=true;cancelSpeech();const c=current.chapters[chapter];paragraph=Math.max(0,Math.min(c.paragraphs.length-1,position.paragraph||0));state.positions[current.id]={chapter,paragraph,fraction:position.fraction||0};$('#chapter-title').textContent=`${chapter+1} / ${current.chapters.length} · ${c.title}`;$('#chapter-meta').textContent=`ГЛАВА ${chapter+1} · ${current.language||'ОРИГИНАЛ'}`;$('#chapter-heading').textContent=c.title;paragraphObserver?.disconnect();paragraphObserver=new IntersectionObserver(entries=>{for(const entry of entries){if(entry.isIntersecting){const el=entry.target;if(!el.dataset.hydrated){el.replaceChildren(wordNodes(el.textContent));el.dataset.hydrated='true'}paragraphObserver.unobserve(el)}}},{root:$('#reading-scroll'),rootMargin:'600px'});const passage=document.createDocumentFragment();c.paragraphs.forEach((p,i)=>{const el=node('p',null,'reading-paragraph');el.dataset.paragraph=i;el.id=`paragraph-${i}`;el.lang=current.language||'';el.textContent=p.text;passage.append(el);paragraphObserver.observe(el)});$('#passage').replaceChildren(passage);$('#previous-chapter').disabled=chapter===0;$('#next-chapter').disabled=chapter===current.chapters.length-1;$('.reader-help').open=false;$('#reading-note').textContent=current.alignment==='demo'?'Демо: три фрагмента с готовым переводом.':current.alignment==='none'?(isStarterId(current.id)?'У издания нет готового парного текста. Словарь доступен по нажатию на слово.':'Файл перевода не добавлен.'):'Сопоставление по порядку, не по смыслу. Несовпавшие главы не переведены.';const pageNo=Number(/^Страница (\d+)$/.exec(c.title)?.[1]);if(current.ocr?.pages.includes(pageNo))$('#reading-note').textContent+=current.ocr.uncertain.includes(pageNo)?' На этой странице OCR не уверено в результате. Сверьте текст с оригиналом.':' Эта страница содержит распознанный текст.';requestAnimationFrame(()=>{if(epoch!==renderEpoch)return;restorePosition(position);setActiveParagraph(paragraph,true);if(bookmark)outcomeCue($('#paragraph-'+paragraph),'bookmark',1000);requestAnimationFrame(()=>{if(epoch===renderEpoch){suppressScroll=false;scheduleSeen()}})})}
-function restorePosition(p){if(isComic(current))return;const el=$(`#paragraph-${paragraph}`),sc=$('#reading-scroll');if(!el)return;const top=el.getBoundingClientRect().top-sc.getBoundingClientRect().top+sc.scrollTop;sc.scrollTop=Math.max(0,top-22+(p.fraction||0)*el.offsetHeight)}
-function capturePosition(){if(!current||$('#reader').hidden||suppressScroll)return;const sc=$('#reading-scroll');
+function renderChapter(position={chapter,paragraph:0,fraction:0},{bookmark=false}={}){listenButton.hidden=isComic(current);if(isComic(current)){void renderComicPage(position,{bookmark});return}const epoch=++renderEpoch;suppressScroll=true;cancelSpeech();const c=current.chapters[chapter];paragraph=Math.max(0,Math.min(c.paragraphs.length-1,position.paragraph||0));state.positions[current.id]={chapter,paragraph,fraction:position.fraction||0};$('#chapter-title').textContent=`${chapter+1} / ${current.chapters.length} · ${c.title}`;$('#chapter-meta').textContent=`ГЛАВА ${chapter+1} · ${current.language||'ОРИГИНАЛ'}`;$('#chapter-heading').textContent=c.title;paragraphObserver?.disconnect();paragraphObserver=new IntersectionObserver(entries=>{for(const entry of entries){if(entry.isIntersecting){const el=entry.target;if(!el.dataset.hydrated){el.replaceChildren(wordNodes(el.textContent));el.dataset.hydrated='true'}paragraphObserver.unobserve(el)}}},{root:$('#reading-scroll'),rootMargin:'600px'});const passage=document.createDocumentFragment();c.paragraphs.forEach((p,i)=>{const el=node('p',null,'reading-paragraph');el.dataset.paragraph=i;el.id=`paragraph-${i}`;el.lang=current.language||'';el.textContent=p.text;passage.append(el);paragraphObserver.observe(el)});$('#passage').replaceChildren(passage);$('#previous-chapter').disabled=chapter===0;$('#next-chapter').disabled=chapter===current.chapters.length-1;$('.reader-help').open=false;$('#reading-note').textContent=current.alignment==='demo'?'Демо: три фрагмента с готовым переводом.':current.alignment==='none'?(isStarterId(current.id)?'У издания нет готового парного текста. Словарь доступен по нажатию на слово.':'Файл перевода не добавлен.'):'Сопоставление по порядку, не по смыслу. Несовпавшие главы не переведены.';const pageNo=Number(/^Страница (\d+)$/.exec(c.title)?.[1]);if(current.ocr?.pages.includes(pageNo))$('#reading-note').textContent+=current.ocr.uncertain.includes(pageNo)?' На этой странице OCR не уверено в результате. Сверьте текст с оригиналом.':' Эта страница содержит распознанный текст.';requestAnimationFrame(()=>{if(epoch!==renderEpoch)return;restorePosition(position);setActiveParagraph(paragraph,true);if(bookmark)outcomeCue($('#paragraph-'+paragraph),'bookmark',1000);if(epoch===renderEpoch){suppressScroll=false;scheduleSeen()}})}
+function restorePosition(p){if(isComic(current))return;const el=$(`#paragraph-${paragraph}`),sc=$('#reading-scroll');if(!el)return;const top=el.getBoundingClientRect().top-sc.getBoundingClientRect().top+sc.scrollTop;sc.scrollTop=Math.max(0,top-22+(p.fraction||0)*el.offsetHeight);markReadingScrollAnchor()}
+function capturePosition(quiet=false){if(!current||$('#reader').hidden||suppressScroll)return;const sc=$('#reading-scroll');
   if(isComic(current)){
     state.positions[current.id]={chapter,paragraph,fraction:Math.max(0,Math.min(.99,sc.scrollTop/Math.max(1,sc.scrollHeight-sc.clientHeight)))};saveState();return;
   }
+  pendingReadingScroll?.flush(quiet);
+  // Browsers can move the scroller, then hide before delivering its scroll event.
+  if(!bookSpeech.playing&&readingScrollAnchor?.epoch===renderEpoch&&Math.abs(sc.scrollTop-readingScrollAnchor.top)>1){
+    const reached=readingScrollParagraph(sc);
+    if(reached!==paragraph)activateScrolledParagraph(reached,quiet);
+    else markReadingScrollAnchor();
+  }
   const para=$(`#paragraph-${paragraph}`);const top=para?para.getBoundingClientRect().top-sc.getBoundingClientRect().top+sc.scrollTop:0;const fraction=para?Math.max(0,Math.min(.99,(sc.scrollTop-top+22)/Math.max(1,para.offsetHeight))):0;state.positions[current.id]={chapter,paragraph,fraction};if(current.id===DEMO_ID)try{localStorage.setItem('folio-page',chapter)}catch{}saveState()}
 function setActiveParagraph(i,sync=false){
+ pendingReadingScroll=null;deferredReadingTranslationEpoch=-1; // Explicit selections supersede older manual scrolls.
  if(!followingBook&&i!==paragraph)bookSpeech.stop();
  if(isComic(current)){paragraph=i;state.positions[current.id]={chapter,paragraph,fraction:state.positions[current.id]?.fraction||0};updateComicProgress();return}
+ markReadingScrollAnchor();
  $('#paragraph-'+paragraph)?.classList.remove('active');paragraph=i;$(`#paragraph-${i}`)?.classList.add('active');state.positions[current.id]={chapter,paragraph,fraction:state.positions[current.id]?.fraction||0};const percentage=progress(current);$('#reading-progress').textContent=`${percentage}% · абзац ${i+1} / ${current.chapters[chapter].paragraphs.length}`;$('#progress-fill').style.transform=`scaleX(${percentage/100})`;updateBookmark();if(sync)syncTranslation();clearTimeout(saveTimer);saveTimer=setTimeout(capturePosition,180);scheduleSeen()}
-function onReadingScroll(){
-  clearTimeout(seenTimer);if(suppressScroll||!current||frame||bookSpeech.playing)return;
-  if(isComic(current)){clearTimeout(saveTimer);saveTimer=setTimeout(capturePosition,180);return}
-  const epoch=renderEpoch;frame=requestAnimationFrame(()=>{
-    frame=0;if(epoch!==renderEpoch||$('#reader').hidden||suppressScroll||bookSpeech.playing)return;
-    const sc=$('#reading-scroll'),max=sc.scrollHeight-sc.clientHeight,atEnd=max>0&&max-sc.scrollTop<2;
+let pendingReadingScroll=null,readingScrollAnchor=null,deferredReadingTranslationEpoch=-1;
+function activateScrolledParagraph(i,quiet){
+  setActiveParagraph(i,!quiet);
+  if(quiet)deferredReadingTranslationEpoch=renderEpoch;
+}
+function resumeReadingTranslation(){
+  if(document.hidden||deferredReadingTranslationEpoch!==renderEpoch||$('#reader').hidden)return;
+  deferredReadingTranslationEpoch=-1;syncTranslation();
+}
+function markReadingScrollAnchor(){readingScrollAnchor={epoch:renderEpoch,top:$('#reading-scroll').scrollTop}}
+function readingScrollParagraph(sc){
+    const max=sc.scrollHeight-sc.clientHeight,atEnd=max>0&&max-sc.scrollTop<2;
     const anchor=sc.getBoundingClientRect().top+(atEnd?Math.min(220,sc.clientHeight*.45):65),rows=$('#passage').children;
     // Scrolling generally stays in the current row. Read live geometry (no height
     // cache invalidation on font, width or hydration), then binary-search only on a jump.
@@ -786,13 +801,66 @@ function onReadingScroll(){
       else{found=paragraph+1;low=paragraph+2}
     }else high=paragraph-1;
     while(low<=high){const middle=(low+high)>>>1;if(top(middle)<=anchor){found=middle;low=middle+1}else high=middle-1}
-    if(found!==paragraph)setActiveParagraph(found,true);
+  return found;
+}
+function onReadingScroll(){
+  clearTimeout(seenTimer);if(suppressScroll||!current||bookSpeech.playing)return;
+  if(isComic(current)){clearTimeout(saveTimer);saveTimer=setTimeout(capturePosition,180);return}
+  if(pendingReadingScroll?.epoch===renderEpoch)return;
+  // A lifecycle save can run before RAF; resolve the same live anchor exactly once.
+  const pending=pendingReadingScroll={epoch:renderEpoch,flush(quiet=false){
+    if(pendingReadingScroll!==pending)return;
+    pendingReadingScroll=null;
+    if(pending.epoch!==renderEpoch||$('#reader').hidden||suppressScroll||bookSpeech.playing)return;
+    const sc=$('#reading-scroll');
+    if(readingScrollAnchor?.epoch===renderEpoch&&Math.abs(sc.scrollTop-readingScrollAnchor.top)<=1)return;
+    const found=readingScrollParagraph(sc);
+    markReadingScrollAnchor();
+    if(found!==paragraph)activateScrolledParagraph(found,quiet);
     else{clearTimeout(saveTimer);saveTimer=setTimeout(capturePosition,180);scheduleSeen()}
-  })
+  }};
+  requestAnimationFrame(()=>pending.flush());
 }
 let ribbonBook=null,currentSegment=null;
-const localTranslator=createLocalTranslator();let localBooks=new WeakSet();
+const localTranslator=createLocalTranslator();
+const localModeKey='folio-local-translation-mode-v1';
+let localModes=new Set(),localModeRevision=0;
+function readLocalModes(){
+  try{
+    const raw=storedValue(localModeKey);
+    if(typeof raw!=='string'||raw.length>100000)return [];
+    const modes=JSON.parse(raw);
+    return Array.isArray(modes)?modes.filter(k=>typeof k==='string').slice(-512):[];
+  }catch{return []}
+}
+localModes=new Set(readLocalModes());
+function localModeId(loc){
+  const pair=translationPack(loc.source,loc.target);
+  return pair?JSON.stringify([loc.book.id,pair.source,pair.target]):null;
+}
+const localEnabled=loc=>localModes.has(localModeId(loc));
+function saveLocalModes(){
+  try{localStorage.setItem(localModeKey,JSON.stringify([...localModes]))}catch{}
+}
+function setLocalMode(loc,enabled){
+  const key=localModeId(loc);if(!key)return;
+  ++localModeRevision;
+  if(enabled){localModes.delete(key);localModes.add(key);if(localModes.size>512)localModes.delete(localModes.values().next().value)}
+  else localModes.delete(key);
+  saveLocalModes();
+}
+function forgetLocalBook(id){
+  const prefix=JSON.stringify([id]).slice(0,-1)+',';
+  for(const key of localModes)if(key.startsWith(prefix))localModes.delete(key);
+  ++localModeRevision;
+  if(localWanted?.book.id===id)cancelLocalQueue();
+  if(localJob?.book.id===id)localTranslator.stop();
+  if(localFailure?.book.id===id)localFailure=null;
+  saveLocalModes();return localTranslator.forgetScope(id);
+}
 let localTimer=0,localWanted=null,localJob=null,localFailure=null,localDialogTarget=null,paintingLocalSegment=null;
+let localSuspended=document.hidden;
+const localForeground=()=>!localSuspended&&!document.hidden&&!$('#reader').hidden;
 let localDownload={loaded:0,total:0};
 const localNotStored=new Set();
 const localTarget=(book,ci,pi)=>{
@@ -802,7 +870,7 @@ const localTarget=(book,ci,pi)=>{
 const currentLocalTarget=()=>localTarget(current,chapter,paragraph);
 const sameLocal=(a,b)=>!!a&&!!b&&a.book===b.book&&a.ci===b.ci&&a.pi===b.pi&&a.p===b.p&&a.source===b.source&&a.target===b.target;
 const canLocal=loc=>!!loc&&localTranslator.capabilities()&&supportsTranslation(loc.source,loc.target);
-const peekLocal=loc=>loc&&canLocal(loc)?localTranslator.peek(loc.p.text,{source:loc.source,target:loc.target}):null;
+const peekLocal=loc=>loc?localTranslator.peek(loc.p.text,{source:loc.source,target:loc.target,scope:loc.book.id}):null;
 const localErrorMessages={
   length:'Этот абзац слишком длинный для локального перевода.',
   'not-installed':'Модель не найдена на устройстве. Скачайте её ещё раз.',
@@ -818,8 +886,8 @@ const localErrorText=reason=>localErrorMessages[reason]||'Не удалось п
 function cancelLocalQueue(){clearTimeout(localTimer);localWanted=null}
 function paintLocalRibbon(loc,target){
   const open=$('#local-translation-open'),sync=$('#sync-translation'),track=$('#translation-track');
-  const show=!loc.p.translation&&canLocal(loc),value=show?peekLocal(loc):null;
-  const enabled=show&&localBooks.has(loc.book),failure=localFailure?.book===loc.book?localFailure:null;
+  const value=!loc.p.translation?peekLocal(loc):null,show=!loc.p.translation&&canLocal(loc);
+  const enabled=show&&localEnabled(loc),failure=localFailure?.book===loc.book?localFailure:null;
   open.hidden=!show;open.textContent=enabled&&!failure?'Пауза':failure?'Повторить':value?'Продолжить':'Перевести';
   open.setAttribute('aria-label',enabled&&!failure?'Приостановить локальный перевод':value&&!failure?'Продолжить локальный перевод':'Локальный перевод абзаца');
   if(paintingLocalSegment&&(paintingLocalSegment.parentElement!==target||!value)){
@@ -853,7 +921,7 @@ function paintLocalDialog(loc){
   if(!sameLocal(localDialogTarget,loc)||!$('#translation-dialog').open)return;
   const paint=++localDialogPaint;
   const wrap=$('#full-translation'),status=$('#local-translation-status'),bar=$('#local-translation-progress'),button=$('#local-translation-start');
-  const value=!loc.p.translation&&canLocal(loc)?peekLocal(loc):null;
+  const value=!loc.p.translation?peekLocal(loc):null;
   const mountedOriginal=wrap.querySelector('.source-text'),lang=readingSourceLanguage(loc.book,loc.ci)||'';
   if(!mountedOriginal||mountedOriginal.textContent!==loc.p.text||mountedOriginal.lang!==lang){
     const original=node('p',loc.p.text,'source-text');original.lang=lang;wrap.replaceChildren(original);
@@ -878,53 +946,93 @@ function paintLocalDialog(loc){
   status.textContent=busy?(bar.hidden?'Переводим на устройстве…':'Скачиваем модель…'):failure?localErrorText(failure):pairCode(loc.source,loc.target)+'. '+(!knownLanguage(readingSourceLanguage(loc.book,loc.ci))?'Язык оригинала взят из настроек. ':'')+'Текст остаётся на устройстве. При первом запуске также загрузится движок.';
   button.textContent=busy?'Переводим…':failure?'Повторить':'Скачать модель · '+formatBytes(translationPack(loc.source,loc.target).downloadBytes);
   if(!busy&&!failure)void localTranslator.modelStorage({source:loc.source,target:loc.target}).then(info=>{
-    if(paint===localDialogPaint&&$('#translation-dialog').open&&!button.disabled&&!$('#local-translation-section').hidden)button.textContent=modelDownloadLabel(info);
+    if(localForeground()&&paint===localDialogPaint&&$('#translation-dialog').open&&!button.disabled&&!$('#local-translation-section').hidden)button.textContent=modelDownloadLabel(info);
   });
 }
 function queueLocal(loc,{explicit=false}={}){
-  if(!loc||loc.p.translation||!canLocal(loc)||sameLocal(localJob,loc))return;
+  if(!localForeground()||!loc||loc.p.translation||!canLocal(loc)||peekLocal(loc)||sameLocal(localJob,loc))return;
   if(localWanted?.explicit&&!explicit)return;
   if(!explicit&&sameLocal(localWanted,loc))return;
   localWanted={...loc,explicit};
   clearTimeout(localTimer);localTimer=setTimeout(pumpLocal,explicit?0:260);
 }
 async function pumpLocal(){
-  if(localJob||!localWanted)return;
+  if(!localForeground()||localJob||!localWanted)return;
   const job=localJob=localWanted;localWanted=null;
   localDownload={loaded:0,total:0};paintLocalDialog(job);
   try{
-    await localTranslator.translate(job.p.text,{source:job.source,target:job.target,allowNetwork:job.explicit,onProgress:(loaded,total)=>{
-      localDownload={loaded,total};paintLocalDialog(job);
+    if(!job.explicit){
+      const installed=await localTranslator.installed({source:job.source,target:job.target});
+      if(localJob!==job||!localForeground()||!sameLocal(job,currentLocalTarget())||!localEnabled(job)||peekLocal(job))return;
+      if(!installed)throw new Error('not-installed');
+    }
+    await localTranslator.translate(job.p.text,{source:job.source,target:job.target,scope:job.book.id,allowNetwork:job.explicit,onProgress:(loaded,total)=>{
+      if(localJob===job&&localForeground()){localDownload={loaded,total};paintLocalDialog(job)}
     }});
+    if(localJob!==job||!localForeground())return;
     if(job.explicit){
       const key=pairCode(job.source,job.target);
-      if(await localTranslator.installed({source:job.source,target:job.target}))localNotStored.delete(key);
-      else localNotStored.add(key);
+      const installed=await localTranslator.installed({source:job.source,target:job.target});
+      if(localJob!==job||!localForeground())return;
+      if(installed)localNotStored.delete(key);else localNotStored.add(key);
     }
     if(localFailure?.book===job.book)localFailure=null;
   }catch(e){
-    if(e.name!=='AbortError'){localFailure={...job,reason:e.message};if(e.message==='length')localBooks.delete(job.book)}
+    if(localJob===job&&localForeground()&&e.name!=='AbortError'){localFailure={...job,reason:e.message};if(e.message==='length')setLocalMode(job,false)}
   }finally{
-    localJob=null;localDownload={loaded:0,total:0};
-    paintLocalDialog(job);
-    if(sameLocal(job,currentLocalTarget())&&!$('#reader').hidden&&!ribbonManual)syncTranslation();
-    if(localWanted)void pumpLocal();
+    if(localJob===job){
+      localJob=null;localDownload={loaded:0,total:0};
+      if(localForeground()){
+        paintLocalDialog(job);
+        if(sameLocal(job,currentLocalTarget())&&!ribbonManual)syncTranslation();
+        if(localWanted)void pumpLocal();
+      }
+    }
   }
 }
-$('#local-translation-open').onclick=()=>{
-  const loc=currentLocalTarget();if(!loc)return;
-  if(localBooks.has(loc.book)&&localFailure?.book!==loc.book){localBooks.delete(loc.book);cancelLocalQueue();syncTranslation()}
-  else if(localFailure?.book!==loc.book&&peekLocal(loc)){localBooks.add(loc.book);syncTranslation()}
-  else openLocalDialog(loc);
+$('#local-translation-open').onclick=async()=>{
+  const loc=currentLocalTarget();if(!localForeground()||!loc)return;
+  if(localEnabled(loc)&&localFailure?.book!==loc.book){setLocalMode(loc,false);cancelLocalQueue();syncTranslation();return}
+  const revision=++localModeRevision;
+  const cached=peekLocal(loc);
+  const ready=cached||await localTranslator.installed({source:loc.source,target:loc.target});
+  if(revision!==localModeRevision||!localForeground()||!sameLocal(loc,currentLocalTarget()))return;
+  if(ready&&(cached||!localFailure||localFailure.reason==='not-installed'||localFailure.book!==loc.book)){
+    localFailure=null;setLocalMode(loc,true);syncTranslation();
+  }else openLocalDialog(loc);
 };
 $('#local-translation-start').onclick=()=>{
-  const loc=localDialogTarget;if(!loc)return;
-  localBooks.add(loc.book);
+  const loc=localDialogTarget;if(!localForeground()||!loc)return;
+  setLocalMode(loc,true);
   if(localFailure?.book===loc.book)localFailure=null;
   queueLocal(loc,{explicit:true});paintLocalDialog(loc);
 };
 $('#translation-dialog').addEventListener('close',()=>{localDialogTarget=null});
-window.addEventListener('pagehide',()=>{cancelLocalQueue();localTranslator.stop()});
+function suspendLocalTranslation(){
+  if(localSuspended)return;
+  localSuspended=true;++localModeRevision;++localDialogPaint;
+  cancelLocalQueue();localJob=null;localDownload={loaded:0,total:0};localTranslator.stop();
+}
+function resumeLocalTranslation(){
+  if(!localSuspended||document.hidden)return;
+  localSuspended=false;
+  if(!localForeground())return;
+  const loc=currentLocalTarget();
+  if(localDialogTarget)paintLocalDialog(localDialogTarget);
+  // Consent to download never outlives hiding; only the previously enabled offline mode resumes.
+  if(loc&&!ribbonManual&&localEnabled(loc)&&localFailure?.book!==loc.book)queueLocal(loc);
+}
+document.addEventListener('visibilitychange',()=>{if(document.hidden)suspendLocalTranslation();else resumeLocalTranslation()});
+window.addEventListener('pagehide',suspendLocalTranslation);
+window.addEventListener('pageshow',resumeLocalTranslation);
+window.addEventListener('storage',event=>{
+  if(event.key!==null)return;
+  // Explicit site-data clearing must also stop stale automatic retries in this tab.
+  localModes.clear();++localModeRevision;++localDialogPaint;
+  cancelLocalQueue();localJob=null;localFailure=null;localDownload={loaded:0,total:0};
+  localTranslator.invalidateCache();localTranslator.stop();
+  if(localForeground()&&!ribbonManual)syncTranslation();
+});
 
 function renderRibbon(){
   ribbonManual=false;
@@ -958,7 +1066,7 @@ function syncTranslation(){
   if(target)ribbon.scrollLeft=target.offsetLeft-ribbon.offsetLeft-parseFloat(getComputedStyle($('#translation-track')).paddingLeft);
   programmaticRibbonLeft=ribbon.scrollLeft;
   $('#sync-translation').textContent='К абзацу ↻';
-  if(!loc.p.translation&&localBooks.has(loc.book)&&canLocal(loc)&&!peekLocal(loc)&&localFailure?.book!==loc.book)queueLocal(loc);
+  if(!loc.p.translation&&localEnabled(loc)&&canLocal(loc)&&!peekLocal(loc)&&localFailure?.book!==loc.book)queueLocal(loc);
   else if(localWanted&&!localWanted.explicit)cancelLocalQueue();
 }
 function markExploring(){if(ribbonManual)return;ribbonManual=true;$('#sync-translation').textContent='Вернуться ↻';$('#ribbon-label').textContent='ПРОСМОТР ПЕРЕВОДА'}
@@ -1057,7 +1165,7 @@ function openWordContext(event){
   }else{
     const loc=localTarget(current,anchor.location.chapter,anchor.location.paragraph);
     const local=loc&&peekLocal(loc);
-    if(local&&canLocal(loc)){const translated=node('p',local,'word-parallel');translated.lang=loc.target;context.append(node('h3','Машинный перевод · '+loc.target.toUpperCase()),translated)}
+    if(local){const translated=node('p',local,'word-parallel');translated.lang=loc.target;context.append(node('h3','Машинный перевод · '+loc.target.toUpperCase()),translated)}
     else if(loc&&canLocal(loc)){
       const button=node('button','Перевести абзац','quiet');button.type='button';button.onclick=()=>openLocalDialog(loc);context.append(button);
     }else context.append(node('p','Для этого абзаца нет готового перевода.','muted'));
@@ -1237,7 +1345,7 @@ function saveLanguagePrefs(patch){
   if(changed){
     if(!Object.hasOwn(patch,'languageSetup'))patch.languageSetup='done';
     if(!Object.hasOwn(patch,'dictionaryPack'))patch.dictionaryPack='';
-    localBooks=new WeakSet();localFailure=null;cancelLocalQueue();
+    ++localModeRevision;localFailure=null;cancelLocalQueue();
   }
   Object.assign(state.prefs,patch);saveState();
   if(changed){dictUI.selectPair(state.prefs.readingLanguage,state.prefs.dictionaryTarget);languageUI?.sync()}
@@ -1494,6 +1602,7 @@ const bookSpeech=createBookSpeech({
   },
   onState(status,lang){
     const running=status==='starting'||status==='speaking';
+    if(running){pendingReadingScroll=null;markReadingScrollAnchor()}
     const label=running?'Приостановить чтение':status==='paused'?'Продолжить слушать':'Слушать книгу';
     listenButton.title=label;listenButton.setAttribute('aria-label',label);
     listenButton.firstElementChild.innerHTML=iconMarkup(running?'listenPause':'headphones');
@@ -1966,7 +2075,7 @@ $('#profile-size').oninput=e=>prefsChanged({size:+e.target.value});$('#profile-t
 $('#export-backup').onclick=()=>{const text=serializeBackup(books,state,legacyWords(),packLearning(learning));const blob=new Blob([text]);if(blob.size>BACKUP_LIMIT)return toast('Копия больше 50 МБ. Скачивание такой копии пока не поддерживается.');downloadText(text,'application/json;charset=utf-8',`folio-backup-${new Date().toISOString().slice(0,10)}.json`)};
 $('#open-backup').onclick=()=>{$('#backup-file').value='';$('#backup-prefs').checked=false;arrangeBackup(null);$('#backup-dialog').showModal()};$('#backup-file').onchange=e=>arrangeBackup(e.target.files[0]);$('#restore-backup').onclick=restoreBackup;
 $('#dictionary-import').onclick=importDictionaryFile;
-window.addEventListener('pagehide',()=>{practiceAudio.stop();capturePosition();if(learningDirty)saveState()});document.addEventListener('visibilitychange',()=>{if(document.hidden){practiceAudio.stop();clearTimeout(seenTimer);capturePosition();if(learningDirty)saveState()}else scheduleSeen()});
+window.addEventListener('pagehide',()=>{practiceAudio.stop();capturePosition(true);if(learningDirty)saveState()});document.addEventListener('visibilitychange',()=>{if(document.hidden){practiceAudio.stop();clearTimeout(seenTimer);capturePosition(true);if(learningDirty)saveState()}else{resumeReadingTranslation();scheduleSeen()}});
 let syncEpoch=0,syncPanel=null;
 async function showSyncPanel(){
   const epoch=++syncEpoch,host=$('#folio-sync-settings');
@@ -1985,7 +2094,7 @@ window.addEventListener('storage',e=>{
   if(e.key===SYNC_WORDS&&(!wordDisk?.held||e.newValue===null))wordStoreNotice('Другая вкладка изменила словарь. Перед редактированием слов перезагрузите Folio.');
 });
 window.addEventListener('pagehide',()=>{syncEpoch++;syncPanel?.dispose();syncPanel=null;wordDisk?.close()});
-window.addEventListener('pageshow',e=>{if(e.persisted&&(wordDisk?.enrolled||storedValue(SYNC_WORDS)!==null)){location.reload();return}if(e.persisted&&location.hash==='#profile/sync')void showSyncPanel()});
+window.addEventListener('pageshow',e=>{if(e.persisted&&(wordDisk?.enrolled||storedValue(SYNC_WORDS)!==null)){location.reload();return}if(e.persisted){resumeReadingTranslation();if(location.hash==='#profile/sync')void showSyncPanel()}});
 function readHash(){
   if(!location.hash.startsWith('#read/')){starterIntent++;editorialIntent++;showHome(homeRoute());return}
   let id;try{id=decodeURIComponent(location.hash.slice(6))}catch{id=DEMO_ID}

@@ -162,9 +162,64 @@ async function loadModelBuffers(pack,cache,allowNetwork,signal,onProgress){
   return parts;
 }
 
-export function createLocalTranslator(){
-  let client=null,preparing=null,boundPack=null,download=null,epoch=0,idleTimer=0,active=0,cacheChars=0;
-  const results=new Map(),inFlight=new Map();
+const LEGACY_RESULTS='folio-local-paragraphs-v1',RESULT_STORAGE='folio-local-paragraphs-v2',RESULT_ANCHOR='folio-local-paragraphs-generation-v2';
+const MAX_DELETED_SCOPES=512,MAX_SCOPE=256;
+export function createLocalTranslator({storage=()=>globalThis.localStorage,locks=()=>globalThis.navigator?.locks,uuid=()=>globalThis.crypto?.randomUUID()}={}){
+  let localRevision=0, observedGeneration=null,cachedRaw,cachedState;
+  const memory=new Map(),inFlight=new Map();
+  const diskStorage=()=>{
+    try{const store=storage();if(store?.getItem(LEGACY_RESULTS)!=null)store.removeItem(LEGACY_RESULTS);return store}catch{return null}
+  };
+  diskStorage(); // Discard the pre-release format without migrating its stale rows.
+  function readState(store){
+    const generation=store?.getItem(RESULT_ANCHOR)||null,raw=store?.getItem(RESULT_STORAGE)||null;
+    if(generation!==observedGeneration){memory.clear();observedGeneration=generation;cachedRaw=undefined}
+    if(raw===cachedRaw&&cachedState)return cachedState;
+    let state={generation,deleted:[],rows:[]};
+    if(generation&&raw&&raw.length<=MAX_CACHE_CHARS*6+200000){
+      try{
+        const parsed=JSON.parse(raw);
+        if(parsed.generation===generation&&Array.isArray(parsed.deleted)&&parsed.deleted.length<=MAX_DELETED_SCOPES&&Array.isArray(parsed.rows)&&parsed.rows.length<=MAX_RESULTS){
+          state={generation,deleted:parsed.deleted.filter(x=>typeof x==='string'&&x.length<=MAX_SCOPE),rows:parsed.rows.filter(x=>Array.isArray(x)&&x.length===2&&typeof x[0]==='string'&&typeof x[1]==='string'&&x[1].trim())};
+        }
+      }catch{}
+    }
+    cachedRaw=raw;cachedState=state;return state;
+  }
+  function stateNow(){
+    try{return readState(diskStorage())}catch{return {generation:null,deleted:[],rows:[]}}
+  }
+  function mutate(task){
+    try{
+      const manager=locks();
+      if(typeof manager?.request==='function')return Promise.resolve(manager.request(RESULT_STORAGE,()=>{
+        const store=diskStorage();if(!store)return null;
+        return task(store,readState(store));
+      })).catch(()=>null);
+    }catch{}
+    return Promise.resolve(null); // Never persist to disk without cross-tab serialization.
+  }
+  function newGeneration(store){
+    const generation=uuid();if(!generation)return null;
+    store.setItem(RESULT_ANCHOR,generation);return generation;
+  }
+  function writeState(store,state){
+    if(store.getItem(RESULT_ANCHOR)!==state.generation)return false;
+    store.setItem(RESULT_STORAGE,JSON.stringify(state));
+    if(store.getItem(RESULT_ANCHOR)===state.generation)return true;
+    // Browser data clearing does not take our application lock.
+    store.removeItem(RESULT_STORAGE);return false;
+  }
+  function putBounded(rows,key,value){
+    const cost=key.length+value.length;
+    if(cost>MAX_CACHE_CHARS)return;
+    rows.delete(key);rows.set(key,value);
+    let used=[...rows].reduce((sum,[k,v])=>sum+k.length+v.length,0);
+    while(rows.size>MAX_RESULTS||used>MAX_CACHE_CHARS){
+      const [old,v]=rows.entries().next().value;used-=old.length+v.length;rows.delete(old);
+    }
+  }
+  let client=null,preparing=null,boundPack=null,download=null,epoch=0,idleTimer=0,active=0;
   const capabilities=()=>typeof Worker==='function'&&typeof WebAssembly==='object'&&typeof DecompressionStream==='function'&&!!globalThis.crypto?.subtle;
   const stop=()=>{
     ++epoch;clearTimeout(idleTimer);download?.abort();download=null;
@@ -230,32 +285,60 @@ export function createLocalTranslator(){
     preparing=task;return task;
   }
 
-  const resultKey=(pack,text)=>pack.id+'\u0000'+text;
-  function cachedValue(key){
-    if(!results.has(key))return undefined;
-    const value=results.get(key);
-    results.delete(key);results.set(key,value);
-    return value;
+  const resultKey=(pack,text,scope)=>JSON.stringify([scope,pack.cacheName,text]);
+  const scopePrefix=scope=>JSON.stringify([scope]).slice(0,-1)+',';
+  function dropPersistentState(store){
+    if(!store)return;
+    // Remove the generation first so no outstanding task can validate its ticket.
+    try{store.removeItem(RESULT_ANCHOR)}catch{}
+    try{store.removeItem(RESULT_STORAGE)}catch{}
   }
-  function peek(text,{source='en',target='ru'}={}){
-    const pack=modelPack(source,target);
-    return pack?cachedValue(resultKey(pack,text)):undefined;
+  async function forgetScope(scope){
+    ++localRevision;
+    if(typeof scope!=='string'||scope.length>MAX_SCOPE)return;
+    const prefix=scopePrefix(scope);for(const key of memory.keys())if(key.startsWith(prefix))memory.delete(key);
+    const removed=await mutate((store,state)=>{
+      if(!state.generation){dropPersistentState(store);return true}
+      const deleted=state.deleted.filter(x=>x!==scope);deleted.push(scope);
+      const rows=state.rows.filter(([key])=>!key.startsWith(prefix));
+      try{
+        const generation=deleted.length>MAX_DELETED_SCOPES?newGeneration(store):state.generation;
+        if(!generation||!writeState(store,{generation,deleted:deleted.slice(-MAX_DELETED_SCOPES),rows}))dropPersistentState(store);
+      }catch{
+        // If the replacement cannot fit, drop the whole cache, not the deletion.
+        dropPersistentState(store);
+      }
+      return true;
+    });
+    if(removed!==true)dropPersistentState(diskStorage());
   }
-  function remember(key,target){
-    const cost=key.length+target.length;
-    if(cost>MAX_CACHE_CHARS)return;
-    if(results.has(key)){cacheChars-=key.length+results.get(key).length;results.delete(key)}
-    results.set(key,target);cacheChars+=cost;
-    while(results.size>MAX_RESULTS||cacheChars>MAX_CACHE_CHARS){
-      const [oldKey,val]=results.entries().next().value;results.delete(oldKey);cacheChars-=oldKey.length+val.length;
-    }
+  async function restoreScope(scope){
+    // Only after the app durably re-adds a catalog book. Rotate the anchor so old
+    // work from before deletion cannot publish into the newly re-added edition.
+    await mutate((store,state)=>{
+      if(!state.deleted.includes(scope))return;
+      const generation=newGeneration(store);
+      if(generation)writeState(store,{...state,generation,deleted:state.deleted.filter(x=>x!==scope)});
+    });
   }
-  function translate(text,{source='en',target='ru',allowNetwork=false,onProgress,signal}={}){
+  function peek(text,{source='en',target='ru',scope=''}={}){
+    const pack=modelPack(source,target);if(!pack)return undefined;
+    const key=resultKey(pack,text,scope),state=stateNow();
+    if(state.deleted.includes(scope))return undefined;
+    return state.rows.find(([k])=>k===key)?.[1]??memory.get(key);
+  }
+  function translate(text,{source='en',target='ru',scope='',allowNetwork=false,onProgress,signal}={}){
     if(signal?.aborted)return Promise.reject(abort());
+    if(typeof scope!=='string'||scope.length>MAX_SCOPE)return Promise.reject(new Error('invalid-scope'));
     const pack=modelPack(source,target);
     if(!pack)return Promise.reject(new Error('unsupported'));
-    const result=resultKey(pack,text);
-    if(results.has(result))return Promise.resolve(cachedValue(result));
+    // Read before queuing the Web Lock: once a known generation is cleared,
+    // this pending caller cannot interpret the empty store as a new install.
+    const started=stateNow();
+    if(started.deleted.includes(scope))return Promise.reject(abort());
+    const result=resultKey(pack,text,scope);
+    const hit=started.rows.find(([key])=>key===result)?.[1]??memory.get(result);
+    if(hit!==undefined)return Promise.resolve(hit);
     let parts;try{parts=splitTranslationText(text)}catch(error){return Promise.reject(error)}
     // An explicit switch replaces the previous runtime so two models never stay resident.
     if(boundPack&&boundPack!==pack)stop();
@@ -264,17 +347,34 @@ export function createLocalTranslator(){
     const key=signal?null:(allowNetwork?'explicit:':'offline:')+result;
     if(key&&inFlight.has(key))return inFlight.get(key);
     active++;clearTimeout(idleTimer);
-    const seq=epoch;let instance;
+    const seq=epoch,revision=localRevision;let instance;
+    const valid=()=>!signal?.aborted&&seq===epoch&&revision===localRevision;
     const task=(async()=>{
+      const ticket=await mutate((store,state)=>{
+        if(!valid())throw abort();
+        if((started.generation&&started.generation!==state.generation)||state.deleted.includes(scope))return {invalidated:true};
+        const generation=state.generation||newGeneration(store);
+        return generation?{generation}:null;
+      });
+      if(!valid()||ticket?.invalidated||(started.generation&&started.generation!==stateNow().generation))throw abort();
       instance=await prepare(pack,{allowNetwork,onProgress});const output=[];
       for(const chunk of parts){
-        if(signal?.aborted||seq!==epoch)throw abort();
+        if(!valid())throw abort();
         const [translation]=await instance.call('translate',[{models:[pack.pair],texts:[{text:chunk,html:false,qualityScores:false}]}]);
         if(typeof translation?.target?.text!=='string'||!translation.target.text.trim())throw new Error('engine-empty');
         output.push(translation.target.text.trim());
       }
-      if(signal?.aborted||seq!==epoch)throw abort();
-      const value=output.join(' ');remember(result,value);return value;
+      if(!valid())throw abort();
+      const value=output.join(' ');
+      const persisted=ticket?await mutate((store,state)=>{
+        if(!valid()||ticket.generation!==state.generation||state.deleted.includes(scope))return 'invalidated';
+        const rows=new Map(state.rows);putBounded(rows,result,value);
+        return writeState(store,{...state,rows:[...rows]})?'saved':'invalidated';
+      }):null;
+      const state=stateNow();
+      if(!valid()||persisted==='invalidated'||state.deleted.includes(scope)||(ticket&&ticket.generation!==state.generation))throw abort();
+      if(persisted!=='saved')putBounded(memory,result,value);
+      return value;
     })().catch(error=>{
       if(error.name!=='AbortError'&&seq===epoch&&instance&&client===instance){client.close();client=null}
       throw error;
@@ -282,5 +382,10 @@ export function createLocalTranslator(){
     if(key)inFlight.set(key,task);return task;
   }
 
-  return {capabilities,installed,modelStorage,translate,peek,stop};
+  function invalidateCache(){
+    // StorageEvent.key === null is an explicit clear signal, even if this
+    // caller had not previously seen a persisted generation.
+    ++localRevision;memory.clear();inFlight.clear();
+  }
+  return {capabilities,installed,modelStorage,translate,peek,forgetScope,restoreScope,invalidateCache,stop};
 }
