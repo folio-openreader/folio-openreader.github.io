@@ -57,7 +57,7 @@ test('installation overlaps exactly two private reads with engine startup, then 
   const override=(k,value)=>Object.defineProperty(globalThis,k,{configurable:true,writable:true,value});
   t.after(()=>globals.forEach(k=>old[k]?Object.defineProperty(globalThis,k,old[k]):delete globalThis[k]));
   const cached=new Map(),cacheKeys=new Set(),workers=[],progress=[],starts=[],calls=[];
-  let pendingFetches=0,maxFetches=0,offline=false,releaseInit;
+  let pendingFetches=0,maxFetches=0,offline=false,releaseInit,nextTranslationGate;
   const firstInit=new Promise(resolve=>releaseInit=resolve);
   const shardRoot=new URL('../dist/vendor/bergamot/',import.meta.url);
   class MockWorker extends EventTarget{
@@ -77,7 +77,10 @@ test('installation overlaps exactly two private reads with engine startup, then 
           assert.equal(data.vocabs[0].byteLength,hindi?925360:904455);
           assert.equal(transfer.length,3);
         }
-        if(name==='translate')assert.deepEqual(args[0].models,[this.pair]);
+        if(name==='translate'){
+          assert.deepEqual(args[0].models,[this.pair]);
+          if(nextTranslationGate){const gate=nextTranslationGate;nextTranslationGate=null;gate.started();await gate.wait}
+        }
         const result=name==='translate'?[{target:{text:this.pair.to==='hi'?'उपकरण पर':'На устройстве'}}]:undefined;
         this.dispatchEvent(new MessageEvent('message',{data:{id,result}}));
       })().catch(()=>this.dispatchEvent(new Event('error')));
@@ -103,7 +106,11 @@ test('installation overlaps exactly two private reads with engine startup, then 
     try{return new Response(await readFile(new URL(new URL(url).pathname.split('/').slice(-2).join('/'),shardRoot)))}
     finally{--pendingFetches}
   });
-  const translator=createLocalTranslator();
+  const disk=new Map();
+  let lock=Promise.resolve(),id=0,lockGate;
+  const storage=()=>({getItem:key=>disk.get(key),setItem:(key,value)=>disk.set(key,value),removeItem:key=>disk.delete(key)});
+  const diskOpts={storage,uuid:()=>String(++id),locks:()=>({request(_name,fn){const gate=lockGate;lockGate=null;const next=lock.then(async()=>{if(gate){gate.started();await gate.wait}return fn()});lock=next.catch(()=>{});return next}})};
+  const translator=createLocalTranslator(diskOpts);
   t.after(()=>{releaseInit();translator.stop()});
   assert.equal(await translator.translate('first paragraph',{allowNetwork:true,onProgress:(...p)=>progress.push(p)}),'На устройстве');
   assert.equal(starts.length,6);assert.equal(maxFetches,2);
@@ -146,4 +153,97 @@ test('installation overlaps exactly two private reads with engine startup, then 
   assert.equal(workers.filter(w=>!w.terminated).length,1);
   await assert.rejects(translator.translate('Test',{source:'hi',target:'en',allowNetwork:true}),/unsupported/);
   assert.equal(starts.length,11);
+
+  await translator.translate('chapter paragraph',{scope:'book-a'});
+  const blackHole=()=>({getItem(){throw new Error('cannot read')},setItem(){throw new DOMException('full','QuotaExceededError')}});
+  const noDisk=createLocalTranslator({storage:blackHole});
+  t.after(()=>noDisk.stop());
+  assert.equal(await noDisk.translate('new fallback paragraph'),'На устройстве');
+  assert.equal(noDisk.peek('new fallback paragraph'),'На устройстве');
+  assert.equal(createLocalTranslator({storage:blackHole}).peek('new fallback paragraph'),undefined);
+  function holdNext(){
+    let started,release;
+    const began=new Promise(resolve=>started=resolve);
+    const wait=new Promise(resolve=>release=resolve);
+    nextTranslationGate={started,wait};return {began,release};
+  }
+  const remover=createLocalTranslator(diskOpts);
+  const deletion=holdNext(),stale=translator.translate('delete me in flight',{scope:'deleted-book'});
+  const rejected=assert.rejects(stale,{name:'AbortError'});
+  await deletion.began;await remover.forgetScope('deleted-book');
+  deletion.release();await rejected;
+  assert.equal(remover.peek('delete me in flight',{scope:'deleted-book'}),undefined);
+  assert.doesNotMatch([...disk.values()].join(),/delete me in flight/);
+  await assert.rejects(translator.translate('new work for deleted book',{scope:'deleted-book'}),{name:'AbortError'});
+  const returned=holdNext(),preRestore=translator.translate('pre-delete bytes',{scope:'readded-book'});
+  const refused=assert.rejects(preRestore,{name:'AbortError'});
+  await returned.began;await remover.forgetScope('readded-book');await remover.restoreScope('readded-book');
+  returned.release();await refused;
+  assert.doesNotMatch([...disk.values()].join(),/pre-delete bytes/);
+  assert.equal(await translator.translate('fresh catalog bytes',{scope:'readded-book'}),'На устройстве');
+  const clear=holdNext(),pending=translator.translate('keep cleared',{scope:'clear-book'});
+  const rejectedClear=assert.rejects(pending,{name:'AbortError'});
+  await clear.began;
+  const oldDisk=new Map(disk);disk.clear();
+  clear.release();await rejectedClear;
+  assert.equal(disk.size,0);
+  assert.equal(translator.peek('first paragraph'),undefined);
+  // Existing below exercises normal cold cache reuse, independently of the clear.
+  for(const [k,v] of oldDisk)disk.set(k,v);
+  const live=new Map(disk);
+  const clearBetweenValidationAndWrite=createLocalTranslator({...diskOpts,storage:()=>({...storage(),setItem(key,value){
+    if(key==='folio-local-paragraphs-v2')disk.clear();
+    disk.set(key,value);
+  }})});
+  t.after(()=>clearBetweenValidationAndWrite.stop());
+  await assert.rejects(clearBetweenValidationAndWrite.translate('cleared in commit',{scope:'race'}),{name:'AbortError'});
+  assert.equal(disk.size,0);
+  for(const [k,v] of live)disk.set(k,v);
+  function holdLock(){
+    let started,release;
+    const began=new Promise(resolve=>started=resolve);
+    const wait=new Promise(resolve=>release=resolve);
+    lockGate={started,wait};return {began,release};
+  }
+  const beforeCalls=calls.length;
+  const beforeLock=holdLock(),queued=translator.translate('must not re-create cleared storage',{scope:'pre-lock'});
+  const canceled=assert.rejects(queued,{name:'AbortError'});
+  await beforeLock.began;disk.clear();beforeLock.release();await canceled;
+  assert.equal(disk.size,0);assert.equal(calls.length,beforeCalls);
+  for(const [k,v] of live)disk.set(k,v);
+  const changedLock=holdLock(),changed=translator.translate('old text must not enter new generation',{scope:'pre-lock'});
+  const changedCanceled=assert.rejects(changed,{name:'AbortError'});
+  await changedLock.began;disk.clear();disk.set('folio-local-paragraphs-generation-v2','external-new-generation');
+  changedLock.release();await changedCanceled;
+  assert.equal(calls.length,beforeCalls);
+  assert.deepEqual([...disk.values()],['external-new-generation']);
+  disk.clear();
+  const signalled=holdLock(),atStartup=translator.translate('new empty but explicitly cleared',{scope:'pre-lock'});
+  const emptyCanceled=assert.rejects(atStartup,{name:'AbortError'});
+  await signalled.began;translator.invalidateCache();signalled.release();await emptyCanceled;
+  assert.equal(disk.size,0);
+  const a=createLocalTranslator(diskOpts),b=createLocalTranslator(diskOpts);
+  t.after(()=>{a.stop();b.stop()});
+  const startup=holdLock(),first=a.translate('first empty result',{scope:'cold-a'});
+  await startup.began;const second=b.translate('second empty result',{scope:'cold-b'});startup.release();
+  assert.deepEqual(await Promise.all([first,second]),['На устройстве','На устройстве']);
+  assert.equal(a.peek('second empty result',{scope:'cold-b'}),'На устройстве');
+  assert.equal(b.peek('first empty result',{scope:'cold-a'}),'На устройстве');
+  disk.clear();for(const [k,v] of live)disk.set(k,v);
+  const numWorkers=workers.length,numCalls=calls.length;
+  cached.clear(); // Model was evicted; text results should survive independently.
+  const reopened=createLocalTranslator(diskOpts);
+  t.after(()=>reopened.stop());
+  assert.equal(reopened.peek('first paragraph',{source:'en-GB',target:'ru-RU'}),'На устройстве');
+  assert.equal(reopened.peek('first paragraph',hindi),'उपकरण पर');
+  assert.equal(await reopened.translate('chapter paragraph',{scope:'book-a'}),'На устройстве');
+  assert.equal(reopened.peek('chapter paragraph',{scope:'book-b'}),undefined);
+  assert.equal(reopened.peek('chapter paragraph ',{scope:'book-a'}),undefined);
+  assert.equal(reopened.peek('chapter paragraph',{scope:'book-a',target:'hi'}),undefined);
+  assert.equal(workers.length,numWorkers);
+  assert.equal(calls.length,numCalls);
+  assert.equal(starts.length,11);
+  await reopened.forgetScope('book-a');
+  assert.equal(createLocalTranslator(diskOpts).peek('chapter paragraph',{scope:'book-a'}),undefined);
+  assert.equal(createLocalTranslator(diskOpts).peek('first paragraph'),'На устройстве');
 });
