@@ -10,15 +10,17 @@ function part(a,b){const i=src.indexOf(a),j=src.indexOf(b,i+a.length);assert.ok(
 const line=a=>part(a,'\n');
 const noop=()=>{};
 function session(disk=new Map(),step=100,rowHeight=step){
-  const translations=[],frames=[],timers=new Map(),events={},nodes=new Map(),writes=[];let serial=0,failWrites=0,resolveFonts;
+  const translations=[],frames=[],timers=new Map(),events={},nodes=new Map(),writes=[],focused=[];let serial=0,failWrites=0,resolveFonts;
   const node=()=>({dataset:{},style:{},classList:{add:noop,remove:noop,toggle:noop},children:[],append(...x){this.children.push(...x)},
     replaceChildren(fragment){this.children=fragment?.children||[]},setAttribute:noop,removeAttribute:noop,toggleAttribute:noop,addEventListener:noop,firstElementChild:{},hidden:false,
     querySelector(selector){return this.children.find(x=>x.className===selector.slice(1))||null},
+    focus(options){focused.push({node:this,options});doc.activeElement=this;},
+    showModal(){this.open=true;doc.activeElement=this;},
     close(){this.open=false},open:false});
   const $=id=>id.startsWith('#paragraph-')?$('#passage').children[Number(id.slice(11))]:
     (nodes.has(id)||nodes.set(id,node()),nodes.get(id));
   const sc=$('#reading-scroll');
-  const doc={hidden:false,get visibilityState(){return this.hidden?'hidden':'visible'},querySelector:()=>null,body:node(),createDocumentFragment:node,getElementById:()=>null,addEventListener:(k,cb)=>(events[k]??=[]).push(cb)};
+  const doc={hidden:false,get visibilityState(){return this.hidden?'hidden':'visible'},querySelector:selector=>selector==='dialog[open]'?[...nodes].find(([id,el])=>id.endsWith('-dialog')&&el.open)?.[1]||null:null,body:node(),createDocumentFragment:node,getElementById:()=>null,addEventListener:(k,cb)=>(events[k]??=[]).push(cb)};
   doc.fonts={check:()=>false,load:()=>new Promise(resolve=>{resolveFonts=resolve})};
   const win={addEventListener:doc.addEventListener,scrollY:0,scrollTo:noop,innerWidth:800};
   const book={id:'test',alignment:'none',language:'en',chapters:[0,1].map(ch=>({title:'Chapter '+ch,
@@ -52,14 +54,15 @@ function session(disk=new Map(),step=100,rowHeight=step){
     part('function scheduleSeen(','function wordNodes('),part('function renderChapter(','let ribbonBook='),
     part('let prefsLayoutEpoch=','function renderProfileStats('),part('function switchChapter(','function updateBookmark('),line('function renderContents('),
     part("$('#reading-scroll').addEventListener('scroll'", ";$('#sync-translation')"),
-    part("$('#reader-back').onclick=e=>", ";$('#previous-chapter')"),...handlers,
+    part("$('#reader-back').onclick=e=>", ";$('#previous-chapter')"),
+    part("$('#previous-chapter').onclick=", ";$('#reader-bookmark')"),...handlers,
     part("window.addEventListener('hashchange',readHash)", "for(const b of $$('[data-catalog]'))"),
     'const speechHooks={'+part('onPosition({book,chapter:ci,paragraph:pi}){','\n});\nlistenButton.onclick=')+'};globalThis.speechHooks=speechHooks;'
     ].join('\n'),c);
   const one=()=>{assert.ok(frames.length);frames.shift()()};
   const drain=()=>{while(frames.length)one()};
   const read=()=>JSON.parse(disk.get('folio-v2')).positions.test;
-  return {c,$,sc,disk,writes,book,frames,one,drain,read,translations,
+  return {c,$,sc,disk,writes,book,frames,one,drain,read,translations,focused,doc,
     timerCount(ms){return [...timers.values()].filter(entry=>entry.ms===ms).length},
     reflow(newStep){step=newStep;for(const row of $('#passage').children)row.offsetHeight=step;sc.scrollHeight=step*20},
     resize(width,newStep=step){this.reflow(newStep);win.innerWidth=width;for(const cb of events.resize)cb()},
@@ -290,4 +293,43 @@ test('a viewport in the inter-paragraph margin reopens in the margin, not on the
 test('corrupt viewport metadata cannot override a valid portable paragraph position',()=>{
   const h=session(),p=pos(2,.4);
   for(const delta of [null,'10',Infinity,-513,513])assert.deepEqual(safePosition({...p,viewportDelta:delta},h.book),p);
+});
+
+
+test('keyboard chapter buttons focus the newly rendered chapter without changing its scroll anchor',()=>{
+  const h=session();h.open(pos(6,.5));assert.equal(h.focused.length,0);
+  h.$('#next-chapter').onclick({detail:0});
+  assert.equal(h.focused.length,0);
+  h.drain();assert.equal(h.doc.activeElement,h.$('#chapter-heading'));
+  assert.equal(h.$('#chapter-heading').textContent,'Chapter 1');
+  assert.equal(h.focused.at(-1).options.preventScroll,true);assert.equal(h.sc.scrollTop,0);
+  h.$('#previous-chapter').onclick({detail:0});h.drain();
+  assert.equal(h.$('#chapter-heading').textContent,'Chapter 0');
+  assert.equal(h.focused.length,2);assert.equal(h.sc.scrollTop,0);
+});
+
+test('keyboard selection in the contents sheet hands focus to the chosen chapter after closing',()=>{
+  const h=session();h.open(pos(4,.2));h.$('#chapter-open').onclick();
+  assert.equal(h.$('#contents-dialog').open,true);
+  h.$('#chapter-list').children[1].onclick({detail:0});
+  assert.equal(h.$('#contents-dialog').open,false);
+  h.drain();assert.equal(h.doc.activeElement,h.$('#chapter-heading'));
+  assert.equal(h.$('#chapter-heading').textContent,'Chapter 1');
+});
+
+test('pointer changes do not steal focus and an older focus request cannot override a newer chapter',()=>{
+  const h=session();h.open(pos(4,.2));
+  h.$('#next-chapter').onclick({detail:0});
+  h.$('#previous-chapter').onclick({detail:1});
+  h.drain();assert.equal(h.focused.length,0);
+  h.$('#chapter-open').onclick();h.$('#chapter-list').children[1].onclick({detail:1});h.drain();
+  assert.equal(h.focused.length,0);
+});
+
+test('an intervening open sheet or hidden reader prevents a delayed chapter focus',()=>{
+  const h=session();h.open(pos(0,0));h.$('#next-chapter').onclick({detail:0});
+  h.$('#word-dialog').showModal();h.drain();
+  assert.equal(h.doc.activeElement,h.$('#word-dialog'));
+  h.$('#word-dialog').close();h.$('#previous-chapter').onclick({detail:0});
+  h.hide('visibilitychange');h.drain();assert.equal(h.focused.length,0);
 });

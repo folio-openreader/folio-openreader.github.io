@@ -92,6 +92,7 @@ button:not(.word):not(:disabled):active,.brand:active{transform:scale(.97);opaci
 #reading-article{padding-left:max(25px,calc(var(--safe-left) + 17px));padding-right:max(25px,calc(var(--safe-right) + 17px))}
 .chapter-heading h1{letter-spacing:-.045em}
 .chapter-heading h1:focus{outline:none}
+:where(html:not([data-pointer-ui])) .chapter-heading h1:focus-visible{outline:2px solid var(--focus,var(--accent));outline-offset:4px;border-radius:3px}
 .reading-footer{height:calc(44px + var(--safe-bottom));padding-inline:max(18px,var(--safe-left),calc((100% - 750px)/2)) max(18px,var(--safe-right),calc((100% - 750px)/2));padding-bottom:var(--safe-bottom)}
 .reading-footer .quiet{min-height:44px;font-weight:630;font-size:13px}
 .progress-rail{height:2px}
