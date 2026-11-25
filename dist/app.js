@@ -1602,6 +1602,7 @@ const bookSpeech=createBookSpeech({
   },
   onState(status,lang){
     const running=status==='starting'||status==='speaking';
+    readingHome.setNarrating(status==='speaking');
     if(running){pendingReadingScroll=null;markReadingScrollAnchor()}
     const label=running?'Приостановить чтение':status==='paused'?'Продолжить слушать':'Слушать книгу';
     listenButton.title=label;listenButton.setAttribute('aria-label',label);

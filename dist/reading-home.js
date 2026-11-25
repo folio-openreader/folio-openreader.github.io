@@ -11,7 +11,7 @@ export function installReadingHome({goHome=()=>{}}={}){
   const reader=q('#reader'), timer=createReadingTime();
   const reduce=window.matchMedia('(prefers-reduced-motion: reduce)');
   const IDLE_MS=120000;
-  let scrollFrame=0,lastActivity=-Infinity,focused=document.hasFocus(),lastView='',active=false,pageVisible=true;
+  let scrollFrame=0,lastActivity=-Infinity,focused=document.hasFocus(),lastView='',active=false,pageVisible=true,narrating=false;
   function select(index){
     for(const [i,slide] of slides.entries()){
       // The inactive slide stays in layout for native scrolling but is not announced.
@@ -46,7 +46,7 @@ export function installReadingHome({goHome=()=>{}}={}){
     }
   }
   function sync({tick=false}={}){
-    const next=pageVisible&&!reader.hidden&&!document.hidden&&focused&&!document.querySelector('dialog[open]')&&performance.now()-lastActivity<IDLE_MS;
+    const next=pageVisible&&!reader.hidden&&!document.hidden&&focused&&!document.querySelector('dialog[open]')&&(narrating||performance.now()-lastActivity<IDLE_MS);
     if(next!==active){active=next;render(timer.setActive(active))}
     else if(tick&&next)timer.tick();
     else if(tick&&!hero.hidden)render();
@@ -83,7 +83,10 @@ export function installReadingHome({goHome=()=>{}}={}){
   render();
   return {
     enterReader(){lastActivity=performance.now();sync()},
-    leaveReader(){lastActivity=-Infinity;sync();render()},
+    leaveReader(){narrating=false;lastActivity=-Infinity;sync();render()},
+    // Only the actual 'speaking' state bypasses the gesture idle timer.
+    // Hidden, blurred or covered readers remain excluded as before.
+    setNarrating(value){if(narrating===value)return;narrating=value;sync()},
     render,
     getReadingHistory: timer.getHistory,
     focusContinue(){go(0);track.scrollTo({left:0,behavior:'instant'});select(0);slides[0].querySelector('button')?.focus({preventScroll:true})}

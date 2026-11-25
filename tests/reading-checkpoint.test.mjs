@@ -36,7 +36,7 @@ function session(disk=new Map(),step=100,rowHeight=step){
     requestAnimationFrame(cb){frames.push(cb);return ++serial},clearTimeout:id=>timers.delete(id),
     setTimeout(cb,ms){const id=++serial;timers.set(id,{cb,ms});return id},
     progress:()=>0,updateBookmark:noop,syncTranslation:()=>translations.push(c.paragraph),saveLearning:noop,updateStorageStatus:noop,
-    toast:noop,applyPrefs:noop,READING_FONTS:{test:{label:'Test'},late:{label:'Late'}},readHash:noop,ribbonManual:false,readingHome:{enterReader:noop,leaveReader:noop},resetWordView:noop,setChromeColor:noop,renderStarterEdition:noop,revealMotion:noop,
+    toast:noop,applyPrefs:noop,READING_FONTS:{test:{label:'Test'},late:{label:'Late'}},readHash:noop,ribbonManual:false,readingHome:{enterReader:noop,leaveReader:noop,setNarrating:noop},resetWordView:noop,setChromeColor:noop,renderStarterEdition:noop,revealMotion:noop,
     cancelMotion:noop,dismissWord:noop,closeComicView:noop,cancelSpeech(){c.bookSpeech.stop()},isStarterId:()=>false,iconMarkup:()=>''};
   Object.assign(sc,{scrollTop:0,clientHeight:300,scrollHeight:step*20,getBoundingClientRect:()=>({top:40}),
     addEventListener:(k,cb)=>{events[k]=[cb]}});
