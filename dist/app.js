@@ -185,7 +185,7 @@ const legacyBookmark=Number(storedValue('folio-bookmark'));if(storedValue('folio
 let storageWarning='',backupDraft=null,backupSequence=0,restoring=false;
 let lexicon=null,lexiconPending=null,selectedWordSequence=0,importingDictionary=false;
 let paragraphObserver=null,importSequence=0;
-let books=[demo],current=null,chapter=0,paragraph=0,selectedWord='',wordAnchor=null,previewBook=null,db=null,toastTimer,saveTimer,frame=0,suppressScroll=false,ribbonManual=false,drag=null;
+let books=[demo],current=null,chapter=0,paragraph=0,selectedWord='',wordAnchor=null,previewBook=null,db=null,toastTimer,saveTimer,suppressScroll=false,ribbonManual=false,drag=null;
 const starterSource=createStarterSource();
 let starterIntent=0;
 const starterShelf=installStarterShelf($('#starter-shelf'),{
@@ -524,7 +524,7 @@ const navMotion=installNavMotion($('.nav-dock'));
 function homeRoute(){const view=location.hash.slice(1);if(view.startsWith('profile/'))return 'profile';return HOME_ROUTES.includes(view)?view:'home'}
 function showHome(which='home',{motion=false,focus=false}={}){
   const leavingReader=!$('#reader').hidden,changed=homeView!==which,forward=HOME_ROUTES.indexOf(which)>HOME_ROUTES.indexOf(homeView);
-  if(leavingReader){cancelLocalQueue();readingHome.leaveReader();dismissWord();capturePosition();closeComicView();renderEpoch++;suppressScroll=false;clearTimeout(saveTimer);clearTimeout(seenTimer)}
+  if(leavingReader){cancelLocalQueue();readingHome.leaveReader();dismissWord();capturePosition(true);closeComicView();renderEpoch++;suppressScroll=false;clearTimeout(saveTimer);clearTimeout(seenTimer)}
   if(!leavingReader&&!changed&&homeLeaving===false&&$('#home').dataset.ready==='true')return;
   cancelSpeech();cancelMotion($('#reader'));
   document.body.classList.remove('reading');setChromeColor();$('#reader').hidden=true;$('#home').hidden=false;$('#home').dataset.ready='true';
@@ -562,7 +562,7 @@ function navigateHome(which,event){
   showHome(which,{motion:!!event?.detail,focus:!!event&&event.detail===0});
 }
 function openBook(id,explicit,{motion=false,focus=false,trigger=''}={}){
-  if(!$('#reader').hidden){dismissWord();capturePosition();closeComicView();}
+  if(!$('#reader').hidden){dismissWord();capturePosition(true);closeComicView();}
   else if(!$('#home').hidden){
     readerReturn=location.hash.startsWith('#read/')?returnRoute():homeView==='library'?'library':'home';
     if(Object.hasOwn(routeScroll,readerReturn))routeScroll[readerReturn]=window.scrollY;
@@ -758,23 +758,74 @@ function wordNodes(text){
   });
   return fragment;
 }
-function renderChapter(position={chapter,paragraph:0,fraction:0},{bookmark=false}={}){listenButton.hidden=isComic(current);if(isComic(current)){void renderComicPage(position,{bookmark});return}const epoch=++renderEpoch;suppressScroll=true;cancelSpeech();const c=current.chapters[chapter];paragraph=Math.max(0,Math.min(c.paragraphs.length-1,position.paragraph||0));state.positions[current.id]={chapter,paragraph,fraction:position.fraction||0};$('#chapter-title').textContent=`${chapter+1} / ${current.chapters.length} · ${c.title}`;$('#chapter-meta').textContent=`ГЛАВА ${chapter+1} · ${current.language||'ОРИГИНАЛ'}`;$('#chapter-heading').textContent=c.title;paragraphObserver?.disconnect();paragraphObserver=new IntersectionObserver(entries=>{for(const entry of entries){if(entry.isIntersecting){const el=entry.target;if(!el.dataset.hydrated){el.replaceChildren(wordNodes(el.textContent));el.dataset.hydrated='true'}paragraphObserver.unobserve(el)}}},{root:$('#reading-scroll'),rootMargin:'600px'});const passage=document.createDocumentFragment();c.paragraphs.forEach((p,i)=>{const el=node('p',null,'reading-paragraph');el.dataset.paragraph=i;el.id=`paragraph-${i}`;el.lang=current.language||'';el.textContent=p.text;passage.append(el);paragraphObserver.observe(el)});$('#passage').replaceChildren(passage);$('#previous-chapter').disabled=chapter===0;$('#next-chapter').disabled=chapter===current.chapters.length-1;$('.reader-help').open=false;$('#reading-note').textContent=current.alignment==='demo'?'Демо: три фрагмента с готовым переводом.':current.alignment==='none'?(isStarterId(current.id)?'У издания нет готового парного текста. Словарь доступен по нажатию на слово.':'Файл перевода не добавлен.'):'Сопоставление по порядку, не по смыслу. Несовпавшие главы не переведены.';const pageNo=Number(/^Страница (\d+)$/.exec(c.title)?.[1]);if(current.ocr?.pages.includes(pageNo))$('#reading-note').textContent+=current.ocr.uncertain.includes(pageNo)?' На этой странице OCR не уверено в результате. Сверьте текст с оригиналом.':' Эта страница содержит распознанный текст.';requestAnimationFrame(()=>{if(epoch!==renderEpoch)return;restorePosition(position);setActiveParagraph(paragraph,true);if(bookmark)outcomeCue($('#paragraph-'+paragraph),'bookmark',1000);requestAnimationFrame(()=>{if(epoch===renderEpoch){suppressScroll=false;scheduleSeen()}})})}
-function restorePosition(p){if(isComic(current))return;const el=$(`#paragraph-${paragraph}`),sc=$('#reading-scroll');if(!el)return;const top=el.getBoundingClientRect().top-sc.getBoundingClientRect().top+sc.scrollTop;sc.scrollTop=Math.max(0,top-22+(p.fraction||0)*el.offsetHeight)}
-function capturePosition(){if(!current||$('#reader').hidden||suppressScroll)return;const sc=$('#reading-scroll');
+function renderChapter(position={chapter,paragraph:0,fraction:0},{bookmark=false}={}){listenButton.hidden=isComic(current);if(isComic(current)){void renderComicPage(position,{bookmark});return}const epoch=++renderEpoch;suppressScroll=true;cancelSpeech();const c=current.chapters[chapter];paragraph=Math.max(0,Math.min(c.paragraphs.length-1,position.paragraph||0));state.positions[current.id]={chapter,paragraph,fraction:position.fraction||0};$('#chapter-title').textContent=`${chapter+1} / ${current.chapters.length} · ${c.title}`;$('#chapter-meta').textContent=`ГЛАВА ${chapter+1} · ${current.language||'ОРИГИНАЛ'}`;$('#chapter-heading').textContent=c.title;paragraphObserver?.disconnect();paragraphObserver=new IntersectionObserver(entries=>{for(const entry of entries){if(entry.isIntersecting){const el=entry.target;if(!el.dataset.hydrated){el.replaceChildren(wordNodes(el.textContent));el.dataset.hydrated='true'}paragraphObserver.unobserve(el)}}},{root:$('#reading-scroll'),rootMargin:'600px'});const passage=document.createDocumentFragment();c.paragraphs.forEach((p,i)=>{const el=node('p',null,'reading-paragraph');el.dataset.paragraph=i;el.id=`paragraph-${i}`;el.lang=current.language||'';el.textContent=p.text;passage.append(el);paragraphObserver.observe(el)});$('#passage').replaceChildren(passage);$('#previous-chapter').disabled=chapter===0;$('#next-chapter').disabled=chapter===current.chapters.length-1;$('.reader-help').open=false;$('#reading-note').textContent=current.alignment==='demo'?'Демо: три фрагмента с готовым переводом.':current.alignment==='none'?(isStarterId(current.id)?'У издания нет готового парного текста. Словарь доступен по нажатию на слово.':'Файл перевода не добавлен.'):'Сопоставление по порядку, не по смыслу. Несовпавшие главы не переведены.';const pageNo=Number(/^Страница (\d+)$/.exec(c.title)?.[1]);if(current.ocr?.pages.includes(pageNo))$('#reading-note').textContent+=current.ocr.uncertain.includes(pageNo)?' На этой странице OCR не уверено в результате. Сверьте текст с оригиналом.':' Эта страница содержит распознанный текст.';requestAnimationFrame(()=>{if(epoch!==renderEpoch)return;restorePosition(position);setActiveParagraph(paragraph,true);if(bookmark)outcomeCue($('#paragraph-'+paragraph),'bookmark',1000);if(epoch===renderEpoch){suppressScroll=false;scheduleSeen()}})}
+function restorePosition(p){if(isComic(current))return;const el=$(`#paragraph-${paragraph}`),sc=$('#reading-scroll');if(!el)return;const top=el.getBoundingClientRect().top-sc.getBoundingClientRect().top+sc.scrollTop;sc.scrollTop=Math.max(0,top-22+(p.fraction||0)*el.offsetHeight);markReadingScrollAnchor()}
+function capturePosition(quiet=false){
+  if(!current||$('#reader').hidden)return;
+  // Before a layout/seek finishes, renderChapter already holds the intended target.
+  if(suppressScroll){if(quiet&&!isComic(current))return saveState();return}
+  const sc=$('#reading-scroll');
   if(isComic(current)){
-    state.positions[current.id]={chapter,paragraph,fraction:Math.max(0,Math.min(.99,sc.scrollTop/Math.max(1,sc.scrollHeight-sc.clientHeight)))};saveState();return;
+    state.positions[current.id]={chapter,paragraph,fraction:Math.max(0,Math.min(.99,sc.scrollTop/Math.max(1,sc.scrollHeight-sc.clientHeight)))};return saveState();
   }
-  const para=$(`#paragraph-${paragraph}`);const top=para?para.getBoundingClientRect().top-sc.getBoundingClientRect().top+sc.scrollTop:0;const fraction=para?Math.max(0,Math.min(.99,(sc.scrollTop-top+22)/Math.max(1,para.offsetHeight))):0;state.positions[current.id]={chapter,paragraph,fraction};if(current.id===DEMO_ID)try{localStorage.setItem('folio-page',chapter)}catch{}saveState()}
+  pendingReadingScroll?.flush(quiet);
+  // A resize may have changed geometry before its frame and before the page hides.
+  // Until a newer scroll owns the spot, keep its pre-reflow relative anchor.
+  if(quiet&&readerSuspended&&readingResizeCurrent(pendingReadingResize,sc)){
+    pendingReadingResize=null;deferredReadingReflowEpoch=renderEpoch;return saveState();
+  }
+  // Browsers can move the scroller, then hide before delivering its scroll event.
+  if(!bookSpeech.playing&&readingScrollAnchor?.epoch===renderEpoch&&Math.abs(sc.scrollTop-readingScrollAnchor.top)>1){
+    const reached=readingScrollParagraph(sc);
+    if(reached!==paragraph)activateScrolledParagraph(reached,quiet);
+    else markReadingScrollAnchor();
+  }
+  clearTimeout(saveTimer); // This synchronous writer supersedes its own delayed save.
+  markReadingScrollAnchor();
+  const para=$(`#paragraph-${paragraph}`);const top=para?para.getBoundingClientRect().top-sc.getBoundingClientRect().top+sc.scrollTop:0;const fraction=para?Math.max(0,Math.min(.99,(sc.scrollTop-top+22)/Math.max(1,para.offsetHeight))):0;state.positions[current.id]={chapter,paragraph,fraction};if(current.id===DEMO_ID)try{localStorage.setItem('folio-page',chapter)}catch{}return saveState()}
 function setActiveParagraph(i,sync=false){
+ pendingReadingScroll=null;deferredReadingTranslationEpoch=-1; // Explicit selections supersede older manual scrolls.
  if(!followingBook&&i!==paragraph)bookSpeech.stop();
  if(isComic(current)){paragraph=i;state.positions[current.id]={chapter,paragraph,fraction:state.positions[current.id]?.fraction||0};updateComicProgress();return}
- $('#paragraph-'+paragraph)?.classList.remove('active');paragraph=i;$(`#paragraph-${i}`)?.classList.add('active');state.positions[current.id]={chapter,paragraph,fraction:state.positions[current.id]?.fraction||0};const percentage=progress(current);$('#reading-progress').textContent=`${percentage}% · абзац ${i+1} / ${current.chapters[chapter].paragraphs.length}`;$('#progress-fill').style.transform=`scaleX(${percentage/100})`;updateBookmark();if(sync)syncTranslation();clearTimeout(saveTimer);saveTimer=setTimeout(capturePosition,180);scheduleSeen()}
-function onReadingScroll(){
-  clearTimeout(seenTimer);if(suppressScroll||!current||frame||bookSpeech.playing)return;
-  if(isComic(current)){clearTimeout(saveTimer);saveTimer=setTimeout(capturePosition,180);return}
-  const epoch=renderEpoch;frame=requestAnimationFrame(()=>{
-    frame=0;if(epoch!==renderEpoch||$('#reader').hidden||suppressScroll||bookSpeech.playing)return;
-    const sc=$('#reading-scroll'),max=sc.scrollHeight-sc.clientHeight,atEnd=max>0&&max-sc.scrollTop<2;
+ markReadingScrollAnchor();
+ $('#paragraph-'+paragraph)?.classList.remove('active');paragraph=i;$(`#paragraph-${i}`)?.classList.add('active');state.positions[current.id]={chapter,paragraph,fraction:state.positions[current.id]?.fraction||0};const percentage=progress(current);$('#reading-progress').textContent=`${percentage}% · абзац ${i+1} / ${current.chapters[chapter].paragraphs.length}`;$('#progress-fill').style.transform=`scaleX(${percentage/100})`;updateBookmark();
+ if(readerSuspended){if(sync)deferredReadingTranslationEpoch=renderEpoch;return}
+ if(sync)syncTranslation();clearTimeout(saveTimer);saveTimer=setTimeout(capturePosition,180);scheduleSeen()}
+let pendingReadingScroll=null,readingScrollAnchor=null,deferredReadingTranslationEpoch=-1,readerSuspended=false,checkpointSaved=false;
+let pendingReadingResize=null,deferredReadingReflowEpoch=-1;
+function suspendReading(){
+  readerSuspended=true;
+  if(!checkpointSaved&&current&&!$('#reader').hidden)checkpointSaved=capturePosition(true)===true;
+  clearTimeout(saveTimer);clearTimeout(seenTimer);
+}
+function resumeReading(){
+  if(document.hidden||!readerSuspended)return;
+  readerSuspended=false;checkpointSaved=false;
+  if(deferredReadingReflowEpoch===renderEpoch&&current&&!isComic(current)&&!$('#reader').hidden&&!suppressScroll){
+    const p=state.positions[current.id];
+    if(p?.chapter===chapter&&p.paragraph===paragraph){
+      restorePosition(p);
+      if(!ribbonManual)deferredReadingTranslationEpoch=renderEpoch;
+    }
+  }
+  deferredReadingReflowEpoch=-1;
+  resumeReadingTranslation();scheduleSeen();
+}
+function deferHiddenReadingReflow(epoch){
+  if(!readerSuspended&&!document.hidden)return false;
+  deferredReadingReflowEpoch=epoch;return true;
+}
+function activateScrolledParagraph(i,quiet){
+  setActiveParagraph(i,!quiet);
+  if(quiet)deferredReadingTranslationEpoch=renderEpoch;
+}
+function resumeReadingTranslation(){
+  if(document.hidden||deferredReadingTranslationEpoch!==renderEpoch||$('#reader').hidden)return;
+  deferredReadingTranslationEpoch=-1;syncTranslation();
+}
+function markReadingScrollAnchor(dirty=false){readingScrollAnchor={epoch:renderEpoch,top:$('#reading-scroll').scrollTop,dirty}}
+function readingScrollParagraph(sc){
+    const max=sc.scrollHeight-sc.clientHeight,atEnd=max>0&&max-sc.scrollTop<2;
     const anchor=sc.getBoundingClientRect().top+(atEnd?Math.min(220,sc.clientHeight*.45):65),rows=$('#passage').children;
     // Scrolling generally stays in the current row. Read live geometry (no height
     // cache invalidation on font, width or hydration), then binary-search only on a jump.
@@ -786,9 +837,27 @@ function onReadingScroll(){
       else{found=paragraph+1;low=paragraph+2}
     }else high=paragraph-1;
     while(low<=high){const middle=(low+high)>>>1;if(top(middle)<=anchor){found=middle;low=middle+1}else high=middle-1}
-    if(found!==paragraph)setActiveParagraph(found,true);
+  return found;
+}
+function onReadingScroll(){
+  clearTimeout(seenTimer);if(readerSuspended||suppressScroll||!current||bookSpeech.playing)return;
+  if(isComic(current)){clearTimeout(saveTimer);saveTimer=setTimeout(capturePosition,180);return}
+  if(pendingReadingScroll?.epoch===renderEpoch)return;
+  // A lifecycle save can run before RAF; resolve the same live anchor exactly once.
+  const pending=pendingReadingScroll={epoch:renderEpoch,flush(quiet=false){
+    if(pendingReadingScroll!==pending)return;
+    pendingReadingScroll=null;
+    if(pending.epoch!==renderEpoch||$('#reader').hidden||suppressScroll||bookSpeech.playing)return;
+    const sc=$('#reading-scroll');
+    if(readingScrollAnchor?.epoch===renderEpoch&&Math.abs(sc.scrollTop-readingScrollAnchor.top)<=1){
+      if(!readerSuspended)scheduleSeen();return;
+    }
+    const found=readingScrollParagraph(sc);
+    if(found!==paragraph)activateScrolledParagraph(found,quiet);
     else{clearTimeout(saveTimer);saveTimer=setTimeout(capturePosition,180);scheduleSeen()}
-  })
+    markReadingScrollAnchor(true);
+  }};
+  requestAnimationFrame(()=>pending.flush());
 }
 let ribbonBook=null,currentSegment=null;
 const localTranslator=createLocalTranslator();let localBooks=new WeakSet();
@@ -1178,7 +1247,16 @@ function prefsChanged(change){
   // A slow cache miss can reflow the already-open chapter after the first frame.
   // Re-anchor only if the same paragraph is still on screen and has not scrolled.
   const late=font!==oldFont&&document.fonts?.load&&!document.fonts.check(face,chars)?document.fonts.load(face,chars).catch(()=>[]):null;
-  const restore=()=>{restorePosition(position);if(!ribbonManual)syncTranslation()};
+  const restore=()=>{
+    restorePosition(position);
+    // restorePosition recorded the programmatic offset; the next real swipe owns it.
+    suppressScroll=false;
+    if(!ribbonManual){
+      if(readerSuspended||document.hidden)deferredReadingTranslationEpoch=epoch;
+      else syncTranslation();
+    }
+    if(!readerSuspended)scheduleSeen();
+  };
   suppressScroll=true;
   requestAnimationFrame(()=>{
     if(!stillHere())return;
@@ -1186,11 +1264,10 @@ function prefsChanged(change){
     const heldScroll=sc.scrollTop;
     requestAnimationFrame(()=>{
       if(!stillHere())return;
-      suppressScroll=false;
       late?.then(faces=>{
-        if(!faces.length||!stillHere()||paragraph!==position.paragraph||Math.abs(sc.scrollTop-heldScroll)>3)return;
+        if(!faces.length||!stillHere()||deferHiddenReadingReflow(epoch)||
+          state.positions[current.id]!==position||paragraph!==position.paragraph||Math.abs(sc.scrollTop-heldScroll)>3)return;
         suppressScroll=true;restore();
-        requestAnimationFrame(()=>{if(stillHere())suppressScroll=false});
       });
     });
   });
@@ -1494,6 +1571,7 @@ const bookSpeech=createBookSpeech({
   },
   onState(status,lang){
     const running=status==='starting'||status==='speaking';
+    if(running){pendingReadingScroll=null;markReadingScrollAnchor()}
     const label=running?'Приостановить чтение':status==='paused'?'Продолжить слушать':'Слушать книгу';
     listenButton.title=label;listenButton.setAttribute('aria-label',label);
     listenButton.firstElementChild.innerHTML=iconMarkup(running?'listenPause':'headphones');
@@ -1966,7 +2044,8 @@ $('#profile-size').oninput=e=>prefsChanged({size:+e.target.value});$('#profile-t
 $('#export-backup').onclick=()=>{const text=serializeBackup(books,state,legacyWords(),packLearning(learning));const blob=new Blob([text]);if(blob.size>BACKUP_LIMIT)return toast('Копия больше 50 МБ. Скачивание такой копии пока не поддерживается.');downloadText(text,'application/json;charset=utf-8',`folio-backup-${new Date().toISOString().slice(0,10)}.json`)};
 $('#open-backup').onclick=()=>{$('#backup-file').value='';$('#backup-prefs').checked=false;arrangeBackup(null);$('#backup-dialog').showModal()};$('#backup-file').onchange=e=>arrangeBackup(e.target.files[0]);$('#restore-backup').onclick=restoreBackup;
 $('#dictionary-import').onclick=importDictionaryFile;
-window.addEventListener('pagehide',()=>{practiceAudio.stop();capturePosition();if(learningDirty)saveState()});document.addEventListener('visibilitychange',()=>{if(document.hidden){practiceAudio.stop();clearTimeout(seenTimer);capturePosition();if(learningDirty)saveState()}else scheduleSeen()});
+window.addEventListener('pagehide',()=>{practiceAudio.stop();suspendReading();if(learningDirty)saveState()});
+document.addEventListener('visibilitychange',()=>{if(document.hidden){practiceAudio.stop();suspendReading();if(learningDirty)saveState()}else resumeReading()});
 let syncEpoch=0,syncPanel=null;
 async function showSyncPanel(){
   const epoch=++syncEpoch,host=$('#folio-sync-settings');
@@ -1985,7 +2064,7 @@ window.addEventListener('storage',e=>{
   if(e.key===SYNC_WORDS&&(!wordDisk?.held||e.newValue===null))wordStoreNotice('Другая вкладка изменила словарь. Перед редактированием слов перезагрузите Folio.');
 });
 window.addEventListener('pagehide',()=>{syncEpoch++;syncPanel?.dispose();syncPanel=null;wordDisk?.close()});
-window.addEventListener('pageshow',e=>{if(e.persisted&&(wordDisk?.enrolled||storedValue(SYNC_WORDS)!==null)){location.reload();return}if(e.persisted&&location.hash==='#profile/sync')void showSyncPanel()});
+window.addEventListener('pageshow',e=>{if(e.persisted&&(wordDisk?.enrolled||storedValue(SYNC_WORDS)!==null)){location.reload();return}if(e.persisted){resumeReading();if(location.hash==='#profile/sync')void showSyncPanel()}});
 function readHash(){
   if(!location.hash.startsWith('#read/')){starterIntent++;editorialIntent++;showHome(homeRoute());return}
   let id;try{id=decodeURIComponent(location.hash.slice(6))}catch{id=DEMO_ID}
@@ -1999,7 +2078,28 @@ function readHash(){
     void openStarterBook(id).catch(()=>{if(location.hash===url)toast('Не удалось загрузить книгу. Открой её из каталога.');});
   }else{starterIntent++;openBook(id)}
 }
-window.addEventListener('hashchange',readHash);let previousWidth=window.innerWidth;window.addEventListener('resize',()=>{const changed=previousWidth!==window.innerWidth;previousWidth=window.innerWidth;if(changed&&current&&!$('#reader').hidden){const p=state.positions[current.id],epoch=renderEpoch;if(p)requestAnimationFrame(()=>{if(epoch!==renderEpoch||isComic(current))return;restorePosition(p);if(!ribbonManual)syncTranslation()})}});
+window.addEventListener('hashchange',readHash);
+let previousWidth=window.innerWidth;
+function readingResizeCurrent(resize,sc){
+  return resize&&resize.width===previousWidth&&resize.epoch===renderEpoch&&resize.book===current&&
+    resize.position===state.positions[current.id]&&resize.top===sc.scrollTop;
+}
+window.addEventListener('resize',()=>{
+  const width=window.innerWidth,changed=previousWidth!==width;previousWidth=width;
+  if(!changed||!current||$('#reader').hidden||isComic(current)||deferHiddenReadingReflow(renderEpoch)||suppressScroll)return;
+  const position=state.positions[current.id],sc=$('#reading-scroll'),top=sc.scrollTop;
+  if(!position)return;
+  // The saved fraction may already be obsolete before resize starts.
+  if(readingScrollAnchor?.epoch===renderEpoch&&(readingScrollAnchor.dirty||Math.abs(top-readingScrollAnchor.top)>1))return;
+  const resize=pendingReadingResize={width,book:current,epoch:renderEpoch,position,top};
+  requestAnimationFrame(()=>{
+    if(pendingReadingResize!==resize)return;
+    pendingReadingResize=null;
+    // A newer scroll or lifecycle checkpoint owns the position, not this stale reflow.
+    if(!readingResizeCurrent(resize,sc)||$('#reader').hidden||suppressScroll||deferHiddenReadingReflow(renderEpoch))return;
+    restorePosition(position);if(!ribbonManual)syncTranslation();
+  });
+});
 for(const b of $$('[data-catalog]'))b.onclick=e=>setCatalogKind(b.dataset.catalog,{motion:e.detail>0});
 for(const b of $$('[data-open-catalog]'))b.onclick=e=>{setCatalogKind(b.dataset.openCatalog);navigateHome('library',e)};
 paintIcons();installFileTiles();bootMobileViewport();
