@@ -18,6 +18,18 @@ export function nextChunk(text,offset,max=160) {
   return {start:offset,end,text:text.slice(offset,end)};
 }
 
+const NEURAL_CHUNK=92, NATIVE_CHUNK=160, LOOKAHEAD_STEPS=24;
+function findChunk(book,chapter,paragraph,offset,max,steps=Infinity){
+  for(;chapter<book.chapters.length&&steps>0;steps--){
+    const rows=book.chapters[chapter].paragraphs;
+    if(paragraph>=rows.length){chapter++;paragraph=0;offset=0;continue}
+    const chunk=nextChunk(rows[paragraph]?.text||'',offset,max);
+    if(chunk)return {chapter,paragraph,chunk};
+    paragraph++;offset=0;
+  }
+  return null;
+}
+
 const OPENING_MIN=36,OPENING_MAX=62,OPENING_SAVING=22;
 let sentenceSegmenter;
 export function firstNarrationChunk(chunk){
@@ -55,23 +67,20 @@ export function createBookSpeech({host=window,onPosition=()=>{},onState=()=>{}}=
   function fail(s){interrupt();emit(s);return false}
   function advance(){
     if(host.document?.hidden){pause();return false}
-    let moved=false,chunk=null;
-    while(c<book.chapters.length){
-      const paragraphs=book.chapters[c].paragraphs;
-      if(p>=paragraphs.length){c++;p=0;offset=0;moved=true;continue}
-      chunk=nextChunk(paragraphs[p]?.text||'',offset,neural?92:160);
-      if(chunk)break;
-      p++;offset=0;moved=true;
+    const found=findChunk(book,c,p,offset,neural?NEURAL_CHUNK:NATIVE_CHUNK);
+    if(!found){book=null;emit('ended');return false}
+    let {chapter,paragraph,chunk}=found;
+    if(chapter!==c||paragraph!==p){
+      c=chapter;p=paragraph;offset=0;
+      onPosition({book,chapter:c,paragraph:p});if(!book||!playing())return false;
     }
-    if(!chunk){book=null;emit('ended');return false}
-    if(moved){onPosition({book,chapter:c,paragraph:p});if(!book||!playing())return false}
     if(neural){
       if(opening)chunk=firstNarrationChunk(chunk);
       const token={};active=token;offset=chunk.start;
-      // At most one following segment on the worker, only in the same book language.
-      const paras=book.chapters[c].paragraphs;
-      let next=nextChunk(paras[p]?.text||'',chunk.end,92)?.text;
-      if(!next)next=nextChunk(paras[p+1]?.text||'',0,92)?.text;
+      // Spend one worker slot on the same segment advance() will find, even
+      // across blank rows or a chapter boundary. Do not scan ahead through an
+      // arbitrary number of empty rows before starting the current playback.
+      const next=findChunk(book,c,p,chunk.end,NEURAL_CHUNK,LOOKAHEAD_STEPS)?.chunk.text;
       timer=host.setTimeout(()=>{if(active===token)fail('unavailable')},60000);
       return playNeural(host,{text:chunk.text,next,resume,voice:neural,rate:voicePreference(host,lang).rate,
         onstart(){if(active===token){resume=null;clear();emit('speaking');timer=host.setTimeout(()=>{if(active===token)fail('unavailable')},120000)}},
