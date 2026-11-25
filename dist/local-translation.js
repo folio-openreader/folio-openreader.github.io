@@ -42,6 +42,56 @@ export function translationPack(source,target='ru'){
 export function supportsTranslation(source,target='ru'){
   return !!modelPack(source,target);
 }
+const AUTO_TRANSLATION_KEY='folio-auto-translation-v1', AUTO_TRANSLATION_MAX=256;
+const localBookId=id=>typeof id==='string'&&/^[a-z0-9_-]{1,192}$/i.test(id);
+const sourceEdition=book=>Number.isSafeInteger(book.createdAt)&&book.createdAt>=0?book.createdAt:0;
+
+export function createAutoTranslationPreferences(storage){
+  // Consent lives only on this device. Store IDs and language pairs, never text
+  // or translated content; model downloads still require an explicit tap.
+  let rows=new Map(),volatile=false;
+  function refresh(storageKey=AUTO_TRANSLATION_KEY){
+    if(volatile||(storageKey!==null&&storageKey!==AUTO_TRANSLATION_KEY))return;
+    try{
+      const raw=storage().getItem(AUTO_TRANSLATION_KEY);
+      const values=raw&&raw.length<=65536?JSON.parse(raw):[];
+      const loaded=new Map();
+      if(Array.isArray(values))for(const row of values.slice(-AUTO_TRANSLATION_MAX)){
+        if(!Array.isArray(row)||row.length!==3)continue;
+        const [id,edition,pair]=row;
+        if(localBookId(id)&&Number.isSafeInteger(edition)&&edition>=0&&typeof pair==='string'&&Object.hasOwn(packs,pair))loaded.set(row.join(':'),row);
+      }
+      rows=loaded;
+    }catch{/* Keep the current tab's preferences when storage is blocked. */}
+  }
+  const entry=(book,source,target)=>{
+    const pack=modelPack(source,target);
+    return localBookId(book?.id)&&pack?[book.id,sourceEdition(book),pack.id]:null;
+  };
+  function persist(){
+    try{
+      storage().setItem(AUTO_TRANSLATION_KEY,JSON.stringify([...rows.values()]));volatile=false;return true;
+    }catch{volatile=true;return false;}
+  }
+  refresh();
+  return {
+    refresh,
+    has(book,source,target){const row=entry(book,source,target);return !!row&&rows.has(row.join(':'));},
+    set(book,source,target,enabled){
+      const row=entry(book,source,target);if(!row)return false;
+      refresh();
+      const key=row.join(':');rows.delete(key);if(enabled)rows.set(key,row);
+      if(rows.size>AUTO_TRANSLATION_MAX)rows.delete(rows.keys().next().value);
+      return persist();
+    },
+    forget(id){
+      refresh();
+      let changed=false;
+      for(const [key,row] of rows)if(row[0]===id){rows.delete(key);changed=true;}
+      return !changed||persist();
+    }
+  };
+}
 export function splitTranslationText(text,limit=CHUNK){
   if(typeof text!=='string'||!text.trim())throw new Error('empty');
   if(!Number.isInteger(limit)||limit<2)throw new RangeError('limit');

@@ -66,7 +66,9 @@ export function safePosition(p,book) {
   if(!object(p)||!Number.isInteger(p.chapter)||!Number.isInteger(p.paragraph))return null;
   if(p.chapter<0||p.paragraph<0||!book?.chapters[p.chapter]?.paragraphs[p.paragraph])return null;
   const fraction=typeof p.fraction==='number'&&Number.isFinite(p.fraction)?bounded(p.fraction,0,.99):0;
-  return {chapter:p.chapter,paragraph:p.paragraph,fraction};
+  const position={chapter:p.chapter,paragraph:p.paragraph,fraction};
+  if(Number.isFinite(p.viewportDelta)&&Math.abs(p.viewportDelta)<=512&&p.viewportDelta!==0)position.viewportDelta=p.viewportDelta;
+  return position;
 }
 // Keep OCR diagnostics portable without storing images or duplicate preview excerpts.
 export function sanitizeOcr(raw) {

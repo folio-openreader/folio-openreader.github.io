@@ -33,3 +33,20 @@ The intended destination is the **dedicated organization site** `folio-openreade
 
 ## Licence
 [MIT](LICENSE) applies to original Folio software, copyright 2026 Olzhas Assemgazy. It does **not** relicense incorporated dependencies, fonts, book editions, research, news, dictionaries, or translation models. Preserve their individual credits and licences; see [source notices](dist/credits.html). The GPL Hindi dictionary includes its corresponding editable source beside its data. [OCR runtime notices](dist/vendor/ocr-v1/THIRD-PARTY/README.txt) and PDF component licences accompany their files.
+
+## Navigate the reader code with Graphify (optional)
+
+Build a local symbol graph of the committed reader modules with Python 3.11.5–3.14 on macOS or Linux:
+
+```sh
+python3 -m venv .venv-graphify
+.venv-graphify/bin/python -m pip install "graphifyy==0.9.120"
+.venv-graphify/bin/python tools/graphify_local.py
+.venv-graphify/bin/graphify query "splitTranslationText"
+```
+
+The [Graphify CLI](https://github.com/Graphify-Labs/graphify) parses source locally
+without a model or API key. Paths in the graph are relative to `dist/`. The command
+indexes `HEAD`, not uncommitted edits, vendor code, dictionary assets or books.
+Repeat the third command after a commit. Only dependency installation needs
+internet. No agent hooks are required; neither the tool nor its graph ships with Folio.

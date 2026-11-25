@@ -9,7 +9,7 @@ const src=readFileSync(process.env.FOLIO_POSITION_TEST_APP || new URL('../dist/a
 function part(a,b){const i=src.indexOf(a),j=src.indexOf(b,i+a.length);assert.ok(i>=0&&j>i,a);return src.slice(i,j)}
 const line=a=>part(a,'\n');
 const noop=()=>{};
-function session(disk=new Map(),step=100){
+function session(disk=new Map(),step=100,rowHeight=step){
   const translations=[],frames=[],timers=new Map(),events={},nodes=new Map(),writes=[];let serial=0,failWrites=0,resolveFonts;
   const node=()=>({dataset:{},style:{},classList:{add:noop,remove:noop,toggle:noop},children:[],append(...x){this.children.push(...x)},
     replaceChildren(fragment){this.children=fragment?.children||[]},setAttribute:noop,removeAttribute:noop,toggleAttribute:noop,addEventListener:noop,firstElementChild:{},hidden:false,
@@ -23,7 +23,7 @@ function session(disk=new Map(),step=100){
   const win={addEventListener:doc.addEventListener,scrollY:0,scrollTo:noop,innerWidth:800};
   const book={id:'test',alignment:'none',language:'en',chapters:[0,1].map(ch=>({title:'Chapter '+ch,
     paragraphs:Array.from({length:20},(_,i)=>({text:String(i+1)}))}))};
-  const c={$,window:win,document:doc,node:(_tag,text,className)=>{const n=node();n.offsetHeight=step;n.className=className;n.textContent=text;
+  const c={$,window:win,document:doc,node:(_tag,text,className)=>{const n=node();n.offsetHeight=rowHeight;n.className=className;n.textContent=text;
       n.getBoundingClientRect=()=>({top:40+Number(n.dataset.paragraph)*step-sc.scrollTop});return n},
     localStorage:{getItem:k=>disk.get(k),setItem(k,v){if(failWrites&&k==='folio-v2'){failWrites--;throw Error('storage blocked')}disk.set(k,String(v));writes.push([k,String(v)])}},
     state:JSON.parse(disk.get('folio-v2')||'{"positions":{}}'),safePosition,isComic,books:[book],current:null,chapter:0,paragraph:0,
@@ -127,8 +127,8 @@ test('same-ID replacement keeps its explicit position despite old frames',()=>{
   assert.deepEqual(h.read(),pos(3,.4));h.tick180();assert.deepEqual(h.read(),pos(3,.4));
 });
 test('capture uses the same bottom-of-scroll anchor as the frame and skips suppressed jumps',()=>{
-  const h=session();h.open(pos(2,0));h.scroll(1700);h.hide('pagehide');assert.deepEqual(h.read(),pos(18,0));
-  h.drain();h.show();h.scroll(500);h.c.suppressScroll=true;h.hide('pagehide');h.drain();assert.deepEqual(h.read(),pos(18,0));
+  const h=session();h.open(pos(2,0));h.scroll(1700);h.hide('pagehide');assert.deepEqual(h.read(),{...pos(18,0),viewportDelta:-78});
+  h.drain();h.show();h.scroll(500);h.c.suppressScroll=true;h.hide('pagehide');h.drain();assert.deepEqual(h.read(),{...pos(18,0),viewportDelta:-78});
 });
 test('audio ownership survives a hide that pauses speech before capture',()=>{
   for(const follows of [false,true]){
@@ -263,4 +263,31 @@ test('orientation while hidden realigns to the new swipe, never the pre-swipe po
   h.resize(600,140);h.drain();assert.equal(h.sc.scrollTop,930.5);
   h.show();h.drain();assert.equal(h.sc.scrollTop,1311.5);
   h.hide('visibilitychange');assert.deepEqual(h.read(),pos(9,.525));
+});
+
+for(const event of ['visibilitychange','pagehide'])for(const raf of [false,true]){
+  test('fast jump across a paragraph boundary restores the exact viewport: '+event+' / RAF '+raf,()=>{
+    const h=session();h.open(pos(0,0));h.scroll(943.5);if(raf)h.one();h.hide(event);
+    // At the 65px selection line, row 10 is active, but it is still 56.5px below the viewport top.
+    assert.equal(h.c.paragraph,10);
+    const fresh=session(new Map(h.disk));fresh.open();
+    assert.equal(fresh.c.paragraph,10);assert.equal(fresh.sc.scrollTop,943.5);
+    fresh.hide('pagehide');const again=session(new Map(fresh.disk));again.open();
+    assert.equal(again.sc.scrollTop,943.5);
+  });
+}
+test('short paragraphs at the scroll limit do not shift past the original viewport on reopen',()=>{
+  const h=session();h.open(pos(3,.2));h.scroll(1700);h.hide('pagehide');
+  const fresh=session(new Map(h.disk));fresh.open();
+  assert.equal(fresh.c.paragraph,18);assert.equal(fresh.sc.scrollTop,1700);
+});
+
+test('a viewport in the inter-paragraph margin reopens in the margin, not on the last line',()=>{
+  const h=session(new Map(),100,40);h.open(pos(0,0));h.scroll(923);h.hide('pagehide');
+  const fresh=session(new Map(h.disk),100,40);fresh.open();
+  assert.equal(fresh.c.paragraph,9);assert.equal(fresh.sc.scrollTop,923);
+});
+test('corrupt viewport metadata cannot override a valid portable paragraph position',()=>{
+  const h=session(),p=pos(2,.4);
+  for(const delta of [null,'10',Infinity,-513,513])assert.deepEqual(safePosition({...p,viewportDelta:delta},h.book),p);
 });

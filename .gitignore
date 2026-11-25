@@ -1,0 +1,3 @@
+# Optional developer-only code graph
+/.venv-graphify/
+/graphify-out/

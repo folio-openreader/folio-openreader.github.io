@@ -1,7 +1,7 @@
 // Comic OCR stays in the browser. The selected, fixed local model is the only
 // language asset requested. Original page Blobs never enter a network request.
 import { check, canvasAt, hasPageMarks, ocrSession } from './ocr-engine.js';
-import { comicImageHeader, COMIC_LIMITS as L } from './comic-import.js';
+import { comicImageHeader, decodeComicImage, COMIC_LIMITS as L } from './comic-import.js';
 import { COMIC_OCR_LANGUAGES } from './comic-languages.js';
 export { COMIC_OCR_LANGUAGES };
 const PAGE_WORDS=5000, PAGE_PARAGRAPHS=2000, PAGE_CHARS=160_000;
@@ -171,19 +171,6 @@ export function stitchComicContext(paragraphs,words,language){
   })};
 }
 function uniqueCandidate(map,key,value){map.set(key,map.has(key)?-1:value)}
-async function decode(blob,signal){
-  if(typeof createImageBitmap==='function'){
-    const image=await createImageBitmap(blob,{imageOrientation:'from-image'});
-    return {image,width:image.width,height:image.height,close:()=>image.close()};
-  }
-  if(typeof Image!=='function')throw new Error('Для распознавания страниц нужен современный браузер.');
-  const image=new Image(),url=URL.createObjectURL(blob);
-  const close=()=>{image.removeAttribute('src');URL.revokeObjectURL(url)};
-  const stop=()=>image.removeAttribute('src');signal?.addEventListener('abort',stop,{once:true});
-  try{image.src=url;await image.decode();check(signal);return {image,width:image.naturalWidth,height:image.naturalHeight,close};}
-  catch(e){close();check(signal);throw e;}
-  finally{signal?.removeEventListener('abort',stop);}
-}
 export async function recognizeComicPage(blob,{language='eng',signal,onProgress}={}){
   check(signal);
   if(!COMIC_OCR_LANGUAGES.includes(language))throw new Error('Выберите доступный язык OCR.');
@@ -195,7 +182,8 @@ export async function recognizeComicPage(blob,{language='eng',signal,onProgress}
   let source,session,canvas;
   try{
     onProgress?.({stage:'render',page:1,total:1,progress:0});check(signal);
-    source=await decode(blob.type===type?blob:blob.slice(0,blob.size,type),signal);check(signal);
+    source=await decodeComicImage(blob.type===type?blob:blob.slice(0,blob.size,type),signal,
+      'Для распознавания страниц нужен современный браузер.');check(signal);
     const tiles=comicOCRTiles(source.width,source.height), paragraphs=[],words=[];
     let chars=0;
     session=ocrSession([language],signal,onProgress,{positioned:true});

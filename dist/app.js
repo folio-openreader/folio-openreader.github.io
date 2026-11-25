@@ -1,4 +1,4 @@
-import {createLocalTranslator,supportsTranslation,translationPack} from './local-translation.js';
+import {createAutoTranslationPreferences,createLocalTranslator,supportsTranslation,translationPack} from './local-translation.js';
 import {installLanguages} from './language-settings.js';
 import {fillLanguages,knownLanguage,languages,pairCode,resolveLanguage,targetHit} from './language-pairs.js';
 import {isComic,comicBook,booksOnly,putComic,readComicPage,dropComic,comicOCRChapter,updateComicPage} from './comic-storage.js';
@@ -286,7 +286,7 @@ async function deleteBook(book){
   if(book.id===DEMO_ID||!books.some(b=>b.id===book.id))throw new Error('Book unavailable');
   if(isComic(book))await dropComic(db,book.id,book.comicPages.length);else await dbAction('readwrite',store=>store.delete(book.id));
   books=books.filter(b=>b.id!==book.id);
-  delete state.positions[book.id];delete state.bookmarks[book.id];
+  delete state.positions[book.id];delete state.bookmarks[book.id];localAuto.forget(book.id);
   if(state.lastBook===book.id)state.lastBook=DEMO_ID;
   saveState();renderPersonalShelf();
 }
@@ -758,8 +758,14 @@ function wordNodes(text){
   });
   return fragment;
 }
-function renderChapter(position={chapter,paragraph:0,fraction:0},{bookmark=false}={}){listenButton.hidden=isComic(current);if(isComic(current)){void renderComicPage(position,{bookmark});return}const epoch=++renderEpoch;suppressScroll=true;cancelSpeech();const c=current.chapters[chapter];paragraph=Math.max(0,Math.min(c.paragraphs.length-1,position.paragraph||0));state.positions[current.id]={chapter,paragraph,fraction:position.fraction||0};$('#chapter-title').textContent=`${chapter+1} / ${current.chapters.length} · ${c.title}`;$('#chapter-meta').textContent=`ГЛАВА ${chapter+1} · ${current.language||'ОРИГИНАЛ'}`;$('#chapter-heading').textContent=c.title;paragraphObserver?.disconnect();paragraphObserver=new IntersectionObserver(entries=>{for(const entry of entries){if(entry.isIntersecting){const el=entry.target;if(!el.dataset.hydrated){el.replaceChildren(wordNodes(el.textContent));el.dataset.hydrated='true'}paragraphObserver.unobserve(el)}}},{root:$('#reading-scroll'),rootMargin:'600px'});const passage=document.createDocumentFragment();c.paragraphs.forEach((p,i)=>{const el=node('p',null,'reading-paragraph');el.dataset.paragraph=i;el.id=`paragraph-${i}`;el.lang=current.language||'';el.textContent=p.text;passage.append(el);paragraphObserver.observe(el)});$('#passage').replaceChildren(passage);$('#previous-chapter').disabled=chapter===0;$('#next-chapter').disabled=chapter===current.chapters.length-1;$('.reader-help').open=false;$('#reading-note').textContent=current.alignment==='demo'?'Демо: три фрагмента с готовым переводом.':current.alignment==='none'?(isStarterId(current.id)?'У издания нет готового парного текста. Словарь доступен по нажатию на слово.':'Файл перевода не добавлен.'):'Сопоставление по порядку, не по смыслу. Несовпавшие главы не переведены.';const pageNo=Number(/^Страница (\d+)$/.exec(c.title)?.[1]);if(current.ocr?.pages.includes(pageNo))$('#reading-note').textContent+=current.ocr.uncertain.includes(pageNo)?' На этой странице OCR не уверено в результате. Сверьте текст с оригиналом.':' Эта страница содержит распознанный текст.';requestAnimationFrame(()=>{if(epoch!==renderEpoch)return;restorePosition(position);setActiveParagraph(paragraph,true);if(bookmark)outcomeCue($('#paragraph-'+paragraph),'bookmark',1000);if(epoch===renderEpoch){suppressScroll=false;scheduleSeen()}})}
-function restorePosition(p){if(isComic(current))return;const el=$(`#paragraph-${paragraph}`),sc=$('#reading-scroll');if(!el)return;const top=el.getBoundingClientRect().top-sc.getBoundingClientRect().top+sc.scrollTop;sc.scrollTop=Math.max(0,top-22+(p.fraction||0)*el.offsetHeight);markReadingScrollAnchor()}
+function renderChapter(position={chapter,paragraph:0,fraction:0},{bookmark=false}={}){listenButton.hidden=isComic(current);if(isComic(current)){void renderComicPage(position,{bookmark});return}const epoch=++renderEpoch;suppressScroll=true;cancelSpeech();const c=current.chapters[chapter];paragraph=Math.max(0,Math.min(c.paragraphs.length-1,position.paragraph||0));state.positions[current.id]={...position,chapter,paragraph,fraction:position.fraction||0};$('#chapter-title').textContent=`${chapter+1} / ${current.chapters.length} · ${c.title}`;$('#chapter-meta').textContent=`ГЛАВА ${chapter+1} · ${current.language||'ОРИГИНАЛ'}`;$('#chapter-heading').textContent=c.title;paragraphObserver?.disconnect();paragraphObserver=new IntersectionObserver(entries=>{for(const entry of entries){if(entry.isIntersecting){const el=entry.target;if(!el.dataset.hydrated){el.replaceChildren(wordNodes(el.textContent));el.dataset.hydrated='true'}paragraphObserver.unobserve(el)}}},{root:$('#reading-scroll'),rootMargin:'600px'});const passage=document.createDocumentFragment();c.paragraphs.forEach((p,i)=>{const el=node('p',null,'reading-paragraph');el.dataset.paragraph=i;el.id=`paragraph-${i}`;el.lang=current.language||'';el.textContent=p.text;passage.append(el);paragraphObserver.observe(el)});$('#passage').replaceChildren(passage);$('#previous-chapter').disabled=chapter===0;$('#next-chapter').disabled=chapter===current.chapters.length-1;$('.reader-help').open=false;$('#reading-note').textContent=current.alignment==='demo'?'Демо: три фрагмента с готовым переводом.':current.alignment==='none'?(isStarterId(current.id)?'У издания нет готового парного текста. Словарь доступен по нажатию на слово.':'Файл перевода не добавлен.'):'Сопоставление по порядку, не по смыслу. Несовпавшие главы не переведены.';const pageNo=Number(/^Страница (\d+)$/.exec(c.title)?.[1]);if(current.ocr?.pages.includes(pageNo))$('#reading-note').textContent+=current.ocr.uncertain.includes(pageNo)?' На этой странице OCR не уверено в результате. Сверьте текст с оригиналом.':' Эта страница содержит распознанный текст.';requestAnimationFrame(()=>{if(epoch!==renderEpoch)return;restorePosition(position);setActiveParagraph(paragraph,true);if(bookmark)outcomeCue($('#paragraph-'+paragraph),'bookmark',1000);if(epoch===renderEpoch){suppressScroll=false;scheduleSeen()}})}
+function restorePosition(p){
+  if(isComic(current))return;
+  const el=$('#paragraph-'+paragraph),sc=$('#reading-scroll');if(!el)return;
+  const top=el.getBoundingClientRect().top-sc.getBoundingClientRect().top+sc.scrollTop;
+  sc.scrollTop=Math.max(0,top-22+(p.fraction||0)*el.offsetHeight+(p.viewportDelta||0));
+  markReadingScrollAnchor();
+}
 function capturePosition(quiet=false){
   if(!current||$('#reader').hidden)return;
   // Before a layout/seek finishes, renderChapter already holds the intended target.
@@ -782,13 +788,23 @@ function capturePosition(quiet=false){
   }
   clearTimeout(saveTimer); // This synchronous writer supersedes its own delayed save.
   markReadingScrollAnchor();
-  const para=$(`#paragraph-${paragraph}`);const top=para?para.getBoundingClientRect().top-sc.getBoundingClientRect().top+sc.scrollTop:0;const fraction=para?Math.max(0,Math.min(.99,(sc.scrollTop-top+22)/Math.max(1,para.offsetHeight))):0;state.positions[current.id]={chapter,paragraph,fraction};if(current.id===DEMO_ID)try{localStorage.setItem('folio-page',chapter)}catch{}return saveState()}
+  const para=$('#paragraph-'+paragraph),height=Math.max(1,para?.offsetHeight||0);
+  const offset=para?sc.getBoundingClientRect().top+22-para.getBoundingClientRect().top:0;
+  const fraction=Math.max(0,Math.min(.99,offset/height)),position={chapter,paragraph,fraction};
+  // Selection and translation use a deeper line than the checkpoint. The viewport
+  // can still be above the selected row or inside the gap below its last line.
+  const remainder=offset-fraction*height;
+  if(Math.abs(remainder)>.01&&Math.abs(remainder)<=512&&readingScrollParagraph(sc)===paragraph)position.viewportDelta=remainder;
+  state.positions[current.id]=position;
+  if(current.id===DEMO_ID)try{localStorage.setItem('folio-page',chapter)}catch{}
+  return saveState();
+}
 function setActiveParagraph(i,sync=false){
  pendingReadingScroll=null;deferredReadingTranslationEpoch=-1; // Explicit selections supersede older manual scrolls.
  if(!followingBook&&i!==paragraph)bookSpeech.stop();
  if(isComic(current)){paragraph=i;state.positions[current.id]={chapter,paragraph,fraction:state.positions[current.id]?.fraction||0};updateComicProgress();return}
  markReadingScrollAnchor();
- $('#paragraph-'+paragraph)?.classList.remove('active');paragraph=i;$(`#paragraph-${i}`)?.classList.add('active');state.positions[current.id]={chapter,paragraph,fraction:state.positions[current.id]?.fraction||0};const percentage=progress(current);$('#reading-progress').textContent=`${percentage}% · абзац ${i+1} / ${current.chapters[chapter].paragraphs.length}`;$('#progress-fill').style.transform=`scaleX(${percentage/100})`;updateBookmark();
+ const previous=paragraph;$('#paragraph-'+paragraph)?.classList.remove('active');paragraph=i;$(`#paragraph-${i}`)?.classList.add('active');if(previous!==i)state.positions[current.id]={chapter,paragraph,fraction:state.positions[current.id]?.fraction||0};const percentage=progress(current);$('#reading-progress').textContent=`${percentage}% · абзац ${i+1} / ${current.chapters[chapter].paragraphs.length}`;$('#progress-fill').style.transform=`scaleX(${percentage/100})`;updateBookmark();
  if(readerSuspended){if(sync)deferredReadingTranslationEpoch=renderEpoch;return}
  if(sync)syncTranslation();clearTimeout(saveTimer);saveTimer=setTimeout(capturePosition,180);scheduleSeen()}
 let pendingReadingScroll=null,readingScrollAnchor=null,deferredReadingTranslationEpoch=-1,readerSuspended=false,checkpointSaved=false;
@@ -860,7 +876,7 @@ function onReadingScroll(){
   requestAnimationFrame(()=>pending.flush());
 }
 let ribbonBook=null,currentSegment=null;
-const localTranslator=createLocalTranslator();let localBooks=new WeakSet();
+const localTranslator=createLocalTranslator(),localAuto=createAutoTranslationPreferences(()=>localStorage);
 let localTimer=0,localWanted=null,localJob=null,localFailure=null,localDialogTarget=null,paintingLocalSegment=null;
 let localDownload={loaded:0,total:0};
 const localNotStored=new Set();
@@ -869,7 +885,14 @@ const localTarget=(book,ci,pi)=>{
   return p&&{book,ci,pi,p,source:sourceLanguage(p.text,readingSourceLanguage(book,ci)),target:state.prefs.dictionaryTarget};
 };
 const currentLocalTarget=()=>localTarget(current,chapter,paragraph);
-const sameLocal=(a,b)=>!!a&&!!b&&a.book===b.book&&a.ci===b.ci&&a.pi===b.pi&&a.p===b.p&&a.source===b.source&&a.target===b.target;
+const sameLocalPair=(a,b)=>!!a&&!!b&&a.book===b.book&&a.source===b.source&&a.target===b.target;
+const sameLocal=(a,b)=>sameLocalPair(a,b)&&a.ci===b.ci&&a.pi===b.pi&&a.p===b.p;
+const localFailureFor=loc=>sameLocalPair(localFailure,loc)&&
+  (!['length','empty'].includes(localFailure.reason)||sameLocal(localFailure,loc))?localFailure:null;
+const autoLocal=loc=>localAuto.has(loc.book,loc.source,loc.target);
+function setAutoLocal(loc,enabled){
+  if(!localAuto.set(loc.book,loc.source,loc.target,enabled))toast('Браузер не сохранил настройку автоперевода.');
+}
 const canLocal=loc=>!!loc&&localTranslator.capabilities()&&supportsTranslation(loc.source,loc.target);
 const peekLocal=loc=>loc&&canLocal(loc)?localTranslator.peek(loc.p.text,{source:loc.source,target:loc.target}):null;
 const localErrorMessages={
@@ -888,7 +911,7 @@ function cancelLocalQueue(){clearTimeout(localTimer);localWanted=null}
 function paintLocalRibbon(loc,target){
   const open=$('#local-translation-open'),sync=$('#sync-translation'),track=$('#translation-track');
   const show=!loc.p.translation&&canLocal(loc),value=show?peekLocal(loc):null;
-  const enabled=show&&localBooks.has(loc.book),failure=localFailure?.book===loc.book?localFailure:null;
+  const enabled=show&&autoLocal(loc),failure=localFailureFor(loc);
   open.hidden=!show;open.textContent=enabled&&!failure?'Пауза':failure?'Повторить':value?'Продолжить':'Перевести';
   open.setAttribute('aria-label',enabled&&!failure?'Приостановить локальный перевод':value&&!failure?'Продолжить локальный перевод':'Локальный перевод абзаца');
   if(paintingLocalSegment&&(paintingLocalSegment.parentElement!==target||!value)){
@@ -943,7 +966,7 @@ function paintLocalDialog(loc){
   const busy=sameLocal(localJob,loc)||sameLocal(localWanted,loc);
   button.disabled=busy;bar.hidden=!busy||!localDownload.total||localDownload.loaded>=localDownload.total;
   bar.max=localDownload.total||1;bar.value=localDownload.loaded;
-  const failure=sameLocal(localFailure,loc)?localFailure.reason:'';
+  const failure=localFailureFor(loc)?.reason||'';
   status.textContent=busy?(bar.hidden?'Переводим на устройстве…':'Скачиваем модель…'):failure?localErrorText(failure):pairCode(loc.source,loc.target)+'. '+(!knownLanguage(readingSourceLanguage(loc.book,loc.ci))?'Язык оригинала взят из настроек. ':'')+'Текст остаётся на устройстве. При первом запуске также загрузится движок.';
   button.textContent=busy?'Переводим…':failure?'Повторить':'Скачать модель · '+formatBytes(translationPack(loc.source,loc.target).downloadBytes);
   if(!busy&&!failure)void localTranslator.modelStorage({source:loc.source,target:loc.target}).then(info=>{
@@ -959,7 +982,9 @@ function queueLocal(loc,{explicit=false}={}){
 }
 async function pumpLocal(){
   if(localJob||!localWanted)return;
-  const job=localJob=localWanted;localWanted=null;
+  const job=localWanted;localWanted=null;
+  if(!job.explicit&&!autoLocal(job))return;
+  localJob=job;
   localDownload={loaded:0,total:0};paintLocalDialog(job);
   try{
     await localTranslator.translate(job.p.text,{source:job.source,target:job.target,allowNetwork:job.explicit,onProgress:(loaded,total)=>{
@@ -970,9 +995,9 @@ async function pumpLocal(){
       if(await localTranslator.installed({source:job.source,target:job.target}))localNotStored.delete(key);
       else localNotStored.add(key);
     }
-    if(localFailure?.book===job.book)localFailure=null;
+    if(sameLocalPair(localFailure,job))localFailure=null;
   }catch(e){
-    if(e.name!=='AbortError'){localFailure={...job,reason:e.message};if(e.message==='length')localBooks.delete(job.book)}
+    if(e.name!=='AbortError')localFailure={...job,reason:e.message};
   }finally{
     localJob=null;localDownload={loaded:0,total:0};
     paintLocalDialog(job);
@@ -981,18 +1006,20 @@ async function pumpLocal(){
   }
 }
 $('#local-translation-open').onclick=()=>{
-  const loc=currentLocalTarget();if(!loc)return;
-  if(localBooks.has(loc.book)&&localFailure?.book!==loc.book){localBooks.delete(loc.book);cancelLocalQueue();syncTranslation()}
-  else if(localFailure?.book!==loc.book&&peekLocal(loc)){localBooks.add(loc.book);syncTranslation()}
+  const loc=currentLocalTarget();if(!loc||!canLocal(loc)||loc.p.translation)return;
+  const failed=localFailureFor(loc);
+  if(autoLocal(loc)&&!failed){setAutoLocal(loc,false);cancelLocalQueue();syncTranslation()}
+  else if(!failed&&peekLocal(loc)){setAutoLocal(loc,true);syncTranslation()}
   else openLocalDialog(loc);
 };
 $('#local-translation-start').onclick=()=>{
-  const loc=localDialogTarget;if(!loc)return;
-  localBooks.add(loc.book);
-  if(localFailure?.book===loc.book)localFailure=null;
+  const loc=localDialogTarget;if(!loc||!canLocal(loc)||loc.p.translation)return;
+  setAutoLocal(loc,true);
+  if(sameLocalPair(localFailure,loc))localFailure=null;
   queueLocal(loc,{explicit:true});paintLocalDialog(loc);
 };
 $('#translation-dialog').addEventListener('close',()=>{localDialogTarget=null});
+window.addEventListener('storage',e=>localAuto.refresh(e.key));
 window.addEventListener('pagehide',()=>{cancelLocalQueue();localTranslator.stop()});
 
 function renderRibbon(){
@@ -1027,7 +1054,7 @@ function syncTranslation(){
   if(target)ribbon.scrollLeft=target.offsetLeft-ribbon.offsetLeft-parseFloat(getComputedStyle($('#translation-track')).paddingLeft);
   programmaticRibbonLeft=ribbon.scrollLeft;
   $('#sync-translation').textContent='К абзацу ↻';
-  if(!loc.p.translation&&localBooks.has(loc.book)&&canLocal(loc)&&!peekLocal(loc)&&localFailure?.book!==loc.book)queueLocal(loc);
+  if(!loc.p.translation&&canLocal(loc)&&autoLocal(loc)&&!peekLocal(loc)&&!localFailureFor(loc))queueLocal(loc);
   else if(localWanted&&!localWanted.explicit)cancelLocalQueue();
 }
 function markExploring(){if(ribbonManual)return;ribbonManual=true;$('#sync-translation').textContent='Вернуться ↻';$('#ribbon-label').textContent='ПРОСМОТР ПЕРЕВОДА'}
@@ -1314,7 +1341,7 @@ function saveLanguagePrefs(patch){
   if(changed){
     if(!Object.hasOwn(patch,'languageSetup'))patch.languageSetup='done';
     if(!Object.hasOwn(patch,'dictionaryPack'))patch.dictionaryPack='';
-    localBooks=new WeakSet();localFailure=null;cancelLocalQueue();
+    localFailure=null;cancelLocalQueue();
   }
   Object.assign(state.prefs,patch);saveState();
   if(changed){dictUI.selectPair(state.prefs.readingLanguage,state.prefs.dictionaryTarget);languageUI?.sync()}
