@@ -61,8 +61,11 @@ const compare=(a,b)=>Number(b.free)-Number(a.free)||a.label.localeCompare(b.labe
 
 function keyText(provider,key){
   const value=typeof key==='string'?key.trim():'';
-  // Ordinary inference keys. Do not accept placeholder tokens or arbitrary authorization syntax.
-  const patterns={openrouter:/^sk-or-v1-[a-z0-9_-]{16,}$/i,gemini:/^(?!(?:gsk_|sk-|xai[-_]))[a-z0-9_-]{20,}$/i,groq:/^gsk_[a-z0-9_-]{16,}$/i};
+  // Google AI Studio issues authorization keys with an AQ. prefix, as well
+  // as older standard keys. Permit the separator only in the known format.
+  const patterns={openrouter:/^sk-or-v1-[a-z0-9_-]{16,}$/i,
+    gemini:/^(?:AQ\.[a-z0-9_-]{20,}|(?!(?:gsk_|sk-|xai[-_]))[a-z0-9_-]{20,})$/i,
+    groq:/^gsk_[a-z0-9_-]{16,}$/i};
   if(value.length>BYOK_LIMITS.keyChars||!patterns[provider].test(value))throw err('key');
   return value;
 }
@@ -164,7 +167,9 @@ async function request(fetcher,provider,path,key,body,signal){
     // Gemini can report an invalid user key as 400 rather than 401.
     if(provider==='gemini'&&res.status===400){
       const detail=await boundedJson(res,body===null?BYOK_LIMITS.catalogBytes:BYOK_LIMITS.completionBytes);
-      if(detail?.error?.details?.some?.(x=>x?.reason==='API_KEY_INVALID'||x?.reason==='API_KEY_SERVICE_BLOCKED'))throw err('auth',{status:400});
+      const reasons=Array.isArray(detail?.error?.details)?detail.error.details:[];
+      if(reasons.some(x=>x?.reason==='API_KEY_INVALID'))throw err('auth',{status:400});
+      if(reasons.some(x=>x?.reason==='API_KEY_SERVICE_BLOCKED'))throw err('forbidden',{status:400});
       throw err('protocol',{status:400});
     }
     cancelBody(res.body);throw responseError(res.status,res.headers);
