@@ -1,4 +1,5 @@
-import {createAutoTranslationPreferences,createLocalTranslator,supportsTranslation,translationPack} from './local-translation.js';
+import {createAutoTranslationPreferences,createLocalTranslator,supportsTranslation,translationPack,translationRevision} from './local-translation.js';
+import {clearTextBookTranslations,prepareParagraphCache,readParagraphCache,stampTextBook,writeParagraphCache} from './paragraph-translation-cache.js';
 import {installLanguages} from './language-settings.js';
 import {fillLanguages,knownLanguage,languages,pairCode,resolveLanguage,targetHit} from './language-pairs.js';
 import {isComic,comicBook,booksOnly,putComic,readComicPage,dropComic,comicOCRChapter,updateComicPage} from './comic-storage.js';
@@ -198,9 +199,9 @@ async function openStarterBook(id,options={}){
   const intent=++starterIntent,url=location.hash;
   let book=books.find(b=>b.id===id);
   if(!book){
-    book=await starterSource.loadBook(id);
+    book=stampTextBook(await starterSource.loadBook(id));
     if(intent!==starterIntent||location.hash!==url)return;
-    try{await dbAction('readwrite',store=>store.put(book));}
+    try{await dbAction('readwrite',store=>{clearTextBookTranslations(store,[book.id]);return store.put(book)});}
     catch{toast('Книга открылась, но браузер не смог сохранить её на устройстве.');}
     if(!books.some(b=>b.id===id))books.push(book);
   }
@@ -269,9 +270,9 @@ async function openEditorialBook(id,options={}){
   const intent=++editorialIntent,url=location.hash;
   let book=books.find(b=>b.id===id);
   if(!book){
-    book=await editorial[kind].loadBook(id);
+    book=stampTextBook(await editorial[kind].loadBook(id));
     if(intent!==editorialIntent||location.hash!==url)return;
-    try{await dbAction('readwrite',store=>store.put(book))}
+    try{await dbAction('readwrite',store=>{clearTextBookTranslations(store,[book.id]);return store.put(book)})}
     catch{toast('Текст открылся, но не сохранился на устройстве.')}
     if(!books.some(b=>b.id===id))books.push(book);
   }
@@ -284,7 +285,7 @@ function alignmentLabel(book){if(isComic(book))return book.comicPages.length+' �
 let bookDeleteDialog=null;
 async function deleteBook(book){
   if(book.id===DEMO_ID||!books.some(b=>b.id===book.id))throw new Error('Book unavailable');
-  if(isComic(book))await dropComic(db,book.id,book.comicPages.length);else await dbAction('readwrite',store=>store.delete(book.id));
+  if(isComic(book))await dropComic(db,book.id,book.comicPages.length);else await dbAction('readwrite',store=>{clearTextBookTranslations(store,[book.id]);return store.delete(book.id)});
   books=books.filter(b=>b.id!==book.id);
   delete state.positions[book.id];delete state.bookmarks[book.id];localAuto.forget(book.id);
   if(state.lastBook===book.id)state.lastBook=DEMO_ID;
@@ -885,6 +886,7 @@ let localTimer=0,localWanted=null,localJob=null,localFailure=null,localDialogTar
 let localPageAway=false,localResumeQueued=false;
 let localDownload={loaded:0,total:0};
 const localNotStored=new Set();
+let lastLocalCacheProbe=null;
 const localTarget=(book,ci,pi)=>{
   const p=book?.chapters[ci]?.paragraphs[pi];
   return p&&{book,ci,pi,p,source:sourceLanguage(p.text,readingSourceLanguage(book,ci)),target:state.prefs.dictionaryTarget};
@@ -899,6 +901,7 @@ function setAutoLocal(loc,enabled){
   if(!localAuto.set(loc.book,loc.source,loc.target,enabled))toast('Браузер не сохранил настройку автоперевода.');
 }
 const canLocal=loc=>!!loc&&localTranslator.capabilities()&&supportsTranslation(loc.source,loc.target);
+const canProbeLocalCache=loc=>!!db&&loc.book.id!==DEMO_ID&&!isComic(loc.book);
 const peekLocal=loc=>loc&&canLocal(loc)?localTranslator.peek(loc.p.text,{source:loc.source,target:loc.target}):null;
 const localErrorMessages={
   length:'Этот абзац слишком длинный для локального перевода.',
@@ -1011,15 +1014,36 @@ async function pumpLocal(){
   const job=localWanted;localWanted=null;
   if(!job.explicit&&!autoLocal(job))return;
   localJob=job;
+  const pair={source:job.source,target:job.target};
   localDownload={loaded:0,total:0};paintLocalDialog(job);
   try{
-    await localTranslator.translate(job.p.text,{source:job.source,target:job.target,allowNetwork:job.explicit,onProgress:(loaded,total)=>{
+    let entry,saved;
+    if(canProbeLocalCache(job)){
+      lastLocalCacheProbe=job;
+      try{
+        entry=await prepareParagraphCache(db,job,translationRevision(job.source,job.target));
+        if(localJob!==job)return;
+        saved=await readParagraphCache(db,entry);
+      }catch{/* A storage error is only a cache miss, never a translation error. */}
+    }
+    if(localJob!==job||!books.includes(job.book))return;
+    if(localWorkPaused()){
+      if(job.explicit&&!localPageAway&&!localWanted)localWanted=job;
+      return;
+    }
+    if(!job.explicit&&($('#reader').hidden||!sameLocal(job,currentLocalTarget())||!autoLocal(job)))return;
+    if(saved)localTranslator.prime(job.p.text,saved,pair);
+    else{
+      if(!job.explicit&&localFailureFor(job))return;
+      const value=await localTranslator.translate(job.p.text,{...pair,allowNetwork:job.explicit,onProgress:(loaded,total)=>{
+        if(localJob!==job)return;
+        localDownload={loaded,total};
+        if(!localWorkPaused())paintLocalDialog(job);
+      }});
       if(localJob!==job)return;
-      localDownload={loaded,total};
-      if(!localWorkPaused())paintLocalDialog(job);
-    }});
-    if(localJob!==job)return;
-    if(job.explicit){
+      if(entry&&books.includes(job.book)&&autoLocal(job))void writeParagraphCache(db,entry,value).catch(()=>{});
+    }
+    if(job.explicit&&!saved){
       const key=pairCode(job.source,job.target);
       const stored=await localTranslator.installed({source:job.source,target:job.target});
       if(localJob!==job)return;
@@ -1090,7 +1114,8 @@ function syncTranslation(){
   if(target)ribbon.scrollLeft=target.offsetLeft-ribbon.offsetLeft-parseFloat(getComputedStyle($('#translation-track')).paddingLeft);
   programmaticRibbonLeft=ribbon.scrollLeft;
   $('#sync-translation').textContent='К абзацу ↻';
-  if(!loc.p.translation&&canLocal(loc)&&autoLocal(loc)&&!peekLocal(loc)&&!localFailureFor(loc))queueLocal(loc);
+  if(!loc.p.translation&&canLocal(loc)&&autoLocal(loc)&&!peekLocal(loc)&&
+    (!localFailureFor(loc)||(canProbeLocalCache(loc)&&!sameLocal(lastLocalCacheProbe,loc))))queueLocal(loc);
   else if(localWanted&&!localWanted.explicit)cancelLocalQueue();
 }
 function markExploring(){if(ribbonManual)return;ribbonManual=true;$('#sync-translation').textContent='Вернуться ↻';$('#ribbon-label').textContent='ПРОСМОТР ПЕРЕВОДА'}
@@ -1351,9 +1376,9 @@ async function restoreBackup(){
   if(!backupDraft||restoring)return;
   if(!canWriteWords(true)){$('#backup-preview').textContent='Восстановление не начато. Закройте другую вкладку Folio и перезагрузите страницу.';return}
   restoring=true;$('#restore-backup').disabled=true;$('#backup-file').disabled=true;
-  const backup=backupDraft,ids=new Set(books.map(b=>b.id)),fresh=backup.books.filter(b=>!ids.has(b.id));
+  const backup=backupDraft,ids=new Set(books.map(b=>b.id)),fresh=backup.books.filter(b=>!ids.has(b.id)).map(stampTextBook);
   try{
-    if(fresh.length)await dbAction('readwrite',store=>{for(const b of fresh)store.add(b);return store.count()});
+    if(fresh.length)await dbAction('readwrite',store=>{clearTextBookTranslations(store,fresh.map(b=>b.id));for(const b of fresh)store.add(b);return store.count()});
     books.push(...fresh);
     const merged=mergeLearning(learning,loadLearning(backup.learning,backup.words));
     // The optional books transaction may already have committed; never imply a full rollback.
@@ -1548,7 +1573,7 @@ function setupOcr(role){
   $('#ocr-'+role).focus();
 }
 $('#retry-ocr').onclick=()=>setupOcr($('#retry-ocr').dataset.role);
-async function saveImport(event){if(!previewBook||$('#import-dialog').hasAttribute('data-saving'))return;if(previewBook.alignment==='positional-unverified'&&!$('#alignment-check').checked)return;$('#save-import').disabled=true;$('#import-dialog').setAttribute('data-saving','');const book={...previewBook,id:'book-'+crypto.randomUUID(),createdAt:Date.now()};for(const key of ['ocr','translationOcr'])if(book[key])book[key]=sanitizeOcr(book[key]);try{await dbAction('readwrite',s=>s.put(book));books.push(book);previewBook=null;$('#import-dialog').close();$('#original-file').value='';$('#translation-file').value='';fileTile($('#original-file'));fileTile($('#translation-file'));resetOcrSettings();invalidateImport();toast('Книга добавлена.');openBook(book.id,undefined,{motion:!!event?.detail,focus:!event?.detail,trigger:'continue'})}catch(e){toast(e.name==='QuotaExceededError'?'Недостаточно памяти браузера для книги. Освободите место или выберите меньший файл.':e.message);$('#save-import').disabled=false}finally{$('#import-dialog').removeAttribute('data-saving')}}
+async function saveImport(event){if(!previewBook||$('#import-dialog').hasAttribute('data-saving'))return;if(previewBook.alignment==='positional-unverified'&&!$('#alignment-check').checked)return;$('#save-import').disabled=true;$('#import-dialog').setAttribute('data-saving','');const book=stampTextBook({...previewBook,id:'book-'+crypto.randomUUID(),createdAt:Date.now()});for(const key of ['ocr','translationOcr'])if(book[key])book[key]=sanitizeOcr(book[key]);try{await dbAction('readwrite',s=>s.put(book));books.push(book);previewBook=null;$('#import-dialog').close();$('#original-file').value='';$('#translation-file').value='';fileTile($('#original-file'));fileTile($('#translation-file'));resetOcrSettings();invalidateImport();toast('Книга добавлена.');openBook(book.id,undefined,{motion:!!event?.detail,focus:!event?.detail,trigger:'continue'})}catch(e){toast(e.name==='QuotaExceededError'?'Недостаточно памяти браузера для книги. Освободите место или выберите меньший файл.':e.message);$('#save-import').disabled=false}finally{$('#import-dialog').removeAttribute('data-saving')}}
 // Touch pans are native. Only actual ribbon scrolling indicates exploration.
 const ribbon=$('#translation-ribbon');
 ribbon.addEventListener('pointerdown',e=>{

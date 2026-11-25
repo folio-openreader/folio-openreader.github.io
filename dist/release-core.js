@@ -123,7 +123,7 @@ function bookFromBackup(b) {
   return {...(kind?{kind}:{}),...(edition?{edition}:{}),...(ocr?{ocr}:{}),...(translationOcr?{translationOcr}:{}),...(warnings.length?{warnings}:{}),id:b.id,title:safeString(b.title,1000)||'Без названия',author:safeString(b.author,1000),language:safeString(b.language,40),translationTitle:safeString(b.translationTitle,1000),translationLanguage:safeString(b.translationLanguage,40),format:b.format,alignment:anyTranslation?'positional-unverified':'none',chapters,createdAt:Number.isFinite(b.createdAt)?b.createdAt:0};
 }
 export function serializeBackup(books,state,words,learning) {
-  return JSON.stringify({format:'folio-backup',version:1,createdAt:new Date().toISOString(),books:books.filter(b=>b.id!==DEMO_ID&&b.kind!=='comic'),state:{positions:state.positions,bookmarks:state.bookmarks,lastBook:state.lastBook,prefs:sanitizePrefs(state.prefs)},words:sanitizeSaved(words),...(learning?{learning}:{})});
+  return JSON.stringify({format:'folio-backup',version:1,createdAt:new Date().toISOString(),books:books.filter(b=>b.id!==DEMO_ID&&b.kind!=='comic').map(({localTranslationGeneration,...book})=>book),state:{positions:state.positions,bookmarks:state.bookmarks,lastBook:state.lastBook,prefs:sanitizePrefs(state.prefs)},words:sanitizeSaved(words),...(learning?{learning}:{})});
 }
 export function parseBackup(text,demo) {
   let raw;try{raw=JSON.parse(text)}catch{throw new Error('Не удалось прочитать JSON. Выберите копию Folio.')};

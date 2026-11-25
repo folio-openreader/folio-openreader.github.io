@@ -13,7 +13,7 @@ const noop=()=>{};
 const makeBook=(id,createdAt=12)=>({id,createdAt,title:'Test book',language:'en',chapters:[
   {paragraphs:[{text:'A river crossed the city.'},{text:'The boats waited in the harbour.'},{text:'The letter finally came.'}]}
 ]});
-function session(disk=new Map(),models=new Set(),books=[makeBook('book-one'),makeBook('book-two')]){
+function session(disk=new Map(),models=new Set(),books=[makeBook('book-one'),makeBook('book-two')],cache=null){
   let dialogs=0,stops=0,pending=null;
   const nodes=new Map(),events={},winEvents={},docEvents={},calls=[],scheduled=new Map(),transient=new Map();
   const makeNode=(text='',className='')=>({
@@ -43,7 +43,7 @@ function session(disk=new Map(),models=new Set(),books=[makeBook('book-one'),mak
         stops++;
         if(pending&&!c.keepStoppedResult){pending.reject(new DOMException('Aborted','AbortError'));pending=null;}
       },
-      peek:(text,{target})=>transient.get(text+'-'+target),
+      peek:(text,{target})=>transient.get(text+'-'+target),prime:(text,value,{target})=>transient.set(text+'-'+target,value),
       translate:async(text,{source,target,allowNetwork})=>{
         const pair=source+'-'+target;calls.push({text,pair,allowNetwork});
         if(c.deferNext){c.deferNext=false;await new Promise((resolve,reject)=>{pending={resolve,reject};});}
@@ -62,7 +62,11 @@ function session(disk=new Map(),models=new Set(),books=[makeBook('book-one'),mak
     safePosition:pos=>pos, clearTimeout:cb=>scheduled.delete(cb),
     setTimeout:(cb,ms)=>{const task=()=>cb();scheduled.set(task,ms);return task;},
     dictUI:{selectPair:noop},touchRibbon:null,programmaticRibbonLeft:0,toast:noop,
-    DEMO_ID:'demo',dbAction:async(_mode,job)=>job({delete:noop}),renderPersonalShelf:noop
+    DEMO_ID:'demo',db:cache,clearTextBookTranslations:noop,
+    translationRevision:(_source,target)=>target,
+    prepareParagraphCache:async(_db,loc,revision)=>({id:loc.book.id+'|'+loc.ci+'|'+loc.pi+'|'+revision,text:loc.p.text}),
+    readParagraphCache:async(db,entry)=>db.get(entry.id),writeParagraphCache:async(db,entry,value)=>db.set(entry.id,value),
+    dbAction:async(_mode,job)=>job({delete:noop}),renderPersonalShelf:noop
   };
   runInNewContext([
     part('async function deleteBook(book)', 'function renderPersonalShelf()'),
@@ -205,4 +209,34 @@ test('an interrupted model download is not silently restarted after pagehide',as
   assert.deepEqual(h.calls.map(x=>x.allowNetwork),[true,false]);
   assert.equal(h.$('#local-translation-open').textContent,'Повторить');
   assert.equal(h.dialogs,1,'return did not open the download panel again');
+});
+
+// Only app routing and model calls are exercised here; the separate Playwright
+// harness is the gate for the real IndexedDB write/delete/restore transaction.
+test('a cold-open reader puts cached paragraph text in the ribbon without fetching a model',async()=>{
+  const books=[makeBook('book-one')],cache=new Map();
+  const first=session(new Map(),new Set(),books,cache);
+  first.open();first.$('#translation-full').onclick();first.$('#local-translation-start').onclick();await first.drain();
+  assert.equal(first.calls.length,1);assert.equal(cache.size,1);
+  const fresh=session(first.disk,new Set(),books,cache);
+  fresh.open();await fresh.drain();
+  assert.deepEqual(fresh.calls,[]);assert.equal(fresh.dialogs,0);
+  assert.match(fresh.$('#translation-track').querySelector('.translation-empty').textContent,/Translation/);
+});
+test('switching paragraphs during a slow cache lookup does not translate the obsolete paragraph',async()=>{
+  const books=[makeBook('book-one')],cache=new Map();
+  const first=session(new Map(),new Set(),books,cache);
+  first.open();first.$('#translation-full').onclick();first.$('#local-translation-start').onclick();await first.drain();
+  const fresh=session(first.disk,first.models,books,cache);
+  let done;
+  fresh.c.readParagraphCache=async (_db,entry)=>{
+    if(entry.id==='book-one|0|0|ru')return new Promise(resolve=>{done=resolve;});
+    return null;
+  };
+  fresh.open();
+  const work=fresh.drain();
+  while(!done)await new Promise(setImmediate);
+  fresh.select(1);done('old cached value');await work;await new Promise(setImmediate);
+  assert.deepEqual(fresh.calls,[{text:'The boats waited in the harbour.',pair:'en-ru',allowNetwork:false}]);
+  assert.match(fresh.$('#translation-track').querySelector('.translation-empty').textContent,/The boats/);
 });

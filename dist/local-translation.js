@@ -39,6 +39,7 @@ const abort=()=>new DOMException('Translation cancelled','AbortError');
 export function translationPack(source,target='ru'){
   return modelPack(source,target)?.info||null;
 }
+export function translationRevision(source,target='ru'){return modelPack(source,target)?.cacheName||null}
 export function supportsTranslation(source,target='ru'){
   return !!modelPack(source,target);
 }
@@ -300,6 +301,10 @@ export function createLocalTranslator(){
       const [oldKey,val]=results.entries().next().value;results.delete(oldKey);cacheChars-=oldKey.length+val.length;
     }
   }
+  function prime(text,value,{source='en',target='ru'}={}){
+    const pack=modelPack(source,target);
+    if(pack&&typeof value==='string'&&value.trim())remember(resultKey(pack,text),value);
+  }
   function translate(text,{source='en',target='ru',allowNetwork=false,onProgress,signal}={}){
     if(signal?.aborted)return Promise.reject(abort());
     const pack=modelPack(source,target);
@@ -332,5 +337,5 @@ export function createLocalTranslator(){
     if(key)inFlight.set(key,task);return task;
   }
 
-  return {capabilities,installed,modelStorage,translate,peek,stop};
+  return {capabilities,installed,modelStorage,translate,peek,prime,stop};
 }
