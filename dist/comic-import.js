@@ -144,8 +144,8 @@ export async function parseComicFiles(files,{signal,onProgress}={}) {
     const input=await file.arrayBuffer();
     check(signal);
     let archive;
-    try {archive=zip(input,{maxDocument:L.imageBytes,maxTotal:L.totalBytes});}
-    catch(e){throw wrapZip(e);}
+    try {archive=zip(input,{maxDocument:L.imageBytes,maxTotal:L.totalBytes,signal});}
+    catch(e){check(signal);throw wrapZip(e);}
     const entries=archive.names().filter(n=>!hidden(n));
     if(entries.some(n=>otherArt.test(n))) throw fail('В архиве есть неподдерживаемые страницы. Сохраните их как JPG, PNG или WebP.');
     const names=entries.filter(n=>ext.test(n)).sort(sortNames);
@@ -153,7 +153,7 @@ export async function parseComicFiles(files,{signal,onProgress}={}) {
     if(names.length>L.pages) throw tooMany();
     records=names.map(name=>({name,load:async()=>{
       try {return await archive.read(name,{binary:true});}
-      catch(e){throw wrapZip(e);}
+      catch(e){check(signal);throw wrapZip(e);}
     }}));
     title=safeText(basename(file.name).replace(archiveExt,''))||'Комикс';
   } else {

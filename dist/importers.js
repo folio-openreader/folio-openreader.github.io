@@ -22,7 +22,12 @@ function protectedBook() {
   return new Error('Protected or encrypted EPUBs cannot be opened. Choose a DRM-free version.');
 }
 
-export function zip(buffer, {maxDocument = MAX_DOCUMENT, maxTotal = 20 * MiB} = {}) {
+function checkImport(signal) {
+  if (signal?.aborted) throw new DOMException('Импорт отменён.','AbortError');
+}
+
+export function zip(buffer, {maxDocument = MAX_DOCUMENT, maxTotal = 20 * MiB, signal} = {}) {
+  checkImport(signal);
   const bytes = new Uint8Array(buffer);
   const view = new DataView(buffer);
   const u16 = i => view.getUint16(i, true);
@@ -57,6 +62,7 @@ export function zip(buffer, {maxDocument = MAX_DOCUMENT, maxTotal = 20 * MiB} = 
     has: name => entries.has(name),
     names: () => [...entries.keys()],
     async read(name, {binary = false} = {}) {
+      checkImport(signal);
       const e = entries.get(name);
       if (!e) throw invalid();
       const {flags, method, checksum, packed, unpacked, local} = e;
@@ -77,20 +83,27 @@ export function zip(buffer, {maxDocument = MAX_DOCUMENT, maxTotal = 20 * MiB} = 
         try { stream = new DecompressionStream('deflate-raw'); }
         catch { throw new Error('This browser cannot unpack EPUBs. Try a recent browser or import a TXT file.'); }
         const reader = new Blob([compressed]).stream().pipeThrough(stream).getReader();
-        let written = 0;
+        // Closing the readable side resolves its pending read. Do not wait for
+        // the decompressor to finish its own cleanup before returning AbortError.
+        const cancel = () => { void reader.cancel().catch(() => {}); };
+        signal?.addEventListener('abort',cancel,{once:true});
+        let written = 0, finished = false;
         try {
           for (;;) {
             const {done, value} = await reader.read();
-            if (done) break;
-            if (written + value.length > unpacked) {
-              await reader.cancel();
-              throw invalid();
-            }
+            checkImport(signal);
+            if (done) { finished = true; break; }
+            if (written + value.length > unpacked) throw invalid();
             out.set(value, written);
             written += value.length;
           }
           if (written !== unpacked) throw invalid();
-        } catch { throw invalid(); }
+        } catch { checkImport(signal); throw invalid(); }
+        finally {
+          signal?.removeEventListener('abort',cancel);
+          if(!finished&&!signal?.aborted)cancel();
+          reader.releaseLock();
+        }
       } else throw invalid();
       if (crc32(out) !== checksum) throw invalid();
       return binary ? out : UTR.decode(out);
@@ -181,11 +194,11 @@ function readChapter(source, fallback) {
   return {title: candidate || metadata(child(root, XHTML_NS, 'head'), XHTML_NS, 'title') || fallback, paragraphs};
 }
 
-async function parseEpub(file) {
+async function parseEpub(file,signal) {
   if (file.size > MAX_EPUB) throw new Error('Choose an EPUB smaller than 24 MB.');
   let archive;
   try {
-    archive = zip(await file.arrayBuffer());
+    archive = zip(await file.arrayBuffer(),{signal});
     // Some valid DRM-free books obscure embedded fonts. We skip all non-text assets;
     // reject any encryption declarations conservatively instead of attempting decryption.
     if (archive.has('META-INF/encryption.xml') || archive.has('META-INF/rights.xml')) throw protectedBook();
@@ -203,15 +216,22 @@ async function parseEpub(file) {
     if (!spine.length) throw invalid();
     if (spine.length > MAX_SPINE) throw oversized();
     const chapters = [];
-    let chars = 0, count = 0, skipped = 0;
+    let chars = 0, count = 0, skipped = 0, sliceStarted=performance.now();
     for (const ref of spine) {
+      // ZIP members stored without compression settle in microtasks only.
+      // In a long spine, give the import dialog a turn to process Cancel.
+      if(performance.now()-sliceStarted>=12){
+        await new Promise(resolve=>setTimeout(resolve,0));sliceStarted=performance.now();
+      }
+      checkImport(signal);
       if (ref.getAttribute('linear') === 'no') continue;
       const item = manifest.get(ref.getAttribute('idref'));
       if (!item) throw invalid();
       if ((item.getAttribute('properties') ?? '').split(/\s+/).includes('nav')) continue;
       if (item.getAttribute('media-type') !== 'application/xhtml+xml') { skipped++; continue; }
       const path = resolvePath(opfPath, item.getAttribute('href') ?? '');
-      const c = readChapter(await archive.read(path), `Chapter ${chapters.length + 1}`);
+      const section=await archive.read(path);checkImport(signal);
+      const c = readChapter(section, `Chapter ${chapters.length + 1}`);
       if (!c.paragraphs.length) { skipped++; continue; }
       count += c.paragraphs.length;
       chars += c.paragraphs.reduce((n, p) => n + p.length, 0);
@@ -239,11 +259,11 @@ function txtParagraphs(text) {
   const blankLine = /\n[^\S\n]*\n/.test(text);
   return text.split(blankLine ? /\n[^\S\n]*\n+/ : /\n/).map(clean).filter(Boolean);
 }
-async function parseTxt(file) {
+async function parseTxt(file,signal) {
   if (file.size > MAX_TXT) throw new Error('Choose a TXT file smaller than 3 MB.');
   let text;
-  try { text = UTR.decode(await file.arrayBuffer()); }
-  catch { throw new Error('This text file is not valid UTF-8. Re-save it as UTF-8 TXT and try again.'); }
+  try { const bytes=await file.arrayBuffer();checkImport(signal);text = UTR.decode(bytes); }
+  catch { checkImport(signal);throw new Error('This text file is not valid UTF-8. Re-save it as UTF-8 TXT and try again.'); }
   if (/[\0\x01-\x08\x0B\x0E-\x1F]/.test(text)) throw new Error('This does not look like plain text. Choose a UTF-8 TXT file.');
   text = text.replace(/\r\n?/g, '\n');
   const paragraphs = txtParagraphs(text);
@@ -254,14 +274,16 @@ async function parseTxt(file) {
 
 export async function parseBook(file, options = {}) {
   if (!file?.name) throw new Error('Выберите EPUB, PDF, UTF-8 TXT, PNG или JPEG.');
-  if (/\.epub$/i.test(file.name)) return parseEpub(file);
-  if (/\.txt$/i.test(file.name)) return parseTxt(file);
+  checkImport(options.signal);
+  if (/\.epub$/i.test(file.name)) return parseEpub(file,options.signal);
+  if (/\.txt$/i.test(file.name)) return parseTxt(file,options.signal);
   if (/\.(pdf|png|jpe?g)$/i.test(file.name)) {
     const image=/\.(png|jpe?g)$/i.test(file.name);
     if(file.size>(image?16:24)*MiB)throw new Error(image?'Снимок: максимум 16 МБ.':'PDF: максимум 24 МБ.');
     const {parsePdf,parseImage}=await import('./pdf-import.js');
+    checkImport(options.signal);
     const bytes=await file.arrayBuffer();
-    if(options.signal?.aborted)throw new DOMException('Отменено','AbortError');
+    checkImport(options.signal);
     const parsed=await (image?parseImage:parsePdf)(bytes,file.name,options);
     // A single OCR language is the reader's explicit choice, not a guess from script.
     if(!parsed.language&&parsed.ocr?.pages?.length&&options.languages?.length===1)
