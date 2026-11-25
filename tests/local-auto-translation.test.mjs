@@ -14,8 +14,8 @@ const makeBook=(id,createdAt=12)=>({id,createdAt,title:'Test book',language:'en'
   {paragraphs:[{text:'A river crossed the city.'},{text:'The boats waited in the harbour.'},{text:'The letter finally came.'}]}
 ]});
 function session(disk=new Map(),models=new Set(),books=[makeBook('book-one'),makeBook('book-two')]){
-  let dialogs=0;
-  const nodes=new Map(),events={},calls=[],scheduled=new Map(),transient=new Map();
+  let dialogs=0,stops=0,pending=null;
+  const nodes=new Map(),events={},winEvents={},docEvents={},calls=[],scheduled=new Map(),transient=new Map();
   const makeNode=(text='',className='')=>({
     textContent:text,className,children:[],classList:{add:noop,remove:noop,toggle:noop},
     hidden:false,open:false,dataset:{},style:{},setAttribute:noop,toggleAttribute:noop,removeAttribute:noop,
@@ -33,14 +33,20 @@ function session(disk=new Map(),models=new Set(),books=[makeBook('book-one'),mak
     chapter:0,paragraph:0,readerReturn:'home',homeView:'home',routeScroll:{},history:{state:{},pushState:noop},location:{hash:'#home'},
     state:{prefs:{readingLanguage:'en',dictionaryTarget:'ru'},positions:{},bookmarks:{}},
     node:(_tag,text,className)=>makeNode(text,className),
-    document:{getElementById:()=>null,body:makeNode(),createDocumentFragment:()=>({...makeNode(),fragment:true})},
-    window:{scrollY:0,addEventListener:(event,fn)=>{events[event]=fn;}},
+    document:{hidden:false,getElementById:()=>null,body:makeNode(),createDocumentFragment:()=>({...makeNode(),fragment:true}),
+      addEventListener:(event,fn)=>{docEvents[event]=fn;}},
+    window:{scrollY:0,addEventListener:(event,fn)=>{winEvents[event]=fn;}},
+    queueMicrotask,
     createLocalTranslator:()=>({
       capabilities:()=>true, installed:async({source,target})=>models.has(source+'-'+target),
-      modelStorage:async()=>({state:'missing'}), stop:noop,
+      modelStorage:async()=>({state:'missing'}), stop(){
+        stops++;
+        if(pending&&!c.keepStoppedResult){pending.reject(new DOMException('Aborted','AbortError'));pending=null;}
+      },
       peek:(text,{target})=>transient.get(text+'-'+target),
       translate:async(text,{source,target,allowNetwork})=>{
         const pair=source+'-'+target;calls.push({text,pair,allowNetwork});
+        if(c.deferNext){c.deferNext=false;await new Promise((resolve,reject)=>{pending={resolve,reject};});}
         if(c.fail===text)throw Error('length');
         if(allowNetwork)models.add(pair);
         if(!models.has(pair))throw Error('not-installed');
@@ -65,7 +71,12 @@ function session(disk=new Map(),models=new Set(),books=[makeBook('book-one'),mak
     part('let languageUI=null;', 'const dictUI=dictionaryControls'),
     part("$('#translation-full').onclick=", ";$('#word-save').onclick=")
   ].join('\n'),c);
-  return {c,$,disk,models,calls,get dialogs(){return dialogs;},
+  return {c,$,disk,models,calls,get dialogs(){return dialogs;},get stops(){return stops;},
+    rejectLate(e){pending?.reject(e);pending=null;},
+    hide(){c.document.hidden=true;docEvents.visibilitychange?.({});},
+    show(){c.document.hidden=false;docEvents.visibilitychange?.({});},
+    pagehide(){winEvents.pagehide?.({persisted:true});},
+    pageshow(){winEvents.pageshow?.({persisted:true});},
     open(id='book-one',paragraph=0){c.openBook(id,{chapter:0,paragraph,fraction:0});},
     select(paragraph){c.paragraph=paragraph;c.syncTranslation();},
     async drain(){for(let task;scheduled.size;){task=[...scheduled.keys()][0];scheduled.delete(task);await task();}}
@@ -134,4 +145,64 @@ test('dirty, oversized or unavailable preference storage never implicitly grants
   assert.equal(pref.has(book,'en','hi'),false);
   assert.equal(createAutoTranslationPreferences(()=>storage).has(book,'en','ru'),false);
   assert.equal(createAutoTranslationPreferences(()=>({getItem:()=> ' '.repeat(66_000)+JSON.stringify([['book-one',12,'en-ru']])})).has(book,'en','ru'),false);
+});
+
+
+const turn=()=>new Promise(setImmediate);
+async function optedIn(){
+  const h=session();h.open();h.$('#translation-full').onclick();h.$('#local-translation-start').onclick();await h.drain();return h;
+}
+
+test('backgrounding never starts a queued paragraph; returning translates only the newest position offline',async()=>{
+  const h=await optedIn(),fresh=session(h.disk,h.models);
+  fresh.open();fresh.hide();fresh.select(1);
+  await fresh.drain();assert.deepEqual(fresh.calls,[]);
+  fresh.show();await turn();await fresh.drain();
+  assert.deepEqual(fresh.calls,[{text:'The boats waited in the harbour.',pair:'en-ru',allowNetwork:false}]);
+  assert.equal(fresh.dialogs,0);
+});
+
+test('pagehide aborts the running paragraph and prevents its completion from starting work until pageshow',async()=>{
+  const h=await optedIn(),fresh=session(h.disk,h.models);
+  fresh.c.deferNext=true;fresh.open();
+  const first=fresh.drain();await turn();assert.equal(fresh.calls.length,1);
+  // Safari may deliver pagehide without a preceding visibilitychange.
+  fresh.pagehide();await first;await fresh.drain();
+  assert.equal(fresh.stops,1);assert.equal(fresh.calls.length,1);
+  fresh.pageshow();await turn();await fresh.drain();
+  assert.equal(fresh.calls.length,2);assert.ok(fresh.calls.every(x=>x.allowNetwork===false));
+  assert.equal(fresh.dialogs,0);
+});
+
+test('a late result from the suspended worker cannot overwrite a failure for the resumed paragraph',async()=>{
+  const h=await optedIn(),fresh=session(h.disk,new Set());
+  fresh.c.keepStoppedResult=true;fresh.c.deferNext=true;fresh.open();
+  const first=fresh.drain();await turn();assert.equal(fresh.calls.length,1);
+  fresh.pagehide();fresh.select(1);fresh.pageshow();await turn();await fresh.drain();
+  assert.equal(fresh.calls.length,2);
+  assert.equal(fresh.$('#local-translation-open').textContent,'Повторить');
+  fresh.rejectLate(Error('length'));await first;await turn();await fresh.drain();
+  assert.equal(fresh.calls.length,2);assert.equal(fresh.$('#local-translation-open').textContent,'Повторить');
+  assert.equal(fresh.dialogs,0);
+});
+
+test('a queued explicit click waits while hidden and resumes once on an ordinary tab switch',async()=>{
+  const h=session();h.open();h.$('#translation-full').onclick();h.$('#local-translation-start').onclick();
+  h.hide();await h.drain();assert.deepEqual(h.calls,[]);
+  h.show();await turn();await h.drain();
+  assert.deepEqual(h.calls,[{text:'A river crossed the city.',pair:'en-ru',allowNetwork:true}]);
+  assert.equal(h.dialogs,1);
+});
+
+test('an interrupted model download is not silently restarted after pagehide',async()=>{
+  const h=session();h.open();h.$('#translation-full').onclick();h.$('#local-translation-start').onclick();
+  h.c.deferNext=true;const first=h.drain();await turn();
+  assert.equal(h.calls[0].allowNetwork,true);
+  h.pagehide();await first;await h.drain();
+  assert.deepEqual(h.calls.map(x=>x.allowNetwork),[true],'no job restarted while the page was away');
+  h.$('#translation-dialog').close();
+  h.pageshow();await turn();await h.drain();
+  assert.deepEqual(h.calls.map(x=>x.allowNetwork),[true,false]);
+  assert.equal(h.$('#local-translation-open').textContent,'Повторить');
+  assert.equal(h.dialogs,1,'return did not open the download panel again');
 });

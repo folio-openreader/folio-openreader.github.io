@@ -882,6 +882,7 @@ function onReadingScroll(){
 let ribbonBook=null,currentSegment=null;
 const localTranslator=createLocalTranslator(),localAuto=createAutoTranslationPreferences(()=>localStorage);
 let localTimer=0,localWanted=null,localJob=null,localFailure=null,localDialogTarget=null,paintingLocalSegment=null;
+let localPageAway=false,localResumeQueued=false;
 let localDownload={loaded:0,total:0};
 const localNotStored=new Set();
 const localTarget=(book,ci,pi)=>{
@@ -912,6 +913,27 @@ const localErrorMessages={
 };
 const localErrorText=reason=>localErrorMessages[reason]||'Не удалось перевести этот абзац. Попробуйте ещё раз.';
 function cancelLocalQueue(){clearTimeout(localTimer);localWanted=null}
+const localWorkPaused=()=>localPageAway||document.hidden;
+function suspendLocalWork(leaving=false){
+  if(leaving||!localWanted?.explicit)cancelLocalQueue();
+  // An already requested download may continue during a brief tab switch.
+  // Background automatic work, and all work on pagehide, is released.
+  if(!leaving&&(!localJob||localJob.explicit))return;
+  localJob=null;localDownload={loaded:0,total:0};
+  localTranslator.stop();
+}
+function resumeLocalWork(){
+  if(localResumeQueued)return;
+  localResumeQueued=true;
+  // Let the reading checkpoint/layout listeners select the latest paragraph first.
+  queueMicrotask(()=>{
+    localResumeQueued=false;
+    if(localWorkPaused()||$('#reader').hidden||!current||isComic(current))return;
+    if(!ribbonManual)syncTranslation();
+    if(localDialogTarget)paintLocalDialog(localDialogTarget);
+    if(localWanted?.explicit)void pumpLocal();
+  });
+}
 function paintLocalRibbon(loc,target){
   const open=$('#local-translation-open'),sync=$('#sync-translation'),track=$('#translation-track');
   const show=!loc.p.translation&&canLocal(loc),value=show?peekLocal(loc):null;
@@ -978,35 +1000,43 @@ function paintLocalDialog(loc){
   });
 }
 function queueLocal(loc,{explicit=false}={}){
-  if(!loc||loc.p.translation||!canLocal(loc)||sameLocal(localJob,loc))return;
+  if(!loc||loc.p.translation||!canLocal(loc)||sameLocal(localJob,loc)||(!explicit&&localWorkPaused()))return;
   if(localWanted?.explicit&&!explicit)return;
   if(!explicit&&sameLocal(localWanted,loc))return;
   localWanted={...loc,explicit};
   clearTimeout(localTimer);localTimer=setTimeout(pumpLocal,explicit?0:260);
 }
 async function pumpLocal(){
-  if(localJob||!localWanted)return;
+  if(localJob||!localWanted||localWorkPaused())return;
   const job=localWanted;localWanted=null;
   if(!job.explicit&&!autoLocal(job))return;
   localJob=job;
   localDownload={loaded:0,total:0};paintLocalDialog(job);
   try{
     await localTranslator.translate(job.p.text,{source:job.source,target:job.target,allowNetwork:job.explicit,onProgress:(loaded,total)=>{
-      localDownload={loaded,total};paintLocalDialog(job);
+      if(localJob!==job)return;
+      localDownload={loaded,total};
+      if(!localWorkPaused())paintLocalDialog(job);
     }});
+    if(localJob!==job)return;
     if(job.explicit){
       const key=pairCode(job.source,job.target);
-      if(await localTranslator.installed({source:job.source,target:job.target}))localNotStored.delete(key);
-      else localNotStored.add(key);
+      const stored=await localTranslator.installed({source:job.source,target:job.target});
+      if(localJob!==job)return;
+      if(stored)localNotStored.delete(key);else localNotStored.add(key);
     }
     if(sameLocalPair(localFailure,job))localFailure=null;
   }catch(e){
-    if(e.name!=='AbortError')localFailure={...job,reason:e.message};
+    if(localJob===job&&e.name!=='AbortError')localFailure={...job,reason:e.message};
   }finally{
-    localJob=null;localDownload={loaded:0,total:0};
-    paintLocalDialog(job);
-    if(sameLocal(job,currentLocalTarget())&&!$('#reader').hidden&&!ribbonManual)syncTranslation();
-    if(localWanted)void pumpLocal();
+    if(localJob===job){
+      localJob=null;localDownload={loaded:0,total:0};
+      if(!localWorkPaused()){
+        paintLocalDialog(job);
+        if(sameLocal(job,currentLocalTarget())&&!$('#reader').hidden&&!ribbonManual)syncTranslation();
+        if(localWanted)void pumpLocal();
+      }
+    }
   }
 }
 $('#local-translation-open').onclick=()=>{
@@ -1024,7 +1054,9 @@ $('#local-translation-start').onclick=()=>{
 };
 $('#translation-dialog').addEventListener('close',()=>{localDialogTarget=null});
 window.addEventListener('storage',e=>localAuto.refresh(e.key));
-window.addEventListener('pagehide',()=>{cancelLocalQueue();localTranslator.stop()});
+window.addEventListener('pagehide',()=>{localPageAway=true;suspendLocalWork(true)});
+window.addEventListener('pageshow',()=>{localPageAway=false;resumeLocalWork()});
+document.addEventListener('visibilitychange',()=>{if(document.hidden)suspendLocalWork();else resumeLocalWork()});
 
 function renderRibbon(){
   ribbonManual=false;
