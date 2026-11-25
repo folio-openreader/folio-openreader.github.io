@@ -100,3 +100,52 @@ test('pre-cancelled TXT does not load bytes and cancellation after reading is no
   later.abort();bytes.resolve(Uint8Array.of(0xff).buffer);
   await assert.rejects(reading,{name:'AbortError'});
 });
+
+function encodedBook(t,byteOrder,{entity=false,truncated=false}={}){
+  const title='Қазақша оқу — 中文',line='Кітаптағы сөз. La rivière. 📖';
+  const path='book/one.xhtml',declaration='<?xml version="1.0" encoding="UTF-16"?>';
+  const container=declaration+'<container xmlns="'+C+'" version="1.0"><rootfiles>'+
+    '<rootfile media-type="application/oebps-package+xml" full-path="book/content.opf"/></rootfiles></container>';
+  const pkg=declaration+'<package xmlns="'+P+'" xmlns:dc="'+D+'" version="3.0" unique-identifier="pub-id">'+
+    '<metadata><dc:title>'+title+'</dc:title><dc:identifier id="pub-id">fixture</dc:identifier><dc:language>kk</dc:language></metadata>'+
+    '<manifest><item id="chapter" href="one.xhtml" media-type="application/xhtml+xml"/></manifest>'+
+    '<spine><itemref idref="chapter"/></spine></package>';
+  const chapter=declaration+(entity?'<!DOCTYPE html [<!ENTITY local "fixture">]>':'')+
+    '<html xmlns="'+X+'"><head><title>Chapter</title></head><body><p>'+line+'</p></body></html>';
+  const encode=xml=>{
+    const le=Buffer.concat([Buffer.from([0xff,0xfe]),Buffer.from(xml,'utf16le')]);
+    return byteOrder==='be'?le.swap16():le;
+  };
+  const validChapter=encode(chapter);
+  const seen=[];
+  replace(t,'DOMParser',class{parseFromString(text,type){
+    assert.equal(type,'application/xml');seen.push(text);
+    let documentElement;
+    if(text===container)documentElement=el(C,'container',{},[el(C,'rootfiles',{},[el(C,'rootfile',{
+      'media-type':'application/oebps-package+xml','full-path':'book/content.opf'})])]);
+    else if(text===pkg)documentElement=el(P,'package',{},[
+      el(P,'metadata',{},[el(D,'title',{},[],title),el(D,'language',{},[],'kk')]),
+      el(P,'manifest',{},[el(P,'item',{id:'chapter',href:'one.xhtml','media-type':'application/xhtml+xml'})]),
+      el(P,'spine',{},[el(P,'itemref',{idref:'chapter'})])
+    ]);
+    else if(text===chapter)documentElement=el(X,'html',{},[el(X,'body',{},[el(X,'p',{},[],line)])]);
+    return {documentElement,getElementsByTagNameNS:()=>[]};
+  }});
+  return {title,line,seen,file:zipFile('utf16.epub',[
+    ['mimetype','application/epub+zip'],['META-INF/container.xml',encode(container)],['book/content.opf',encode(pkg),true],
+    [path,truncated?validChapter.subarray(0,validChapter.length-1):validChapter,true]
+  ])};
+}
+
+for(const byteOrder of ['le','be'])test('the book importer reads EPUB XML marked as UTF-16 '+byteOrder.toUpperCase(),async t=>{
+  const fixture=encodedBook(t,byteOrder),book=await parseBook(fixture.file,{signal:new AbortController().signal});
+  assert.equal(book.title,fixture.title);assert.equal(book.language,'kk');
+  assert.deepEqual(book.chapters[0].paragraphs,[fixture.line]);assert.equal(fixture.seen.length,3);
+});
+
+test('bad UTF-16 data and unsupported entity declarations still fail before XML parsing of that chapter',async t=>{
+  const broken=encodedBook(t,'le',{truncated:true});
+  await assert.rejects(parseBook(broken.file),/damaged|unsupported/i);assert.equal(broken.seen.length,2);
+  const entity=encodedBook(t,'be',{entity:true});
+  await assert.rejects(parseBook(entity.file),/damaged|unsupported/i);assert.equal(entity.seen.length,2);
+});

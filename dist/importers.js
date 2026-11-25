@@ -121,6 +121,14 @@ function crc32(bytes) {
   return (crc ^ 0xffffffff) >>> 0;
 }
 
+// EPUB permits UTF-16 XML with a byte-order mark. Keep ZIP names, the
+// mimetype token, custom dictionaries and standalone TXT on strict UTF-8.
+function decodePublicationXml(bytes) {
+  if(bytes[0]===0xff&&bytes[1]===0xfe)return new TextDecoder('utf-16le',{fatal:true}).decode(bytes);
+  if(bytes[0]===0xfe&&bytes[1]===0xff)return new TextDecoder('utf-16be',{fatal:true}).decode(bytes);
+  return UTR.decode(bytes);
+}
+
 function xml(text) {
   // Never parse imported markup as HTML or attach it to the live document.
   // Allow simple EPUB XHTML doctypes, but never parse entity declarations or internal subsets.
@@ -199,16 +207,21 @@ async function parseEpub(file,signal) {
   let archive;
   try {
     archive = zip(await file.arrayBuffer(),{signal});
+    const readXmlResource=async path=>{
+      const bytes=await archive.read(path,{binary:true});
+      checkImport(signal);
+      return decodePublicationXml(bytes);
+    };
     // Some valid DRM-free books obscure embedded fonts. We skip all non-text assets;
     // reject any encryption declarations conservatively instead of attempting decryption.
     if (archive.has('META-INF/encryption.xml') || archive.has('META-INF/rights.xml')) throw protectedBook();
     if (!archive.has('META-INF/container.xml')) throw invalid();
     if (archive.has('mimetype') && (await archive.read('mimetype')).trim() !== 'application/epub+zip') throw invalid();
-    const container = xml(await archive.read('META-INF/container.xml')).documentElement;
+    const container = xml(await readXmlResource('META-INF/container.xml')).documentElement;
     if (container.namespaceURI !== OCF_NS || container.localName !== 'container') throw invalid();
     const opf = children(child(container, OCF_NS, 'rootfiles'), OCF_NS, 'rootfile').find(x => x.getAttribute('media-type') === 'application/oebps-package+xml');
     const opfPath = resolvePath('', opf?.getAttribute('full-path') ?? '');
-    const pkg = xml(await archive.read(opfPath)).documentElement;
+    const pkg = xml(await readXmlResource(opfPath)).documentElement;
     if (pkg.namespaceURI !== OPF_NS || pkg.localName !== 'package') throw invalid();
     const meta = child(pkg, OPF_NS, 'metadata');
     const manifest = new Map(children(child(pkg, OPF_NS, 'manifest'), OPF_NS, 'item').map(n => [n.getAttribute('id'), n]));
@@ -230,7 +243,7 @@ async function parseEpub(file,signal) {
       if ((item.getAttribute('properties') ?? '').split(/\s+/).includes('nav')) continue;
       if (item.getAttribute('media-type') !== 'application/xhtml+xml') { skipped++; continue; }
       const path = resolvePath(opfPath, item.getAttribute('href') ?? '');
-      const section=await archive.read(path);checkImport(signal);
+      const section=await readXmlResource(path);checkImport(signal);
       const c = readChapter(section, `Chapter ${chapters.length + 1}`);
       if (!c.paragraphs.length) { skipped++; continue; }
       count += c.paragraphs.length;
