@@ -583,7 +583,7 @@ const navMotion=installNavMotion($('.nav-dock'));
 function homeRoute(){const view=location.hash.slice(1);if(view.startsWith('profile/'))return 'profile';return HOME_ROUTES.includes(view)?view:'home'}
 function showHome(which='home',{motion=false,focus=false}={}){
   const leavingReader=!$('#reader').hidden,changed=homeView!==which,forward=HOME_ROUTES.indexOf(which)>HOME_ROUTES.indexOf(homeView);
-  if(leavingReader){cancelLocalQueue();readingHome.leaveReader();closeReaderSheets();capturePosition(true);closeComicView();renderEpoch++;$('#passage').removeAttribute('aria-busy');suppressScroll=false;clearTimeout(saveTimer);clearTimeout(seenTimer)}
+  if(leavingReader){cancelLocalQueue({abortAutomatic:true});readingHome.leaveReader();closeReaderSheets();capturePosition(true);closeComicView();renderEpoch++;$('#passage').removeAttribute('aria-busy');suppressScroll=false;clearTimeout(saveTimer);clearTimeout(seenTimer)}
   if(!leavingReader&&!changed&&homeLeaving===false&&$('#home').dataset.ready==='true')return;
   cancelSpeech();cancelMotion($('#reader'));
   document.body.classList.remove('reading');setChromeColor();$('#reader').hidden=true;$('#home').hidden=false;$('#home').dataset.ready='true';
@@ -629,7 +629,10 @@ function navigateHome(which,event){
   showHome(which,{motion:!!event?.detail,focus:!!event&&event.detail===0});
 }
 function openBook(id,explicit,{motion=false,focus=false,trigger=''}={}){
-  if(!$('#reader').hidden){dismissWord();capturePosition(true);closeComicView();}
+  if(!$('#reader').hidden){
+    if(current?.id!==id)cancelLocalQueue({abortAutomatic:true});
+    dismissWord();capturePosition(true);closeComicView();
+  }
   else if(!$('#home').hidden){
     readerReturn=location.hash.startsWith('#read/')?returnRoute():homeView==='library'?'library':'home';
     if(Object.hasOwn(routeScroll,readerReturn))routeScroll[readerReturn]=window.scrollY;
@@ -1091,7 +1094,12 @@ const localErrorMessages={
   'engine-init':'Не удалось запустить переводчик. Обновите браузер или попробуйте другой.',
 };
 const localErrorText=reason=>localErrorMessages[reason]||'Не удалось перевести этот абзац. Попробуйте ещё раз.';
-function cancelLocalQueue(){clearTimeout(localTimer);localWanted=null}
+function cancelLocalQueue({abortAutomatic=false}={}){
+  clearTimeout(localTimer);localWanted=null;
+  // Automatic work belongs to the visible book. A reader's explicit request
+  // can still finish, while a stale automatic worker must release the slot.
+  if(abortAutomatic&&localJob&&!localJob.explicit)stopLocalJob();
+}
 const localWorkPaused=()=>localPageAway||document.hidden;
 function stopLocalJob(){
   localJob=null;localDownload={loaded:0,total:0};
@@ -1268,11 +1276,7 @@ $('#local-translation-open').onclick=()=>{
   const loc=currentLocalTarget();if(!loc||!canLocal(loc)||loc.p.translation)return;
   const failed=localFailureFor(loc);
   if(autoLocal(loc)&&!failed){
-    setAutoLocal(loc,false);cancelLocalQueue();
-    // Pause queued and running automatic work, but let an already-started
-    // explicit translation finish. Previously a paused worker could still repaint.
-    if(localJob&&!localJob.explicit)stopLocalJob();
-    syncTranslation();
+    setAutoLocal(loc,false);cancelLocalQueue({abortAutomatic:true});syncTranslation();
   }
   else if(!failed&&peekLocal(loc)){setAutoLocal(loc,true);syncTranslation()}
   else openLocalDialog(loc);
