@@ -375,9 +375,15 @@ function renderPersonalShelf(){
       remove.setAttribute('aria-label',`Удалить книгу ${b.title}`);
       remove.onclick=e=>{
         if(!e.isTrusted)return;
+        const list=editorialShelves[kind]||shelf,index=[...list.children].indexOf(card);
         (bookDeleteDialog??=createBookDeleteDialog()).open({
           bookTitle:b.title,trigger:remove,remove:()=>deleteBook(b),
-          focusFallback:()=>[...(editorialShelves[kind]||shelf).querySelectorAll('.book-open')][0]||$('[data-view=library]'),
+          focusFallback:()=>{
+            // After rebuilding the shelf, the next book occupies this slot;
+            // if it was the last, keep the reader at the previous card.
+            const remaining=list.querySelectorAll('.book-open');
+            return remaining[index]||remaining[index-1]||(kind?$('#'+kind+'-home-empty'):null);
+          },
         });
       };
       foot.append(remove)
