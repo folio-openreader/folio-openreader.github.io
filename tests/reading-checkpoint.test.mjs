@@ -50,7 +50,7 @@ function session(disk=new Map(),step=100,rowHeight=step){
   const lifecycle=part("window.addEventListener('pagehide',()=>{practiceAudio.stop()", "let syncEpoch=");
   const handlers=[line("document.addEventListener('visibilitychange',()=>{if(document.hidden){wordSpeech.reset()"),
     line("window.addEventListener('pagehide',cancelSpeech);"),lifecycle,line("window.addEventListener('pageshow',e=>{if(e.persisted&&(wordDisk")];
-  runInNewContext([part('function saveState(','function escapeHTML('),part('function showHome(','let comicView='),
+  runInNewContext([part('let rememberedReadingPositions=','function escapeHTML('),part('function showHome(','let comicView='),
     part('function scheduleSeen(','function wordNodes('),part('function renderChapter(','let ribbonBook='),
     part('function comicPageGeometry(','function updateComicProgress('),
     part('let prefsLayoutEpoch=','function renderProfileStats('),part('function switchChapter(','function updateBookmark('),line('function renderContents('),
@@ -169,6 +169,20 @@ for(const event of ['visibilitychange','pagehide'])test(event+' replay and stale
   assert.deepEqual(JSON.parse(h.disk.get('folio-v2')),newer);assert.equal(h.writes.length,n+1);
   h.show('pageshow');h.show();assert.deepEqual(h.translations,[2,10]);
   h.scroll(500);h.hide('pagehide');assert.deepEqual(h.read(),pos(5,.22));
+});
+test('a stale active tab preserves changed or deleted positions belonging to other books',()=>{
+  const disk=new Map([['folio-v2',JSON.stringify({positions:{test:pos(1,.1),other:pos(2,.2),removed:pos(3,.3)}})]]);
+  const h=session(disk);h.open(pos(1,.1));
+  disk.set('folio-v2',JSON.stringify({positions:{test:pos(1,.1),other:pos(8,.3)}}));
+  h.scroll(500);h.hide('visibilitychange');
+  assert.deepEqual(JSON.parse(disk.get('folio-v2')).positions,{test:pos(5,.22),other:pos(8,.3)});
+});
+test('non-reading save preserves a newer same-book checkpoint when its local position is unchanged',()=>{
+  const disk=new Map([['folio-v2',JSON.stringify({positions:{test:pos(1,.1)}})]]);
+  const h=session(disk);
+  disk.set('folio-v2',JSON.stringify({positions:{test:pos(15,.4)}}));
+  h.c.saveState();
+  assert.deepEqual(h.read(),pos(15,.4));
 });
 test('failed lifecycle write is retried at pagehide',()=>{
   const h=session();h.open(pos(2,0));h.scroll(1000);h.failNextWrite();h.hide('visibilitychange');

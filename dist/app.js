@@ -228,7 +228,34 @@ function renderStarterEdition(book){
 
 function toast(message){$('#toast').textContent=message;$('#toast').style.display='block';clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('#toast').style.display='none',4000)}
 function updateStorageStatus(){const status=$('#local-storage-status');if(status)status.textContent=storageWarning||(!db?'Хранилище книг недоступно. Восстановление книг отключено.':'')}
-function saveState(){try{localStorage.setItem('folio-v2',JSON.stringify(state));saveLearning();storageWarning='';updateStorageStatus();return true}catch{if(!storageWarning)toast('Изменения работают в этой вкладке, но не сохраняются в браузере.');storageWarning='Хранилище настроек недоступно. Изменения будут потеряны после перезагрузки; их можно скачать в копию.';updateStorageStatus();return false}}
+let rememberedReadingPositions={...state.positions};
+function sameReadingPosition(a,b){
+  return a===b||!!a&&!!b&&['chapter','paragraph','fraction','viewportDelta','comicImageOffset'].every(k=>a[k]===b[k]);
+}
+function readingPositionsToSave(stored,previous,local){
+  // A stale tab only owns reading positions it actually changed. Do not
+  // resurrect a deletion or overwrite the checkpoint of another book.
+  const merged=Object.assign(Object.create(null),stored);
+  for(const id of new Set([...Object.keys(previous),...Object.keys(local)])){
+    if(!Object.hasOwn(local,id)){if(Object.hasOwn(previous,id))delete merged[id];}
+    else if(!Object.hasOwn(previous,id)||!sameReadingPosition(previous[id],local[id]))merged[id]=local[id];
+  }
+  return merged;
+}
+function storedReadingPositions(){
+  const raw=localStorage.getItem('folio-v2');
+  if(raw==null)return null;
+  try{
+    const positions=JSON.parse(raw)?.positions;
+    return positions&&typeof positions==='object'&&!Array.isArray(positions)?positions:null;
+  }catch{return null}
+}
+function saveState(){try{
+  const latest=storedReadingPositions();
+  const positions=latest?readingPositionsToSave(latest,rememberedReadingPositions,state.positions):state.positions;
+  localStorage.setItem('folio-v2',JSON.stringify({...state,positions}));
+  rememberedReadingPositions={...state.positions};
+  saveLearning();storageWarning='';updateStorageStatus();return true}catch{if(!storageWarning)toast('Изменения работают в этой вкладке, но не сохраняются в браузере.');storageWarning='Хранилище настроек недоступно. Изменения будут потеряны после перезагрузки; их можно скачать в копию.';updateStorageStatus();return false}}
 function escapeHTML(t){return String(t).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 const node=(tag,text,className)=>{const e=document.createElement(tag);if(text!=null)e.textContent=text;if(className)e.className=className;return e};
 function openDB(){return new Promise((resolve,reject)=>{const request=indexedDB.open('folio-library');request.onupgradeneeded=()=>request.result.createObjectStore('books',{keyPath:'id'});request.onsuccess=()=>{request.result.onversionchange=()=>request.result.close();resolve(request.result)};request.onerror=()=>reject(request.error);request.onblocked=()=>reject(new Error('Хранилище занято другой вкладкой.'))})}
