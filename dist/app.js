@@ -1081,13 +1081,16 @@ const localErrorMessages={
 const localErrorText=reason=>localErrorMessages[reason]||'Не удалось перевести этот абзац. Попробуйте ещё раз.';
 function cancelLocalQueue(){clearTimeout(localTimer);localWanted=null}
 const localWorkPaused=()=>localPageAway||document.hidden;
+function stopLocalJob(){
+  localJob=null;localDownload={loaded:0,total:0};
+  localTranslator.stop();
+}
 function suspendLocalWork(leaving=false){
   if(leaving||!localWanted?.explicit)cancelLocalQueue();
   // An already requested download may continue during a brief tab switch.
   // Background automatic work, and all work on pagehide, is released.
   if(!leaving&&(!localJob||localJob.explicit))return;
-  localJob=null;localDownload={loaded:0,total:0};
-  localTranslator.stop();
+  stopLocalJob();
 }
 function resumeLocalWork(){
   if(localResumeQueued)return;
@@ -1252,7 +1255,13 @@ async function pumpLocal(){
 $('#local-translation-open').onclick=()=>{
   const loc=currentLocalTarget();if(!loc||!canLocal(loc)||loc.p.translation)return;
   const failed=localFailureFor(loc);
-  if(autoLocal(loc)&&!failed){setAutoLocal(loc,false);cancelLocalQueue();syncTranslation()}
+  if(autoLocal(loc)&&!failed){
+    setAutoLocal(loc,false);cancelLocalQueue();
+    // Pause queued and running automatic work, but let an already-started
+    // explicit translation finish. Previously a paused worker could still repaint.
+    if(localJob&&!localJob.explicit)stopLocalJob();
+    syncTranslation();
+  }
   else if(!failed&&peekLocal(loc)){setAutoLocal(loc,true);syncTranslation()}
   else openLocalDialog(loc);
 };

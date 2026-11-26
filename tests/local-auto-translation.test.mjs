@@ -77,6 +77,7 @@ function session(disk=new Map(),models=new Set(),books=[makeBook('book-one'),mak
   ].join('\n'),c);
   return {c,$,disk,models,calls,get dialogs(){return dialogs;},get stops(){return stops;},
     rejectLate(e){pending?.reject(e);pending=null;},
+    resolveLate(){pending?.resolve();pending=null;},
     hide(){c.document.hidden=true;docEvents.visibilitychange?.({});},
     show(){c.document.hidden=false;docEvents.visibilitychange?.({});},
     pagehide(){winEvents.pagehide?.({persisted:true});},
@@ -239,4 +240,36 @@ test('switching paragraphs during a slow cache lookup does not translate the obs
   fresh.select(1);done('old cached value');await work;await new Promise(setImmediate);
   assert.deepEqual(fresh.calls,[{text:'The boats waited in the harbour.',pair:'en-ru',allowNetwork:false}]);
   assert.match(fresh.$('#translation-track').querySelector('.translation-empty').textContent,/The boats/);
+});
+
+
+test('Pause stops an already-running automatic paragraph without painting the canceled result',async()=>{
+  const h=await optedIn(),fresh=session(h.disk,h.models);
+  fresh.c.deferNext=true;fresh.open('book-one',1);
+  const work=fresh.drain();await turn();
+  assert.deepEqual(fresh.calls,[{text:'The boats waited in the harbour.',pair:'en-ru',allowNetwork:false}]);
+  const toggle=fresh.$('#local-translation-open');
+  assert.equal(toggle.textContent,'Пауза');
+  toggle.onclick();
+  assert.equal(fresh.stops,1,'actively cancel the paused worker, not just its future schedule');
+  await work;
+  assert.equal(toggle.textContent,'Перевести');
+  assert.equal(fresh.$('#translation-track').querySelector('.translation-empty').textContent,'Нет готового перевода.');
+  fresh.select(2);await fresh.drain();
+  assert.equal(fresh.calls.length,1,'no new automatic work after pause');
+  fresh.$('#translation-full').onclick();fresh.$('#local-translation-start').onclick();await fresh.drain();
+  assert.equal(fresh.calls.at(-1).text,'The letter finally came.');
+  assert.equal(fresh.calls.at(-1).allowNetwork,true);
+});
+
+test('Pause does not abort a separate explicit translation already requested by the reader',async()=>{
+  const h=session();h.open();h.$('#translation-full').onclick();h.$('#local-translation-start').onclick();
+  h.c.deferNext=true;const work=h.drain();await turn();
+  assert.equal(h.calls[0].allowNetwork,true);
+  h.$('#translation-dialog').close();h.c.syncTranslation();
+  h.$('#local-translation-open').onclick();
+  assert.equal(h.stops,0);
+  h.resolveLate();await work;
+  assert.equal(h.$('#local-translation-open').textContent,'Продолжить');
+  h.select(1);await h.drain();assert.equal(h.calls.length,1);
 });
