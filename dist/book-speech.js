@@ -3,6 +3,9 @@ import {availableNarrator,pauseNeural,playNeural,stopNeural} from './neural-voic
 // fallback policy; never let another browser choose an unspecified default voice.
 import {localVoice,voicePreference,appleSpeechPlatform,nativeEnglish} from './word-speech.js';
 
+// Honorifics, initials and short dotted abbreviations are not sentence ends.
+const abbreviationEnd=/(?:^|[^\p{L}\p{N}'’\-])(?:mr|mrs|ms|miss|dr|prof|sr|jr|st|etc|vs|fig|no|vol|rev|sgt|[A-Za-z]|[A-Za-z]{1,3}\.[A-Za-z]{1,3})\.[”’»"']*$/iu;
+
 export function nextChunk(text,offset,max=160) {
   // Bound native utterance length, and prefer ending a phrase to cutting a word.
   while(offset<text.length&&/\s/u.test(text[offset]))offset++;
@@ -10,7 +13,10 @@ export function nextChunk(text,offset,max=160) {
   let end=Math.min(offset+max,text.length);
   if(end<text.length){
     const slice=text.slice(offset,end), stops=[...slice.matchAll(/[.!?。！？…](?:[”’»"']*)(?=\s|$)|[。！？]/gu)];
-    const space=[...slice.matchAll(/\s+/gu)].at(-1),stop=stops.at(-1);
+    const stop=stops.reverse().find(m=>!abbreviationEnd.test(slice.slice(0,m.index+m[0].length)));
+    // If a size limit falls just after "Dr.", prefer the previous word
+    // boundary, so the next segment can say the title with the name.
+    const space=stop?null:[...slice.matchAll(/\s+/gu)].reverse().find(m=>!abbreviationEnd.test(slice.slice(0,m.index)));
     if(stop)end=offset+stop.index+stop[0].length;
     else if(space)end=offset+space.index;
     else if(/[\uD800-\uDBFF]/u.test(text[end-1]))end--;

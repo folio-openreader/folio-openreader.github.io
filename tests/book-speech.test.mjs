@@ -65,3 +65,18 @@ test('unavailable native voice rotates only on explicit retry and never selects 
  f.engine.stop();
  assert.equal(f.timers.size,0);
 });
+
+test('narration does not use English titles or initials as sentence breaks at either engine limit',()=>{
+ const text='Dr. A. Morgan said that the final ferry carried supplies to the island while the crew waited for the tide to turn and the lighthouse began to shine across the still water before dawn. Captain Mara called from the quay.';
+ for(const limit of [92,160]){
+  const pieces=[];
+  for(let chunk;(chunk=nextChunk(text,pieces.at(-1)?.end||0,limit));)pieces.push(chunk);
+  assert.match(pieces[0].text,/^Dr\. A\. Morgan said that/, 'voice chunk must not stop after a title or initial');
+  assert.ok(pieces.every(chunk=>chunk.text.length<=limit&&chunk.end>chunk.start));
+  assert.equal(pieces.map(chunk=>chunk.text).join(' '),text);
+ }
+ const atLimit='Start before Dr. A. Morgan speaks.';
+ assert.equal(nextChunk(atLimit,0,16).text,'Start before');
+ const realSentence="The ferry crossed later than Doctor Morgan's. Another short sentence follows.";
+ assert.equal(nextChunk(realSentence,0,65).text,"The ferry crossed later than Doctor Morgan's.");
+});
