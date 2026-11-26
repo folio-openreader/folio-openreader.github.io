@@ -90,7 +90,10 @@ button:not(.word):not(:disabled):active,.brand:active{transform:scale(.97);opaci
 #translation-track{height:42px;padding-inline:max(10px,calc((100vw - 730px)/2));font-size:19px}
 .sync-button{min-height:27px;padding:0 4px}
 #reading-article{padding-left:max(25px,calc(var(--safe-left) + 17px));padding-right:max(25px,calc(var(--safe-right) + 17px))}
-.chapter-heading h1{letter-spacing:-.045em}
+/* The reader clips horizontal overflow; preserve long original words without
+   splitting a dictionary token into multiple controls. */
+.chapter-heading h1{letter-spacing:-.045em;overflow-wrap:anywhere}
+.reading-paragraph .word{max-inline-size:100%;overflow-wrap:anywhere;text-align:start}
 .chapter-heading h1:focus{outline:none}
 :where(html:not([data-pointer-ui])) .chapter-heading h1:focus-visible{outline:2px solid var(--focus,var(--accent));outline-offset:4px;border-radius:3px}
 .reading-footer{height:calc(44px + var(--safe-bottom));padding-inline:max(18px,var(--safe-left),calc((100% - 750px)/2)) max(18px,var(--safe-right),calc((100% - 750px)/2));padding-bottom:var(--safe-bottom)}
@@ -100,6 +103,7 @@ button:not(.word):not(:disabled):active,.brand:active{transform:scale(.97);opaci
 /* Native dialog keeps browser focus/reaction and Escape; CSS only decorates. */
 dialog{border-radius:19px;overscroll-behavior-y:contain;scroll-padding-block:20px;max-height:calc(100dvh - 32px);box-shadow:0 16px 65px #181b182b}
 #chapter-list{max-block-size:min(44dvh,24rem);overflow-y:auto;overscroll-behavior-y:contain;scrollbar-width:thin;scroll-padding-block:4px;padding:3px}
+#contents-dialog .chapter-row{min-inline-size:0;overflow-wrap:anywhere}
 dialog::backdrop{background:#121b16a0;backdrop-filter:none}
 dialog[open]{animation:dialog-enter var(--sheet-time) var(--ease-drawer) both}
 dialog[open]::backdrop{animation:backdrop-in 180ms var(--ease-out) both}
