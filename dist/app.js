@@ -1828,9 +1828,11 @@ async function importDictionaryFile(){
   }catch(e){dictUI.status(e.message||'Не удалось импортировать словарь.')}
   finally{importingDictionary=false;await dictUI.refresh({repaintWord:true})}
 }
-const dropMotions=new Map();
+// A platform picker replaces FileList before validation. The accepted File
+// remains authoritative so a rejected replacement cannot invalidate work.
+const dropMotions=new Map(),acceptedImportFiles=new Map();
 function fileTile(input,{dropped=false,animate=true}={}){
-  const label=input.closest('.drop-field'),file=input.files[0],type=label.dataset.fileField,fx=dropMotions.get(input);
+  const label=input.closest('.drop-field'),file=acceptedImportFiles.get(input),type=label.dataset.fileField,fx=dropMotions.get(input);
   label.toggleAttribute('data-filled',!!file);
   const name=file?.name||(type==='original'?'Перетащите книгу или снимок':'Файл той же книги');
   fx?.setText(name,animate);
@@ -1838,7 +1840,7 @@ function fileTile(input,{dropped=false,animate=true}={}){
   if(file)fx?.land(file,dropped);else fx?.reset();
 }
 function setBookTiles(kind){
-  for(const [input,fx] of dropMotions)if(input.files.length)fx.state(kind);
+  for(const [input,fx] of dropMotions)if(acceptedImportFiles.has(input))fx.state(kind);
 }
 function importStatus(text,state=''){
   const status=$('#import-status');status.textContent=text;if(state)status.dataset.state=state;else delete status.dataset.state;
@@ -1848,7 +1850,7 @@ const importRoles=['original','translation'];
 const ocrLanguageChoices=[['eng','Английский'],['rus','Русский'],['kaz','Казахский'],['eng+rus','EN + RU'],['rus+kaz','RU + KK'],['eng+kaz','EN + KK'],['eng+rus+kaz','EN + RU + KK']];
 const isPdf=file=>/\.pdf$/i.test(file?.name||'');
 const isImage=file=>/\.(?:png|jpe?g|webp)$/i.test(file?.name||'');
-const getFile=role=>$('#'+role+'-file').files[0];
+const getFile=role=>acceptedImportFiles.get($('#'+role+'-file'));
 const ocrRecovery=new Set(), parsedImport=new Map();
 const preferredOcr=role=>[({en:'eng',ru:'rus',kk:'kaz'})[knownLanguage(role==='original'?state.prefs.readingLanguage:state.prefs.dictionaryTarget)]||(role==='original'?'eng':'rus')];
 for(const role of importRoles){
@@ -1971,9 +1973,9 @@ function renderImportPreview(a,b,event,{originalLanguage}={}){
 }
 $('#remove-translation-file').onclick=event=>{
   const input=$('#translation-file');
-  if(!input.files.length||$('#import-dialog').hasAttribute('data-saving'))return;
+  if(!acceptedImportFiles.has(input)||$('#import-dialog').hasAttribute('data-saving'))return;
   const original=getFile('original'),cached=parsedImport.get('original'),originalLanguage=previewBook?.language;
-  input.value='';fileTile(input,{animate:false});resetOcrSettings('translation');invalidateImport();
+  input.value='';acceptedImportFiles.delete(input);fileTile(input,{animate:false});resetOcrSettings('translation');invalidateImport();
   if(cached?.file===original&&cached?.key===importParseKey('original')){
     renderImportPreview(cached.parsed,null,event,{originalLanguage});
     importStatus('Файл перевода убран. Проверьте оригинал.','ready');
@@ -2028,7 +2030,7 @@ function setupOcr(role){
   $('#ocr-'+role).focus();
 }
 $('#retry-ocr').onclick=()=>setupOcr($('#retry-ocr').dataset.role);
-async function saveImport(event){if(!previewBook||$('#import-dialog').hasAttribute('data-saving'))return;if(previewBook.alignment==='positional-unverified'&&!$('#alignment-check').checked)return;$('#save-import').disabled=$('#remove-translation-file').disabled=true;$('#import-dialog').setAttribute('data-saving','');const book=stampTextBook({...previewBook,id:'book-'+crypto.randomUUID(),createdAt:Date.now()});for(const key of ['ocr','translationOcr'])if(book[key])book[key]=sanitizeOcr(book[key]);try{await dbAction('readwrite',s=>s.put(book));books.push(book);previewBook=null;$('#import-dialog').close();$('#original-file').value='';$('#translation-file').value='';fileTile($('#original-file'));fileTile($('#translation-file'));resetOcrSettings();invalidateImport();toast('Книга добавлена.');openBook(book.id,undefined,{motion:!!event?.detail,focus:!event?.detail,trigger:'continue'})}catch(e){toast(e.name==='QuotaExceededError'?'Недостаточно памяти браузера для книги. Освободите место или выберите меньший файл.':e.message);$('#save-import').disabled=false}finally{$('#import-dialog').removeAttribute('data-saving');$('#remove-translation-file').disabled=false}}
+async function saveImport(event){if(!previewBook||$('#import-dialog').hasAttribute('data-saving'))return;if(previewBook.alignment==='positional-unverified'&&!$('#alignment-check').checked)return;$('#save-import').disabled=$('#remove-translation-file').disabled=true;$('#import-dialog').setAttribute('data-saving','');const book=stampTextBook({...previewBook,id:'book-'+crypto.randomUUID(),createdAt:Date.now()});for(const key of ['ocr','translationOcr'])if(book[key])book[key]=sanitizeOcr(book[key]);try{await dbAction('readwrite',s=>s.put(book));books.push(book);previewBook=null;$('#import-dialog').close();$('#original-file').value='';$('#translation-file').value='';acceptedImportFiles.clear();fileTile($('#original-file'));fileTile($('#translation-file'));resetOcrSettings();invalidateImport();toast('Книга добавлена.');openBook(book.id,undefined,{motion:!!event?.detail,focus:!event?.detail,trigger:'continue'})}catch(e){toast(e.name==='QuotaExceededError'?'Недостаточно памяти браузера для книги. Освободите место или выберите меньший файл.':e.message);$('#save-import').disabled=false}finally{$('#import-dialog').removeAttribute('data-saving');$('#remove-translation-file').disabled=false}}
 // Touch pans are native. Only actual ribbon scrolling indicates exploration.
 const ribbon=$('#translation-ribbon');
 ribbon.addEventListener('pointerdown',e=>{
@@ -2070,26 +2072,37 @@ function installFileTiles(){
   const hasFiles=e=>Array.from(e.dataTransfer?.types||[]).includes('Files');
   for(const label of $$('.drop-field')){
     const input=label.querySelector('input'),role=label.dataset.fileField,fx=installDropMotion(label);dropMotions.set(input,fx);
+    const reject=message=>{
+      const retained=acceptedImportFiles.has(input);
+      fx.leave();if(!retained)fx.state('rejected');
+      $('#import-file-warning').textContent=message+(retained?' Прежний файл не изменён.':'');
+    };
+    const accept=(file,options)=>{
+      acceptedImportFiles.set(input,file);fileTile(input,options);resetOcrSettings(role);invalidateImport();
+    };
     input.onchange=e=>{
-      const issue=bookFileError(input.files[0]);
-      if(issue){input.value='';fileTile(input,{animate:false});resetOcrSettings(role);invalidateImport();fx.state('rejected');importStatus(issue,'error');return}
-      fileTile(input,{animate:!!(e.isTrusted&&lastPointerInput)});resetOcrSettings(role);invalidateImport();
+      const file=input.files[0],issue=bookFileError(file);
+      if(!file||issue){
+        const previous=acceptedImportFiles.get(input);
+        input.value='';
+        if(previous)try{
+          const data=new DataTransfer();data.items.add(previous);input.files=data.files;
+        }catch{/* The import still uses the previous accepted File. */}
+        if(issue)reject(issue);
+        return;
+      }
+      accept(file,{animate:!!(e.isTrusted&&lastPointerInput)});
     };
     label.addEventListener('pointerdown',()=>fx.press(),{passive:true});
     label.addEventListener('dragover',e=>{if(!hasFiles(e))return;e.preventDefault();e.dataTransfer.dropEffect='copy';fx.drag(e)});
     label.addEventListener('dragleave',e=>{if(!label.contains(e.relatedTarget))fx.leave()});
     label.addEventListener('drop',e=>{
       if(!hasFiles(e))return;e.preventDefault();const files=e.dataTransfer.files,file=files[0];
-      const reject=message=>{
-        fx.leave();if(!input.files.length)fx.state('rejected');
-        // The previous files, preview and running parser still own this import.
-        $('#import-file-warning').textContent=message+(input.files.length?' Прежний файл не изменён.':'');
-      };
       const issue=files.length>1?'Добавьте по одному файлу.':bookFileError(file);
       if(issue||!file){reject(issue||'Не удалось прочитать файл. Нажмите «Выбрать».');return}
       try{const data=new DataTransfer();data.items.add(file);input.files=data.files}
       catch{reject('Нажмите «Выбрать», чтобы добавить файл.');return}
-      fileTile(input,{dropped:true});resetOcrSettings(role);invalidateImport();
+      accept(file,{dropped:true});
     })
   }
   $('#import-dialog').addEventListener('close',()=>{if($('#import-dialog').open)return;resetOcrSettings();invalidateImport();for(const fx of dropMotions.values())fx.settle()});
