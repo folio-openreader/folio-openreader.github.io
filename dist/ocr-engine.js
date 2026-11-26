@@ -39,10 +39,16 @@ function waitForDecode(start,signal,closeLate){
 export async function decodePageImage(blob,signal,unsupported){
   check(signal);
   if(typeof createImageBitmap==='function'){
-    const image=await waitForDecode(()=>createImageBitmap(blob,{imageOrientation:'from-image'}),signal,image=>image.close());
-    return {image,width:image.width,height:image.height,close:()=>image.close()};
+    try{
+      const image=await waitForDecode(()=>createImageBitmap(blob,{imageOrientation:'from-image'}),signal,image=>image.close());
+      return {image,width:image.width,height:image.height,close:()=>image.close()};
+    }catch(e){
+      check(signal); // A canceled import never starts a second decode.
+      if(typeof Image!=='function')throw e;
+    }
   }
-  // For engines without ImageBitmap, decode only our just-validated raster Blob.
+  // Some browsers expose ImageBitmap but reject a supported format or options.
+  // Retry only our already-validated raster Blob, never a URL from the document.
   if(typeof Image!=='function')throw error(unsupported);
   const image=new Image(),url=URL.createObjectURL(blob);
   const close=()=>{image.removeAttribute('src');URL.revokeObjectURL(url)};

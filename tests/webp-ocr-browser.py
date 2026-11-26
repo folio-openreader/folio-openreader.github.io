@@ -27,13 +27,20 @@ def fixture(animated=False):
     return content.getvalue()
 
 
-def run(dist, chromium, without_bitmap=False):
+def run(dist, chromium, without_bitmap=False, reject_bitmap=False):
     with serve(dist) as origin, sync_playwright() as pw:
         browser = pw.chromium.launch(executable_path=chromium, headless=True, args=["--disable-dev-shm-usage"])
         context = browser.new_context(viewport={"width": 390, "height": 844}, is_mobile=True,
                                       has_touch=True, service_workers="block")
         if without_bitmap:
             context.add_init_script("Object.defineProperty(window,'createImageBitmap',{value:undefined});")
+        if reject_bitmap:
+            context.add_init_script("""window.bitmapAttempts=0;
+              Object.defineProperty(window,'createImageBitmap',{value:async()=>{
+                window.bitmapAttempts++;
+                throw new DOMException('Valid image not supported by bitmap decoder','NotSupportedError');
+              }});
+            """)
         launches = []
         def route(r):
             url = r.request.url
@@ -58,6 +65,8 @@ def run(dist, chromium, without_bitmap=False):
                 expect(p.locator("#import-status")).to_contain_text("Анимированный WebP")
                 expect(p.locator("#import-preview")).to_be_hidden()
                 assert not launches, launches
+                if reject_bitmap:
+                    assert p.evaluate("bitmapAttempts") == 0
             else:
                 p.wait_for_function("""() => ['ready','error'].includes(document.querySelector('#import-status').dataset.state)""",
                                     timeout=25000)
@@ -67,9 +76,12 @@ def run(dist, chromium, without_bitmap=False):
                 expect(p.locator("#book-title")).to_have_text("River scan")
                 expect(p.locator("#paragraph-0")).to_have_text("Follow the river.")
                 assert len(launches) == 1, launches
+                if reject_bitmap:
+                    assert p.evaluate("bitmapAttempts") == 1
         assert not errors, errors
-        print("Real WebP scan OCR succeeded " + ("without createImageBitmap" if without_bitmap else "with native bitmap") +
-              "; animated WebP rejected before the OCR worker.")
+        mode = ("after createImageBitmap rejected the valid image" if reject_bitmap else
+                "without createImageBitmap" if without_bitmap else "with native bitmap")
+        print(f"Real WebP scan OCR succeeded {mode}; animated WebP rejected before the OCR worker.")
         browser.close()
 
 
@@ -77,6 +89,8 @@ if __name__ == "__main__":
     parser = ArgumentParser(description=__doc__)
     parser.add_argument("dist", type=Path)
     parser.add_argument("--chromium")
-    parser.add_argument("--without-bitmap", action="store_true")
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--without-bitmap", action="store_true")
+    mode.add_argument("--reject-bitmap", action="store_true")
     a = parser.parse_args()
-    run(a.dist.resolve(), a.chromium, a.without_bitmap)
+    run(a.dist.resolve(), a.chromium, a.without_bitmap, a.reject_bitmap)

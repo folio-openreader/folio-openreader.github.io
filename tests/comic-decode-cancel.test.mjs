@@ -28,7 +28,8 @@ async function expectPromptAbort(job){
 
 for(const [name,run] of Object.entries(modes)){
   test(name+' cancels during a stalled native decode and closes the late bitmap',async t=>{
-    const native=deferred(),started=deferred(),controller=new AbortController();let closed=0;
+    const native=deferred(),started=deferred(),controller=new AbortController();let closed=0,fallback=0;
+    setGlobal(t,'Image',class{constructor(){fallback++;}});
     setGlobal(t,'createImageBitmap',(_blob,options)=>{
       assert.deepEqual(options,{imageOrientation:'from-image'});started.resolve();return native.promise;
     });
@@ -36,7 +37,7 @@ for(const [name,run] of Object.entries(modes)){
     await started.promise;controller.abort();
     try{await expectPromptAbort(job);}
     finally{native.resolve({width:1,height:1,close(){closed++}});await job.catch(()=>{});}
-    await nextTurn();assert.equal(closed,1);
+    await nextTurn();assert.equal(closed,1);assert.equal(fallback,0,'aborting must not start a fallback decode');
   });
   test(name+' cancels and cleans up a fallback HTML image even if decode never settles',async t=>{
     const started=deferred(),native=deferred(),controller=new AbortController(),revoked=[];let dropped=0;
@@ -68,4 +69,19 @@ test('completed native and fallback decoding still import correctly and release 
     removeAttribute(){dropped++;}
   });
   const second=await parseComicFiles([file()]);assert.equal(second.pages[0].width,1);assert.equal(dropped,1);
+});
+
+test('a present bitmap decoder can reject a valid raster without blocking comic import',async t=>{
+  let attempted=0,decoded=0,released=0;
+  setGlobal(t,'createImageBitmap',async()=>{
+    attempted++;throw new DOMException('Bitmap decoder rejected a valid image','NotSupportedError');
+  });
+  setGlobal(t,'Image',class{
+    naturalWidth=1;naturalHeight=1;
+    async decode(){assert.match(this.src,/^blob:/);decoded++;}
+    removeAttribute(name){assert.equal(name,'src');released++;}
+  });
+  const book=await parseComicFiles([file()]);
+  assert.equal(book.pages[0].width,1);
+  assert.deepEqual([attempted,decoded,released],[1,1,1]);
 });
