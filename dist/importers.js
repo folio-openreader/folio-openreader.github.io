@@ -121,9 +121,9 @@ function crc32(bytes) {
   return (crc ^ 0xffffffff) >>> 0;
 }
 
-// EPUB permits UTF-16 XML with a byte-order mark. Keep ZIP names, the
-// mimetype token, custom dictionaries and standalone TXT on strict UTF-8.
-function decodePublicationXml(bytes) {
+// EPUB XML and standalone TXT may explicitly mark UTF-16 with a BOM.
+// Never guess encodings. ZIP names and other formats keep their own UTF-8 path.
+function decodeUnicodeText(bytes) {
   if(bytes[0]===0xff&&bytes[1]===0xfe)return new TextDecoder('utf-16le',{fatal:true}).decode(bytes);
   if(bytes[0]===0xfe&&bytes[1]===0xff)return new TextDecoder('utf-16be',{fatal:true}).decode(bytes);
   return UTR.decode(bytes);
@@ -210,7 +210,7 @@ async function parseEpub(file,signal) {
     const readXmlResource=async path=>{
       const bytes=await archive.read(path,{binary:true});
       checkImport(signal);
-      return decodePublicationXml(bytes);
+      return decodeUnicodeText(bytes);
     };
     // Some valid DRM-free books obscure embedded fonts. We skip all non-text assets;
     // reject any encryption declarations conservatively instead of attempting decryption.
@@ -273,20 +273,20 @@ function txtParagraphs(text) {
   return text.split(blankLine ? /\n[^\S\n]*\n+/ : /\n/).map(clean).filter(Boolean);
 }
 async function parseTxt(file,signal) {
-  if (file.size > MAX_TXT) throw new Error('Choose a TXT file smaller than 3 MB.');
+  if (file.size > MAX_TXT) throw new Error('TXT: максимум 3 МБ.');
   let text;
-  try { const bytes=await file.arrayBuffer();checkImport(signal);text = UTR.decode(bytes); }
-  catch { checkImport(signal);throw new Error('This text file is not valid UTF-8. Re-save it as UTF-8 TXT and try again.'); }
-  if (/[\0\x01-\x08\x0B\x0E-\x1F]/.test(text)) throw new Error('This does not look like plain text. Choose a UTF-8 TXT file.');
+  try { const bytes=new Uint8Array(await file.arrayBuffer());checkImport(signal);text=decodeUnicodeText(bytes); }
+  catch { checkImport(signal);throw new Error('Не удалось прочитать текст. Сохраните TXT в UTF-8 или UTF-16 с меткой кодировки.'); }
+  if (/[\0\x01-\x08\x0B\x0E-\x1F]/.test(text)) throw new Error('Это не обычный текст. Выберите текстовый файл TXT.');
   text = text.replace(/\r\n?/g, '\n');
   const paragraphs = txtParagraphs(text);
-  if (!paragraphs.length) throw new Error('This text file is empty. Choose a book that contains text.');
-  if (paragraphs.length > MAX_PARAGRAPHS) throw new Error('This file has too many paragraphs. Split it into smaller books.');
+  if (!paragraphs.length) throw new Error('Текстовый файл пуст. Выберите книгу с текстом.');
+  if (paragraphs.length > MAX_PARAGRAPHS) throw new Error('В файле слишком много абзацев. Разделите его на части.');
   return {title: fallbackTitle(file.name), author: '', language: guessLanguage(text), chapters: [{title: 'Text', paragraphs}], warnings: [], format: 'TXT'};
 }
 
 export async function parseBook(file, options = {}) {
-  if (!file?.name) throw new Error('Выберите EPUB, PDF, UTF-8 TXT, PNG или JPEG.');
+  if (!file?.name) throw new Error('Выберите EPUB, PDF, TXT, PNG или JPEG.');
   checkImport(options.signal);
   if (/\.epub$/i.test(file.name)) return parseEpub(file,options.signal);
   if (/\.txt$/i.test(file.name)) return parseTxt(file,options.signal);
@@ -304,7 +304,7 @@ export async function parseBook(file, options = {}) {
     if(!parsed.language)parsed.language=guessLanguage(parsed.chapters.slice(0,6).map(c=>c.paragraphs.slice(0,4).map(p=>p.slice(0,300)).join(' ')).join(' '));
     return parsed;
   }
-  throw new Error('Выберите EPUB, PDF, UTF-8 TXT, PNG или JPEG. Другие форматы не поддерживаются.');
+  throw new Error('Выберите EPUB, PDF, TXT, PNG или JPEG. Другие форматы не поддерживаются.');
 }
 
 export function singleBook(parsed) {
