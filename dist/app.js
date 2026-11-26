@@ -675,6 +675,7 @@ function openBook(id,explicit,{motion=false,focus=false,trigger=''}={}){
   if(focus)$('#reading-scroll').focus({preventScroll:true});
 }
 let comicView=null,activeComicPage=null,comicOCR=null,comicImportJob=null,comicCorrection=null;
+let comicResizeAnchor=null;
 const comicOCRDialog=$('#comic-ocr-dialog'),comicOCRLanguage=$('#comic-ocr-language'),comicOCRStart=$('#comic-ocr-start');
 const comicOCRSheet=installSheet(comicOCRDialog);
 for(const [id,option] of Object.entries(COMIC_OCR_OPTIONS)){
@@ -707,7 +708,7 @@ function readingSourceLanguage(book,index){
   return isComic(book)?comicModelTag(comicPageModel(book,index)):book?.language;
 }
 function closeComicView(){
-  closeComicCorrection();
+  comicResizeAnchor=null;closeComicCorrection();
   comicOCR?.abort();comicOCR=null;activeComicPage=null;
   comicView?.destroy();comicView=null;
   $('#reader').classList.remove('comic-mode');$('.translation-wrap').hidden=false;$('#translation-full').hidden=false;
@@ -727,6 +728,9 @@ function restoreComicPosition(sc,position){
   if(anchor===0){sc.scrollTop=0;return}
   // Older bookmarks lack an artwork anchor. Keep their existing interpretation.
   sc.scrollTop=anchor==null?g.maxScroll*(position.fraction||0):sc.scrollTop-g.offset+anchor*g.height;
+}
+function rememberComicResizeAnchor(sc,position){
+  comicResizeAnchor={epoch:renderEpoch,top:sc.scrollTop,position};
 }
 function updateComicProgress(){
   const percentage=progress(current);
@@ -760,6 +764,7 @@ async function renderComicPage(position,{bookmark=false}={}){
     requestAnimationFrame(()=>{
       if(!visible())return;
       restoreComicPosition(sc,position);suppressScroll=false;
+      rememberComicResizeAnchor(sc,state.positions[book.id]);
       if(bookmark)outcomeCue($('#chapter-open'),'bookmark',1000);
     });
   }catch{
@@ -979,8 +984,9 @@ function capturePosition(quiet=false){
     // Use the visible location within the artwork, not the scroll percentage of
     // the whole view; the OCR transcript above the image opens and collapses.
     const comicImageOffset=atEnd?1:Math.max(0,Math.min(.999999,g.offset/g.height));
-    state.positions[current.id]={chapter,paragraph,comicImageOffset,
+    const position=state.positions[current.id]={chapter,paragraph,comicImageOffset,
       fraction:Math.max(0,Math.min(.99,sc.scrollTop/Math.max(1,g.maxScroll)))};
+    rememberComicResizeAnchor(sc,position);
     return saveState();
   }
   pendingReadingScroll?.flush(quiet);
@@ -2687,9 +2693,25 @@ function readingResizeCurrent(resize,sc){
 }
 window.addEventListener('resize',()=>{
   const width=window.innerWidth,changed=previousWidth!==width;previousWidth=width;
-  if(!changed||!current||$('#reader').hidden||isComic(current)||deferHiddenReadingReflow(renderEpoch)||suppressScroll)return;
+  if(!changed||!current||$('#reader').hidden||suppressScroll)return;
   const position=state.positions[current.id],sc=$('#reading-scroll'),top=sc.scrollTop;
   if(!position)return;
+  if(isComic(current)){
+    if(readerSuspended||document.hidden)return;
+    const anchor=comicResizeAnchor,geometry=comicPageGeometry(sc);
+    // The browser may clamp the old pixel position to the new page end.
+    // A real, newer swipe should not be reversed by the older art anchor.
+    if(anchor?.epoch!==renderEpoch||anchor.position!==position||!geometry||
+       Math.abs(top-Math.min(anchor.top,geometry.maxScroll))>1)return;
+    const resize={width,book:current,epoch:renderEpoch,position,top};
+    clearTimeout(saveTimer);
+    requestAnimationFrame(()=>{
+      if(!readingResizeCurrent(resize,sc)||$('#reader').hidden||suppressScroll||readerSuspended||document.hidden)return;
+      restoreComicPosition(sc,position);rememberComicResizeAnchor(sc,position);
+    });
+    return;
+  }
+  if(deferHiddenReadingReflow(renderEpoch))return;
   // The saved fraction may already be obsolete before resize starts.
   if(readingScrollAnchor?.epoch===renderEpoch&&(readingScrollAnchor.dirty||Math.abs(top-readingScrollAnchor.top)>1))return;
   const resize=pendingReadingResize={width,book:current,epoch:renderEpoch,position,top};
