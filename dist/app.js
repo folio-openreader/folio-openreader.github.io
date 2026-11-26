@@ -111,7 +111,7 @@ function readJSON(key,fallback){try{return JSON.parse(storedValue(key))??fallbac
 const firstLanguageVisit=['folio-v2','folio-words','folio-learning-v1','folio-page','folio-bookmark'].every(key=>storedValue(key)===null);
 const prior=readJSON('folio-v2',{}), record=v=>v&&typeof v==='object'&&!Array.isArray(v)?v:{};
 let state={positions:{...record(prior.positions)},bookmarks:{...record(prior.bookmarks)},lastBook:typeof prior.lastBook==='string'?prior.lastBook:DEMO_ID,prefs:sanitizePrefs(prior.prefs)};
-if(!safePosition(state.positions[DEMO_ID],demo))state.positions[DEMO_ID]={chapter:Math.max(0,Math.min(2,Number(storedValue('folio-page'))||0)),paragraph:0,fraction:0};
+if(!safePosition(state.positions[DEMO_ID],demo))state.positions[DEMO_ID]={chapter:Math.max(0,Math.min(2,Number(storedValue('folio-page'))||0)),paragraph:0,fraction:0,chapterTop:true};
 const legacySaved=sanitizeSaved(readJSON('folio-words',[]));
 const LEARNING_KEY='folio-learning-v1';
 const SYNC_WORDS='folio-word-store-v2';
@@ -233,7 +233,7 @@ function toast(message){$('#toast').textContent=message;$('#toast').style.displa
 function updateStorageStatus(){const status=$('#local-storage-status');if(status)status.textContent=storageWarning||(!db?'Хранилище книг недоступно. Восстановление книг отключено.':'')}
 let rememberedReadingPositions={...state.positions},rememberedBookmarks={...record(prior.bookmarks)};
 function sameReadingPosition(a,b){
-  return a===b||!!a&&!!b&&['chapter','paragraph','fraction','viewportDelta','comicImageOffset','soloScrollProgress'].every(k=>a[k]===b[k]);
+  return a===b||!!a&&!!b&&['chapter','paragraph','fraction','viewportDelta','chapterTop','comicImageOffset','soloScrollProgress'].every(k=>a[k]===b[k]);
 }
 function readingPositionsToSave(stored,previous,local){
   // A stale tab only owns reading positions it actually changed. Do not
@@ -661,7 +661,8 @@ function openBook(id,explicit,{motion=false,focus=false,trigger=''}={}){
   }
   resetWordView();
   current=books.find(b=>b.id===id)||demo;state.lastBook=current.id;readerTrigger=trigger;homeLeaving=true;
-  const pos=safePosition(explicit||state.positions[current.id],current)||{chapter:0,paragraph:0,fraction:0};
+  const pos=safePosition(explicit||state.positions[current.id],current)||
+    {chapter:0,paragraph:0,fraction:0,...(isComic(current)?{}:{chapterTop:true})};
   chapter=pos.chapter;paragraph=pos.paragraph;
   cancelMotion($('#'+homeView+'-view'));$('#home').hidden=true;$('#reader').hidden=false;document.body.classList.add('reading');setChromeColor();
   $('#book-title').textContent=current.title;renderStarterEdition(current);if(!isComic(current))renderRibbon();renderChapter(pos);saveState();
@@ -946,7 +947,9 @@ function renderChapter(position={chapter,paragraph:0,fraction:0},{bookmark=false
 }
 function restorePosition(p){
   if(isComic(current))return;
-  const el=$('#paragraph-'+paragraph),sc=$('#reading-scroll');if(!el)return;
+  const sc=$('#reading-scroll');
+  if(p.chapterTop&&paragraph===0){sc.scrollTop=0;markReadingScrollAnchor();return}
+  const el=$('#paragraph-'+paragraph);if(!el)return;
   const top=el.getBoundingClientRect().top-sc.getBoundingClientRect().top+sc.scrollTop;
   sc.scrollTop=Math.max(0,top-22+(p.fraction||0)*el.offsetHeight+(p.viewportDelta||0));
   markReadingScrollAnchor();
@@ -1008,11 +1011,14 @@ function capturePosition(quiet=false){
   markReadingScrollAnchor();
   const para=$('#paragraph-'+paragraph),height=Math.max(1,para?.offsetHeight||0);
   const offset=para?sc.getBoundingClientRect().top+22-para.getBoundingClientRect().top:0;
-  const fraction=Math.max(0,Math.min(.99,offset/height)),position={chapter,paragraph,fraction};
+  // The true chapter start includes its title, above the first paragraph.
+  const atChapterTop=paragraph===0&&sc.scrollTop<=1;
+  const fraction=atChapterTop?0:Math.max(0,Math.min(.99,offset/height)),position={chapter,paragraph,fraction};
+  if(atChapterTop)position.chapterTop=true;
   // Selection and translation use a deeper line than the checkpoint. The viewport
   // can still be above the selected row or inside the gap below its last line.
   const remainder=offset-fraction*height;
-  if(Math.abs(remainder)>.01&&Math.abs(remainder)<=512&&readingScrollParagraph(sc)===paragraph)position.viewportDelta=remainder;
+  if(!atChapterTop&&Math.abs(remainder)>.01&&Math.abs(remainder)<=512&&readingScrollParagraph(sc)===paragraph)position.viewportDelta=remainder;
   // A whole article or long note can be one paragraph. Use its actual
   // scroll progress for display, independent of the exact text restore anchor.
   const solo=current.chapters.length===1&&current.chapters[0].paragraphs.length===1;
@@ -1416,7 +1422,13 @@ function syncTranslation(){
   else cancelSavedRibbonProbe();
 }
 function markExploring(){if(ribbonManual)return;ribbonManual=true;cancelSavedRibbonProbe();$('#sync-translation').textContent='Вернуться ↻';$('#ribbon-label').textContent='ПРОСМОТР ПЕРЕВОДА'}
-function switchChapter(next,{focus=false}={}){if(!current?.chapters[next])return;if(isComic(current)){dismissWord();capturePosition()}chapter=next;paragraph=0;renderChapter({chapter,paragraph:0,fraction:0},{focus});saveState()}
+function switchChapter(next,{focus=false}={}){
+  if(!current?.chapters[next])return;
+  const comic=isComic(current);
+  if(comic){dismissWord();capturePosition()}
+  chapter=next;paragraph=0;
+  renderChapter({chapter,paragraph:0,fraction:0,...(comic?{}:{chapterTop:true})},{focus});saveState();
+}
 function updateBookmark(){const list=state.bookmarks[current.id]||[];const active=list.some(x=>x.chapter===chapter&&x.paragraph===paragraph);$('#reader-bookmark').setAttribute('aria-pressed',String(active));$('#reader-bookmark').setAttribute('aria-label',active?'Удалить закладку':'Сохранить закладку')}
 function openReaderContents(){
   const dialog=$('#contents-dialog'),list=$('#chapter-list');

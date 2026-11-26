@@ -123,8 +123,11 @@ test('a consumed callback cannot steal a later scroll in the same render',()=>{
 test('a pending scroll cannot replace an explicit paragraph or a chapter jump',()=>{
   const h=session();h.open(pos(2,0));h.scroll(1000);h.c.setActiveParagraph(6,true);
   h.hide('visibilitychange');h.drain();assert.equal(h.c.paragraph,6);assert.deepEqual(h.read(),pos(6,.99));
-  h.show();h.scroll(1200);h.c.switchChapter(1);h.hide('pagehide');assert.deepEqual(h.read(),pos(0,0,1));
-  h.drain();h.tick180();assert.deepEqual(h.read(),pos(0,0,1)); // hidden timers cannot overwrite the seek
+  const top={...pos(0,0,1),chapterTop:true};
+  h.show();h.scroll(1200);h.c.switchChapter(1);h.hide('pagehide');assert.deepEqual(h.read(),top);
+  h.drain();h.tick180();assert.deepEqual(h.read(),top); // hidden timers cannot overwrite the seek
+  assert.equal(h.sc.scrollTop,0);
+  const fresh=session(new Map(h.disk),150);fresh.open();assert.equal(fresh.sc.scrollTop,0);
 });
 test('same-ID replacement keeps its explicit position despite old frames',()=>{
   const h=session();h.open(pos(2,0));h.scroll(1000);
@@ -397,4 +400,12 @@ test('verify single-paragraph scroll progress independently of a portable text a
   assert.deepEqual(safePosition({...anchor,soloScrollProgress:1},book),{...anchor,soloScrollProgress:1});
   assert.deepEqual(safePosition(enriched,{kind:'comic',chapters:book.chapters}),anchor);
   assert.deepEqual(safePosition(enriched,{chapters:[...book.chapters,...book.chapters]}),anchor);
+});
+
+test('chapter-top markers are restricted to an actual text chapter start',()=>{
+  const h=session(),top={...pos(0,0,1),chapterTop:true};
+  assert.deepEqual(safePosition({...top,viewportDelta:-100},h.book),top);
+  assert.deepEqual(safePosition({...top,fraction:.1},h.book),pos(0,.1,1));
+  assert.deepEqual(safePosition({...top,paragraph:1},h.book),pos(1,0,1));
+  assert.deepEqual(safePosition(top,{...h.book,kind:'comic'}),pos(0,0,1));
 });
