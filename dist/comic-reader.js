@@ -159,15 +159,16 @@ export function createComicReader(host,{onNavigate,onRecognize,onCorrection,onWo
   function paintControls(){
     const hasMarks=content.marks.length>0, hasText=content.paragraphs.some(p=>p.trim());
     const ready=hasText, busy=state==='loading', empty=state==='empty';
-    ocr.hidden=false;ocr.disabled=busy&&!ready;ocr.removeAttribute('aria-pressed');
+    // Native disabled blurs the control when a keyboard user starts OCR.
+    if(busy&&!ready)ocr.setAttribute('aria-disabled','true');
+    else ocr.removeAttribute('aria-disabled');
+    ocr.removeAttribute('aria-pressed');
     correction.hidden=!onCorrection||!page.blob;correction.disabled=busy;correction.dataset.busy=String(busy);
     ocr.dataset.busy=String(busy&&!ready);
     stateNote.hidden=true;
     if (ready && hasMarks){
       setOcrLabel('Слова','Слова на изображении');ocr.setAttribute('aria-pressed',String(drawMarks));
-    } else if (ready && hasText){
-      ocr.hidden=true;
-    } else if (busy) {
+    } else if (!ready && busy) {
       setOcrLabel('Распознаём…','Распознавание слов');
     } else if(state==='error') {
       setOcrLabel('Повторить','Повторить распознавание слов');
@@ -177,11 +178,14 @@ export function createComicReader(host,{onNavigate,onRecognize,onCorrection,onWo
     } else {
       setOcrLabel('Распознать','Распознать слова на странице');
     }
-    if(!onRecognize && !(ready&&hasMarks)) ocr.hidden=true;
-    transcript.hidden=!ready||!hasText;
+    const hideOcr=ready?!hasMarks:!onRecognize;
+    transcript.hidden=!ready;
     transcript.setAttribute('aria-expanded',String(!transcript.hidden&&readText));
     transcript.setAttribute('aria-label',readText?'Скрыть распознанный текст':'Показать распознанный текст');
     transcript.title=transcript.getAttribute('aria-label');
+    // Without image boxes the transcript replaces the scan control.
+    if(hideOcr&&!transcript.hidden&&doc.activeElement===ocr)transcript.focus({preventScroll:true});
+    ocr.hidden=hideOcr;
     overlay.hidden=!drawMarks||!ready||!hasMarks||!fault.hidden;
     panel.hidden=transcript.hidden||!readText;
     if(!panel.hidden) buildPanel();
@@ -259,7 +263,7 @@ export function createComicReader(host,{onNavigate,onRecognize,onCorrection,onWo
   }
   function click(e) {
     const target=e.target.closest?.('button');
-    if(!target||target.disabled)return;
+    if(!target||target.disabled||target.getAttribute('aria-disabled')==='true')return;
     if(target===prev || target===next){onNavigate?.(page.index+(target===prev?-1:1));return;}
     if(target===correction){onCorrection?.(page.index,correction);return;}
     if(target===ocr){
