@@ -1,5 +1,7 @@
 // Choosing a language is not a claim that a dictionary, OCR, or translation model exists.
 export const languages=Object.freeze({en:'Английский',ru:'Русский',hi:'Хинди',es:'Испанский',kk:'Казахский',de:'Немецкий',fr:'Французский'});
+// A declared book language enables reading tools, not a translation target.
+export const importSourceLanguages=Object.freeze({...languages,zh:'Китайский'});
 const aliases={eng:'en',rus:'ru',hin:'hi',spa:'es',kaz:'kk',deu:'de',ger:'de',fra:'fr',fre:'fr',jpn:'ja',kor:'ko',zho:'zh',chi:'zh'};
 export function knownLanguage(tag){
   const code=String(tag||'').trim().toLowerCase().split(/[-_]/)[0];
@@ -35,8 +37,8 @@ export function pairInfo(source,target,catalog,installed,pack,runtime){
     !runtime?'Локальная модель есть, но этот браузер её не поддерживает.':'Можно скачать модель при чтении. Текст останется на устройстве.';
   return {dictionary,paragraphs};
 }
-export function fillLanguages(select,value,{unknown=false}={}){
-  select.replaceChildren(...(unknown?[new Option('Не указан','')]:[]),...Object.entries(languages).map(([code,label])=>new Option(label,code)));
+export function fillLanguages(select,value,{unknown=false,choices=languages}={}){
+  select.replaceChildren(...(unknown?[new Option('Не указан','')]:[]),...Object.entries(choices).map(([code,label])=>new Option(label,code)));
   select.value=value;
 }
 

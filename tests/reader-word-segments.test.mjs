@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {readingWordSegments} from '../dist/language-pairs.js';
+import {importSourceLanguages,languages,pairInfo,readingWordSegments,resolveLanguage} from '../dist/language-pairs.js';
 import {normalizeWord,wordKey} from '../dist/learning-core.js';
 
 test('reader keeps UTF-16 offsets and word boundaries for tagged Japanese and borrowed Latin text',()=>{
@@ -42,4 +42,14 @@ test('tagged Chinese prose exposes words with exact UTF-16 offsets in either scr
   assert.deepEqual([...readingWordSegments('今天我们去公园','und')],[{word:'今天我们去公园',offset:0}]);
   const large='文'.repeat(4500);
   assert.deepEqual([...readingWordSegments(large,'zh')],[{word:large,offset:0}]);
+});
+
+test('Chinese is a manual import source, without automatic inference or a provider claim',()=>{
+  assert.equal(importSourceLanguages.zh,'Китайский');
+  assert.equal(Object.hasOwn(languages,'zh'),false);
+  assert.equal(resolveLanguage('','en','今天我们去公园。'),'und');
+  assert.deepEqual(pairInfo('zh','ru',[],[],null,true),{
+    dictionary:'Готового пакета нет. Можно импортировать свой словарь.',
+    paragraphs:'Локальной модели для этой пары нет.'
+  });
 });

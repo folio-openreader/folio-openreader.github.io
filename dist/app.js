@@ -1,7 +1,7 @@
 import {createAutoTranslationPreferences,createLocalTranslator,supportsTranslation,translationPack,translationRevision} from './local-translation.js';
 import {clearTextBookTranslations,prepareParagraphCache,readParagraphCache,stampTextBook,writeParagraphCache} from './paragraph-translation-cache.js';
 import {installLanguages} from './language-settings.js';
-import {fillLanguages,knownLanguage,languages,pairCode,readingWordSegments,resolveLanguage,targetHit} from './language-pairs.js';
+import {fillLanguages,importSourceLanguages,knownLanguage,languages,pairCode,readingWordSegments,resolveLanguage,targetHit} from './language-pairs.js';
 import {isComic,comicBook,booksOnly,putComic,readComicPage,dropComic,comicOCRChapter,updateComicPage} from './comic-storage.js';
 import {COMIC_OCR_OPTIONS,comicPageModel,comicModelTag} from './comic-languages.js';
 import {demoChapters, dictionary} from './data.js';
@@ -1957,12 +1957,12 @@ function renderImportPreview(a,b,event,{originalLanguage}={}){
   box.replaceChildren(previewText('h3',previewBook.title,'language'),node('p',`${previewBook.author||'Автор не указан'} · ${unit}: ${previewBook.chapters.length} · Абзацев: ${totalParagraphs(previewBook)}`,'muted'));
   for(const [field,label,choice,parsed] of [['language','Язык оригинала',state.prefs.readingLanguage,a],['translationLanguage','Язык парного файла',state.prefs.dictionaryTarget,b]]){
     if(!parsed)continue;
-    const tag=parsed.language;
-    if(knownLanguage(tag)){box.append(node('p',label+': '+(languages[knownLanguage(tag)]||tag),'muted'));continue}
+    const tag=parsed.language,known=knownLanguage(tag),choices=field==='language'?importSourceLanguages:languages;
+    if(known){box.append(node('p',label+': '+(choices[known]||tag),'muted'));continue}
     const select=node('select'),wrapper=node('label',label+' (не указан в файле)','field');
     const inferred=resolveLanguage(tag,choice,parsed.chapters[0]?.paragraphs[0]||'');
     const selected=field==='language'&&originalLanguage!==undefined?originalLanguage:inferred;
-    fillLanguages(select,Object.hasOwn(languages,selected)?selected:'',{unknown:true});
+    fillLanguages(select,Object.hasOwn(choices,selected)?selected:'',{unknown:true,choices});
     const book=previewBook;const commit=()=>{
       book[field]=select.value||tag||'und';
       for(const excerpt of excerpts[field])excerpt.lang=book[field];
