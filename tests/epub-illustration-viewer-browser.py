@@ -94,6 +94,30 @@ def run(dist,chromium):
         expect(p.locator("#reader")).to_be_visible()
         expect(viewer).to_be_hidden()
         p.wait_for_function("expected=>Math.abs(document.querySelector('#reading-scroll').scrollTop-expected)<2",arg=point)
+        # Reload inside the viewer keeps its same local illustration and history
+        # entry, rather than leaving a hidden overlay that swallows the next Back.
+        expect(cover).to_be_visible()
+        cover.tap()
+        inspect()
+        token=p.evaluate("history.state?.folioIllustration")
+        length=p.evaluate("history.length")
+        p.reload()
+        p.locator("#folio-boot").wait_for(state="detached")
+        expect(cover).to_be_visible()
+        thumb=cover.locator("img").get_attribute("src")
+        full_after_reload=inspect()
+        assert p.evaluate("history.state?.folioIllustration")==token
+        assert p.evaluate("history.length")==length
+        p.go_back()
+        stayed(full_after_reload)
+        p.go_forward()
+        full_after_reload=inspect()
+        close.tap()
+        stayed(full_after_reload)
+        p.wait_for_function("!history.state?.folioIllustration")
+        p.go_back()
+        expect(p.locator("#reader")).to_be_hidden()
+        expect(p.locator("#home")).to_be_visible()
         assert not unexpected,unexpected
         assert not errors,errors
         b.close()

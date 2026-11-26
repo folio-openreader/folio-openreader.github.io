@@ -676,7 +676,8 @@ function openBook(id,explicit,{motion=false,focus=false,trigger=''}={}){
   const url='#read/'+encodeURIComponent(current.id);
   if(location.hash!==url){
     const shelfParent=fromShelf&&(location.hash==='#'+readerReturn||(!location.hash&&readerReturn==='home'));
-    history.pushState({...history.state,folioReaderReturn:readerReturn,folioReaderShelfParent:shelfParent},'',url);
+    const {folioIllustration,folioIllustrationTarget,...parent}=history.state||{};
+    history.pushState({...parent,folioReaderReturn:readerReturn,folioReaderShelfParent:shelfParent},'',url);
   }
   readingHome.enterReader();
   revealMotion($('#reader'),'reader',{enabled:motion});
@@ -1031,21 +1032,32 @@ function renderChapter(position={chapter,paragraph:0,fraction:0},{bookmark=false
     }
   },{root:sc,rootMargin:'600px'});
   const passage=document.createDocumentFragment(),large=c.paragraphs.length>640;
+  // A cold render can rehydrate the viewer only from this tab's current
+  // history entry. Chapter switches and normal routing never auto-open it.
+  const target=$('#folio-boot')?history.state?.folioIllustrationTarget:null;
+  const restoreToken=target&&target.route===location.href&&target.chapter===chapterIndex?history.state?.folioIllustration:null;
+  const loadIllustration=index=>dbAction('readonly',store=>readIllustration(store,book.id,index));
+  const openIllustration=(info,token)=>{
+    if(!alive())return;
+    bookSpeech.pause();if(!token)capturePosition(true);
+    illustrationViewer??=createIllustrationViewer($('#illustration-full'));
+    illustrationViewer.open(info,token);
+  };
+  const slots=new Map(),drawings=new Map();let restoreDrawing=null;
   const layer=c.illustrations?.length
-    ?(illustrationLayer=createIllustrationLayer(sc,index=>dbAction('readonly',store=>readIllustration(store,book.id,index)),info=>{
-      if(!alive())return;
-      bookSpeech.pause();capturePosition(true);
-      illustrationViewer??=createIllustrationViewer($('#illustration-full'));
-      illustrationViewer.open(info);
+    ?(illustrationLayer=createIllustrationLayer(sc,loadIllustration,info=>{
+      openIllustration({...info,chapter:chapterIndex,slot:slots.get(info.button)});
     })):null;
-  const drawings=new Map();
-  if(layer)for(const illustration of c.illustrations){
+  if(layer)c.illustrations.forEach((illustration,slot)=>{
     if(!drawings.has(illustration.before))drawings.set(illustration.before,[]);
-    drawings.get(illustration.before).push(illustration);
-  }
+    drawings.get(illustration.before).push({illustration,slot});
+  });
   const appendArt=layer?index=>{
-    const slots=drawings.get(index);
-    if(slots)for(const illustration of slots)passage.append(layer.mount(document,illustration,language));
+    for(const {illustration,slot} of drawings.get(index)||[]){
+      const figure=layer.mount(document,illustration,language),button=figure.firstElementChild;
+      slots.set(button,slot);passage.append(figure);
+      if(restoreToken&&slot===target.slot)restoreDrawing={...illustration,language,button,chapter:chapterIndex,slot};
+    }
   }:null;
   let next=0;
   if(large){
@@ -1072,6 +1084,10 @@ function renderChapter(position={chapter,paragraph:0,fraction:0},{bookmark=false
       if(bookmark)outcomeCue($('#paragraph-'+paragraph),'bookmark',1000);
       if(!alive())return;
       suppressScroll=false;scheduleSeen();queueColdAnchorCorrection(position,epoch);
+      if(restoreDrawing)void loadIllustration(restoreDrawing.asset).then(saved=>{
+        if(saved?.blob instanceof Blob&&alive()&&history.state?.folioIllustration===restoreToken&&!document.querySelector('dialog[open]'))
+          openIllustration({...restoreDrawing,blob:saved.blob},restoreToken);
+      }).catch(()=>{});
       // Keyboard/AT jumps move focus only after settling their viewport.
       if(focus&&!document.hidden&&!document.querySelector('dialog[open]')){
         const target=bookmark?$('#paragraph-'+paragraph):$('#chapter-heading');

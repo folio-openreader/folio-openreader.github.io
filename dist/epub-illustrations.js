@@ -68,7 +68,7 @@ export function createIllustrationLayer(scroller,load,onOpen){
 }
 
 // A viewer owns its own URL; retiring the lazy preview cannot blank it.
-// History carries only an ephemeral token, never the image or its description.
+// History carries only a token and local slot, never the image or its description.
 export function createIllustrationViewer(dialog){
   const doc=dialog.ownerDocument,win=doc.defaultView,history=win.history;
   const image=dialog.querySelector('img'),close=dialog.querySelector('button'),error=dialog.querySelector('[role=status]');
@@ -83,15 +83,17 @@ export function createIllustrationViewer(dialog){
       closingBack=true;history.back();
     }
   }
-  function open({blob,alt,language,button}){
+  function open({blob,alt,language,button,chapter,slot},restoreToken){
     if(active||closingBack||!(blob instanceof Blob))return;
     const route=win.location.href;
-    const replay=last?.button===button&&last.route===route&&history.state?.folioIllustration===last.token;
+    const marker=history.state?.folioIllustration;
+    if(restoreToken&&marker!==restoreToken)return;
+    const replay=!!restoreToken||(last?.button===button&&last.route===route&&marker===last.token);
     const url=URL.createObjectURL(blob);
     try{dialog.showModal();}catch{URL.revokeObjectURL(url);return;}
-    let token=replay?last.token:null;
+    let token=replay?marker:null;
     if(!replay)try{
-      token=crypto.randomUUID();history.pushState({...history.state,folioIllustration:token},'',route);
+      token=crypto.randomUUID();history.pushState({...history.state,folioIllustration:token,folioIllustrationTarget:{route,chapter,slot}},'',route);
     }catch{token=null;}
     active={button,url,token};last=token?{button,token,route}:null;
     image.alt=alt;image.lang=language;image.hidden=false;error.hidden=true;
