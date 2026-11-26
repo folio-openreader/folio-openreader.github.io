@@ -1,7 +1,7 @@
 import {createAutoTranslationPreferences,createLocalTranslator,supportsTranslation,translationPack,translationRevision} from './local-translation.js';
 import {clearTextBookTranslations,prepareParagraphCache,readParagraphCache,stampTextBook,writeParagraphCache} from './paragraph-translation-cache.js';
 import {installLanguages} from './language-settings.js';
-import {fillLanguages,knownLanguage,languages,pairCode,resolveLanguage,targetHit} from './language-pairs.js';
+import {fillLanguages,knownLanguage,languages,pairCode,readingWordSegments,resolveLanguage,targetHit} from './language-pairs.js';
 import {isComic,comicBook,booksOnly,putComic,readComicPage,dropComic,comicOCRChapter,updateComicPage} from './comic-storage.js';
 import {COMIC_OCR_OPTIONS,comicPageModel,comicModelTag} from './comic-languages.js';
 import {demoChapters, dictionary} from './data.js';
@@ -792,14 +792,16 @@ function scheduleSeen(){
     if(changed)trackChanged();
   },650);
 }
-function wordNodes(text){
+function wordNodes(text,language){
   const fragment=document.createDocumentFragment();
-  let offset=0;
-  text.split(/([\p{L}][\p{L}\p{M}]*(?:['‘’ʼ‐‑-][\p{L}][\p{L}\p{M}]*)*)/gu).forEach((part,i)=>{
-    if(i%2){const b=node('button',part,'word');b.dataset.word=part.toLocaleLowerCase();b.dataset.offset=offset;b.type='button';b.tabIndex=i===1?0:-1;attachStage(b,getWord(learning,part,trackingLanguage(part)));fragment.append(b)}
-    else fragment.append(document.createTextNode(part));
-    offset+=part.length;
-  });
+  let cursor=0,first=true;
+  for(const {word,offset} of readingWordSegments(text,language)){
+    if(offset>cursor)fragment.append(document.createTextNode(text.slice(cursor,offset)));
+    const b=node('button',word,'word');b.dataset.word=word.toLocaleLowerCase();b.dataset.offset=offset;b.type='button';b.tabIndex=first?0:-1;
+    attachStage(b,getWord(learning,word,trackingLanguage(word)));fragment.append(b);
+    first=false;cursor=offset+word.length;
+  }
+  if(cursor<text.length)fragment.append(document.createTextNode(text.slice(cursor)));
   return fragment;
 }
 function renderChapter(position={chapter,paragraph:0,fraction:0},{bookmark=false,focus=false}={}){
@@ -828,7 +830,7 @@ function renderChapter(position={chapter,paragraph:0,fraction:0},{bookmark=false
     if(!alive())return;
     for(const entry of entries)if(entry.isIntersecting){
       const el=entry.target;
-      if(!el.dataset.hydrated){el.replaceChildren(wordNodes(el.textContent));el.dataset.hydrated='true'}
+      if(!el.dataset.hydrated){el.replaceChildren(wordNodes(el.textContent,el.lang));el.dataset.hydrated='true'}
       observer.unobserve(el);
     }
   },{root:sc,rootMargin:'600px'});

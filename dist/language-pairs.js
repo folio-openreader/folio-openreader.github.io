@@ -39,3 +39,23 @@ export function fillLanguages(select,value,{unknown=false}={}){
   select.replaceChildren(...(unknown?[new Option('Не указан','')]:[]),...Object.entries(languages).map(([code,label])=>new Option(label,code)));
   select.value=value;
 }
+
+
+// Preserve the existing boundaries for spaced text, apostrophes and hyphens.
+// Japanese needs word segmentation inside a continuous run of letters.
+const readingWords=/[\p{L}][\p{L}\p{M}]*(?:['‘’ʼ‐‑-][\p{L}][\p{L}\p{M}]*)*/gu;
+const japaneseScript=/[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}]/u;
+let japaneseSegmenter;
+export function* readingWordSegments(text,language){
+  const japanese=knownLanguage(language)==='ja'&&typeof Intl.Segmenter==='function';
+  for(const match of text.matchAll(readingWords)){
+    const [word]=match,offset=match.index;
+    // Bound the extra button work for unusually long continuous runs.
+    if(japanese&&word.length<=4096&&japaneseScript.test(word)){
+      japaneseSegmenter??=new Intl.Segmenter('ja',{granularity:'word'});
+      for(const {segment,index,isWordLike} of japaneseSegmenter.segment(word)){
+        if(isWordLike)yield {word:segment,offset:offset+index};
+      }
+    }else yield {word,offset};
+  }
+}
