@@ -47,3 +47,21 @@ test('utterances stay bounded, preserve text content, break naturally and avoid 
  for(let c;(c=nextChunk(text,offset));offset=c.end){assert.ok(c.text.length<=160&&c.end>offset);assert.ok(c.text.isWellFormed());pieces.push(c.text)}
  assert.equal(pieces[0],'One short sentence.');assert.equal(pieces.join('').replaceAll(' ',''),text.replaceAll(' ',''));
 });
+
+test('unavailable native voice rotates only on explicit retry and never selects a remote fallback',()=>{
+ const alternate={lang:'en-US',localService:true,name:'Alternate'};
+ const otherLanguage={lang:'ru',localService:true,name:'Russian'};
+ const f=fixture([voice,remote,otherLanguage,alternate]);
+ f.toggle();f.heard[0].onerror({error:'voice-unavailable'});
+ assert.equal(f.events.at(-1),'retry-voice');
+ assert.equal(f.heard.length,1);
+ assert.equal(f.toggle({event:{isTrusted:false}}),false);
+ assert.equal(f.heard.length,1);
+ f.toggle();assert.equal(f.heard[1].voice,alternate);
+ f.heard[1].onerror({error:'not-allowed'});assert.equal(f.events.at(-1),'blocked');
+ f.toggle();assert.equal(f.heard[2].voice,alternate);
+ f.heard[2].onerror({error:'language-unavailable'});assert.equal(f.events.at(-1),'missing');
+ f.toggle();assert.equal(f.heard[3].voice,voice);
+ f.engine.stop();
+ assert.equal(f.timers.size,0);
+});

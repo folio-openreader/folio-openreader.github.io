@@ -1851,6 +1851,7 @@ const bookSpeech=createBookSpeech({
     if(status==='ended')toast('Книга прослушана.');
     else if(status==='unsupported')toast('Этот браузер не поддерживает чтение вслух.');
     else if(status==='unknown')toast('Укажите язык чтения в настройках Folio.');
+    else if(status==='retry-voice')toast('Выбранный голос не запустился. Нажмите ещё раз, чтобы попробовать другой голос на устройстве.');
     else if(status==='missing'||status==='waiting')toast('Нет локального голоса для языка книги. Проверьте голоса в настройках устройства и нажмите ещё раз.');
     else if(['blocked','unavailable','interrupted'].includes(status))toast(wordSpeechMessage(status,lang));
   }

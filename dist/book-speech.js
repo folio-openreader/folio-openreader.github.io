@@ -50,6 +50,8 @@ export function createBookSpeech({host=window,onPosition=()=>{},onState=()=>{}}=
   const getVoices=()=>{try{return synth?.getVoices?.()||[]}catch{return []}};
   getVoices(); // warm up the voice list without submitting any book text
   let book=null,c=0,p=0,offset=0,active=null,status='idle',timer,voice,lang,neural,resume,opening=true;
+  const failedVoices=new Set();
+  let nativeLocale='',nativePreference='';
   const playing=()=>status==='speaking'||status==='starting';
   function emit(s){status=s;onState(s,lang)}
   function clear(){host.clearTimeout?.(timer);timer=undefined}
@@ -57,7 +59,7 @@ export function createBookSpeech({host=window,onPosition=()=>{},onState=()=>{}}=
     const old=active;active=null;clear();
     if(old&&neural)stopNeural();else if(old)try{synth.cancel()}catch{}
   }
-  function stop(){interrupt();resume=null;opening=true;book=null;offset=0;if(status!=='idle')emit('idle')}
+  function stop(){interrupt();resume=null;opening=true;book=null;offset=0;failedVoices.clear();if(status!=='idle')emit('idle')}
   function pause(){
     if(!playing())return;
     if(active&&neural){active=null;clear();resume=pauseNeural()||resume}
@@ -65,6 +67,14 @@ export function createBookSpeech({host=window,onPosition=()=>{},onState=()=>{}}=
     emit('paused')
   }
   function fail(s){interrupt();emit(s);return false}
+  function failNative(s){
+    const key=voice?.voiceURI||voice?.name;
+    if(key&&(s==='missing'||s==='unavailable')){
+      failedVoices.add(key);
+      if(localVoice(getVoices(),nativeLocale,failedVoices))s='retry-voice';
+    }
+    return fail(s);
+  }
   function advance(){
     if(host.document?.hidden){pause();return false}
     const found=findChunk(book,c,p,offset,neural?NEURAL_CHUNK:NATIVE_CHUNK);
@@ -106,14 +116,16 @@ export function createBookSpeech({host=window,onPosition=()=>{},onState=()=>{}}=
     };
     u.onend=()=>{
       if(active!==u)return;
-      if(!started){fail('unavailable');return}
+      if(!started){failNative('unavailable');return}
       active=null;clear();offset=chunk.end;advance();
     };
     u.onerror=e=>{
-      if(active===u)fail(e?.error==='not-allowed'?'blocked':['voice-unavailable','language-unavailable'].includes(e?.error)?'missing':
-        ['canceled','interrupted'].includes(e?.error)?'interrupted':'unavailable');
+      if(active!==u)return;
+      const reason=e?.error;
+      if(['voice-unavailable','language-unavailable'].includes(reason))failNative('missing');
+      else fail(reason==='not-allowed'?'blocked':['canceled','interrupted'].includes(reason)?'interrupted':'unavailable');
     };
-    timer=host.setTimeout(()=>{if(active===u)fail('unavailable')},5500);
+    timer=host.setTimeout(()=>{if(active===u)failNative('unavailable')},5500);
     try{synth.speak(u);return true}catch{return fail('unavailable')}
   }
   function toggle({event,source,chapter,paragraph,language}){
@@ -124,7 +136,14 @@ export function createBookSpeech({host=window,onPosition=()=>{},onState=()=>{}}=
     if(neural){emit('starting');return advance()}
     if(!synth||typeof synth.speak!=='function'||typeof Utterance!=='function')return fail('unsupported');
     if(!lang)return fail('unknown');
-    const voices=getVoices();voice=localVoice(voices,lang,new Set(),voicePreference(host,lang).voice);
+    const preferred=voicePreference(host,lang).voice;
+    if(nativeLocale!==lang||nativePreference!==preferred)failedVoices.clear();
+    nativeLocale=lang;nativePreference=preferred;
+    const voices=getVoices();
+    voice=localVoice(voices,lang,failedVoices,preferred);
+    // Try a different listed local voice only on an explicit retry. Do not
+    // store the fallback or change the user's voice/rate preferences.
+    if(!voice&&failedVoices.size){failedVoices.clear();voice=localVoice(voices,lang,failedVoices,preferred)}
     if(!voice){
       const fallback=appleSpeechPlatform(host.navigator).systemSafari&&nativeEnglish(lang);
       if(!fallback)return fail(voices.length?'missing':'waiting');
