@@ -11,6 +11,7 @@ const OPF_NS = 'http://www.idpf.org/2007/opf';
 const OCF_NS = 'urn:oasis:names:tc:opendocument:xmlns:container';
 const DC_NS = 'http://purl.org/dc/elements/1.1/';
 const XHTML_NS = 'http://www.w3.org/1999/xhtml';
+const XML_NS = 'http://www.w3.org/XML/1998/namespace';
 
 function invalid() {
   return new Error('This EPUB is damaged or uses an unsupported archive format. Try exporting a fresh EPUB.');
@@ -216,7 +217,15 @@ async function readChapter(source, fallback, signal) {
   }
   checkImport(signal);
   flush();
-  return {title: candidate || metadata(child(root, XHTML_NS, 'head'), XHTML_NS, 'title') || fallback, paragraphs};
+  // Read an explicit XHTML declaration, not the script or the text itself.
+  const tag = el => el.getAttributeNS?.(XML_NS,'lang') ?? el.getAttribute('lang');
+  const rawLanguage = (tag(body) ?? tag(root) ?? '').trim();
+  let contentLanguage='';
+  if(rawLanguage&&rawLanguage.length<=40)try{
+    const locale=new Intl.Locale(rawLanguage);
+    if(!['und','mul','zxx'].includes(locale.language))contentLanguage=locale.baseName;
+  }catch{}
+  return {title: candidate || metadata(child(root, XHTML_NS, 'head'), XHTML_NS, 'title') || fallback, paragraphs, contentLanguage};
 }
 
 const XMLENC_NS='http://www.w3.org/2001/04/xmlenc#', EPUB_FONT_OBFUSCATION='http://www.idpf.org/2008/embedding';
@@ -279,7 +288,7 @@ async function parseEpub(file,signal) {
     const spine = children(child(pkg, OPF_NS, 'spine'), OPF_NS, 'itemref');
     if (!spine.length) throw invalid();
     if (spine.length > MAX_SPINE) throw oversized();
-    const chapters = [];
+    const chapters = [], contentLanguages=new Set();
     let chars = 0, count = 0, skipped = 0, sliceStarted=performance.now();
     for (const ref of spine) {
       // ZIP members stored without compression settle in microtasks only.
@@ -296,8 +305,9 @@ async function parseEpub(file,signal) {
       const path = resolvePath(opfPath, item.getAttribute('href') ?? '');
       if(unusedFonts.has(path))throw protectedBook(); // An alias must not make a skipped asset readable.
       const section=await readXmlResource(path);checkImport(signal);
-      const c = await readChapter(section, `Chapter ${chapters.length + 1}`,signal);
+      const {contentLanguage,...c} = await readChapter(section, `Chapter ${chapters.length + 1}`,signal);
       if (!c.paragraphs.length) { skipped++; continue; }
+      contentLanguages.add(contentLanguage);
       count += c.paragraphs.length;
       chars += c.paragraphs.reduce((n, p) => n + p.length, 0);
       if (chars > MAX_TEXT || count > MAX_PARAGRAPHS) throw oversized();
@@ -306,7 +316,12 @@ async function parseEpub(file,signal) {
     if (!chapters.length) throw new Error('No readable text was found. Folio opens text-based EPUBs, not image-only books.');
     const warnings = ['Text only: illustrations and original page layout are not imported.'];
     if (skipped) warnings.push(`${skipped} non-text or empty section(s) skipped.`);
-    return {title: metadata(meta, DC_NS, 'title') || fallbackTitle(file.name), author: metadata(meta, DC_NS, 'creator'), language: metadata(meta, DC_NS, 'language'), chapters, warnings, format: 'EPUB'};
+    let language=metadata(meta, DC_NS, 'language');
+    // Package metadata takes precedence. Fall back only if every readable
+    // chapter explicitly agrees, so mixed or untagged books keep the chooser.
+    if((!language||language.toLowerCase()==='und')&&contentLanguages.size===1&&!contentLanguages.has(''))
+      [language]=contentLanguages;
+    return {title: metadata(meta, DC_NS, 'title') || fallbackTitle(file.name), author: metadata(meta, DC_NS, 'creator'), language, chapters, warnings, format: 'EPUB'};
   } catch (err) {
     if (err instanceof TypeError || err instanceof RangeError || err instanceof URIError) throw invalid();
     throw err;
