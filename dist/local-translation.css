@@ -5,6 +5,7 @@
 #local-translation-section{margin-block:0 13px}
 #local-translation-status{margin:0 0 8px}
 #local-translation-status:empty{display:none}
+#local-translation-start[aria-disabled=true]{opacity:.68;cursor:progress;filter:none;transform:none}
 #full-translation .paragraph-original{margin-block-start:14px;padding-block-start:10px;border-block-start:1px solid var(--line)}
 #full-translation .paragraph-original h3{margin:0 0 5px;font-size:.81rem;color:var(--muted)}
 #full-translation .paragraph-original .source-text{margin:0}

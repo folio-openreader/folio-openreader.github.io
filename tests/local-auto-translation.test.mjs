@@ -217,7 +217,8 @@ test('an interrupted model download is not silently restarted after pagehide',as
 test('a cold-open reader puts cached paragraph text in the ribbon without fetching a model',async()=>{
   const books=[makeBook('book-one')],cache=new Map();
   const first=session(new Map(),new Set(),books,cache);
-  first.open();first.$('#translation-full').onclick();first.$('#local-translation-start').onclick();await first.drain();
+  first.open();first.$('#translation-full').onclick();await turn(); // Wait for the sheet's cache probe.
+  first.$('#local-translation-start').onclick();await first.drain();
   assert.equal(first.calls.length,1);assert.equal(cache.size,1);
   const fresh=session(first.disk,new Set(),books,cache);
   fresh.open();await fresh.drain();
@@ -227,7 +228,8 @@ test('a cold-open reader puts cached paragraph text in the ribbon without fetchi
 test('switching paragraphs during a slow cache lookup does not translate the obsolete paragraph',async()=>{
   const books=[makeBook('book-one')],cache=new Map();
   const first=session(new Map(),new Set(),books,cache);
-  first.open();first.$('#translation-full').onclick();first.$('#local-translation-start').onclick();await first.drain();
+  first.open();first.$('#translation-full').onclick();await turn(); // Wait for the sheet's cache probe.
+  first.$('#local-translation-start').onclick();await first.drain();
   const fresh=session(first.disk,first.models,books,cache);
   let done;
   fresh.c.readParagraphCache=async (_db,entry)=>{
@@ -265,7 +267,8 @@ test('Pause stops an already-running automatic paragraph without painting the ca
 test('Pause keeps an explicitly requested translation running and its completed result durable',async()=>{
   const books=[makeBook('book-one')],cache=new Map();
   const h=session(new Map(),new Set(),books,cache);
-  h.open();h.$('#translation-full').onclick();h.$('#local-translation-start').onclick();
+  h.open();h.$('#translation-full').onclick();await turn(); // The button is disabled until the probe completes.
+  h.$('#local-translation-start').onclick();
   assert.equal(h.$('#local-translation-open').textContent,'Пауза','manual request must immediately update the ribbon');
   h.c.deferNext=true;const work=h.drain();await turn();
   assert.equal(h.calls[0].allowNetwork,true);

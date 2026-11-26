@@ -1259,13 +1259,21 @@ function openLocalDialog(loc){
 }
 let localDialogPaint=0;
 function paintLocalDialog(loc){
-  if(!sameLocal(localDialogTarget,loc)||!$('#translation-dialog').open)return;
+  const dialog=$('#translation-dialog');
+  if(!sameLocal(localDialogTarget,loc)||!dialog.open)return;
   const paint=++localDialogPaint;
   const wrap=$('#translation-result'),status=$('#local-translation-status'),bar=$('#local-translation-progress'),button=$('#local-translation-start');
   const value=!loc.p.translation?peekLocal(loc):null,checking=sameLocal(localDialogProbe,loc);
   const original=$('#translation-original'),lang=readingSourceLanguage(loc.book,loc.ci)||'';
   if(original.textContent!==loc.p.text)original.textContent=loc.p.text;
   if(original.lang!==lang)original.lang=lang;
+  const focused=document.activeElement;
+  const focusResult=(focused===button&&!lastPointerInput)||
+    (!!focused&&focused.parentElement===wrap&&focused.classList.contains('machine-result'));
+  const setWaiting=waiting=>{
+    // Keep a keyboard user's place; the handler rejects further activation.
+    if(waiting)button.setAttribute('aria-disabled','true');else button.removeAttribute('aria-disabled');
+  };
   wrap.replaceChildren();
   $('#local-translation-section').hidden=!!loc.p.translation||!!value||(!checking&&!canLocal(loc));
   if(loc.p.translation){
@@ -1277,18 +1285,21 @@ function paintLocalDialog(loc){
     const p=node('p',value,'machine-result');p.lang=loc.target;p.dir='auto';
     wrap.append(node('p','Машинный перевод · '+loc.target.toUpperCase(),'machine-source'),p);
     if(localNotStored.has(pairCode(loc.source,loc.target)))wrap.append(node('p','Модель не сохранилась целиком. После перезапуска может понадобиться интернет.','muted'));
+    if(focusResult&&!document.hidden&&!dialog.hasAttribute('data-sheet-exiting')){
+      p.tabIndex=-1;p.focus({preventScroll:true});
+    }
     return;
   }
-  if(checking){status.textContent='Ищем сохранённый перевод…';button.textContent='Подождите…';button.disabled=true;bar.hidden=true;return}
+  if(checking){status.textContent='Ищем сохранённый перевод…';button.textContent='Подождите…';setWaiting(true);bar.hidden=true;return}
   if(!canLocal(loc)){wrap.append(node('p',localTranslator.capabilities()?(loc.source===loc.target?'Оригинал уже на выбранном языке.':loc.source==='und'?'Язык оригинала не определён.':'Нет локальной модели для '+pairCode(loc.source,loc.target)+'.'):'Локальный перевод недоступен в этом браузере.','muted'));return}
   const busy=sameLocal(localJob,loc)||sameLocal(localWanted,loc);
-  button.disabled=busy;bar.hidden=!busy||!localDownload.total||localDownload.loaded>=localDownload.total;
+  setWaiting(busy);bar.hidden=!busy||!localDownload.total||localDownload.loaded>=localDownload.total;
   bar.max=localDownload.total||1;bar.value=localDownload.loaded;
   const failure=localFailureFor(loc)?.reason||'';
   status.textContent=busy?(bar.hidden?'Переводим на устройстве…':'Скачиваем модель…'):failure?localErrorText(failure):pairCode(loc.source,loc.target)+'. '+(!knownLanguage(readingSourceLanguage(loc.book,loc.ci))?'Язык оригинала взят из настроек. ':'')+'Текст остаётся на устройстве. При первом запуске также загрузится движок.';
   button.textContent=busy?'Переводим…':failure?'Повторить':'Скачать модель · '+formatBytes(translationPack(loc.source,loc.target).downloadBytes);
   if(!busy&&!failure)void localTranslator.modelStorage({source:loc.source,target:loc.target}).then(info=>{
-    if(paint===localDialogPaint&&$('#translation-dialog').open&&!button.disabled&&!$('#local-translation-section').hidden)button.textContent=modelDownloadLabel(info);
+    if(paint===localDialogPaint&&dialog.open&&!$('#local-translation-section').hidden)button.textContent=modelDownloadLabel(info);
   });
 }
 function queueLocal(loc,{explicit=false}={}){
@@ -1363,7 +1374,8 @@ $('#local-translation-open').onclick=()=>{
   else openLocalDialog(loc);
 };
 $('#local-translation-start').onclick=()=>{
-  const loc=localDialogTarget;if(!loc||!canLocal(loc)||loc.p.translation)return;
+  const loc=localDialogTarget;if(!loc||!canLocal(loc)||loc.p.translation||
+    sameLocal(localDialogProbe,loc)||sameLocal(localJob,loc)||sameLocal(localWanted,loc))return;
   setAutoLocal(loc,true);
   if(sameLocalPair(localFailure,loc))localFailure=null;
   queueLocal(loc,{explicit:true});paintLocalDialog(loc);
