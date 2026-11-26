@@ -2148,25 +2148,38 @@ $('#word-speech').onclick=sayWord;
 // This is a navigation/disclosure action, never a provider request. The
 // existing context pane has a separate, explicit and cancellable send button.
 const returnFromAi=$('#byok-return-reader');
-function clearAiReaderReturn(){
-  if(location.hash==='#profile/ai')return;
-  returnFromAi.hidden=true;returnFromAi.removeAttribute('href');
+let aiReaderReturnPending=false;
+function aiReaderEntry(){
+  const entry=history.state?.folioAiReader;
+  return location.hash==='#profile/ai'&&typeof entry?.hash==='string'&&entry.hash.startsWith('#read/')&&entry.hash.length<=512?entry:null;
 }
-window.addEventListener('hashchange',clearAiReaderReturn);
+function syncAiReaderReturn(){
+  aiReaderReturnPending=false;
+  const entry=aiReaderEntry();returnFromAi.hidden=!entry;
+  if(entry)returnFromAi.href=entry.hash;else returnFromAi.removeAttribute('href');
+}
+window.addEventListener('hashchange',syncAiReaderReturn);
+$('#profile-view').addEventListener('folio:profile-page',syncAiReaderReturn);
+syncAiReaderReturn();
 returnFromAi.addEventListener('click',event=>{
   if(event.defaultPrevented||event.button!==0||event.metaKey||event.ctrlKey||event.shiftKey||event.altKey)return;
+  if(aiReaderReturnPending){event.preventDefault();return}
+  const entry=aiReaderEntry();
+  if(!entry)return;
   window.addEventListener('hashchange',()=>{
     if(!$('#reader').hidden)$('#reading-scroll').focus({preventScroll:true});
   },{once:true});
+  // Reuse the original book entry: it already remembers the originating shelf.
+  if(entry.parent){event.preventDefault();aiReaderReturnPending=true;history.back()}
 });
 $('#word-ai-entry').onclick=event=>{
   if(!wordAnchor||!current||!$('#word-dialog').open)return;
   const connection=byokSession.snapshot();
   if(!connection?.model||!BYOK_PROVIDERS.some(provider=>provider.id===connection.provider)){
-    returnFromAi.href='#read/'+encodeURIComponent(current.id);
-    returnFromAi.hidden=false;
+    const hash='#read/'+encodeURIComponent(current.id),parent=location.hash===hash;
     location.hash='profile/ai';
-    showHome('profile');
+    history.replaceState({...history.state,folioAiReader:{hash,parent}},'');
+    syncAiReaderReturn();showHome('profile');
     // profile-stack handles the route on hashchange; focus only afterwards.
     window.addEventListener('hashchange',()=>{
       if(location.hash==='#profile/ai')$('#byok-heading').focus({preventScroll:true});

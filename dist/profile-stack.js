@@ -80,7 +80,7 @@ function installProfileStack(profile,stage) {
     if(history.state?.folioProfileParent===true){
       pendingBack=true;history.back();
     }else{
-      history.replaceState(history.state,'','#profile');
+      history.replaceState({...history.state,folioAiReader:null},'','#profile');
       handleLocation();
     }
   }
@@ -91,7 +91,8 @@ function installProfileStack(profile,stage) {
     if(link.hasAttribute('data-profile-up')){back();return}
     const page=link.dataset.profileOpen;
     if(page===current)return;
-    history.pushState({...history.state,folioProfileParent:current==='root'},'',link.hash);
+    // Regular profile navigation is not a shortcut from an open book.
+    history.pushState({...history.state,folioAiReader:null,folioProfileParent:current==='root'},'',link.hash);
     profileRoute=true;
     activate(page,{animate:true,focus:true,scroll:true,source:link});
   });
