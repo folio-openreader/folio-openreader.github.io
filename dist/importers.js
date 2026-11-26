@@ -181,7 +181,7 @@ async function readChapter(source, fallback, signal) {
     buffer = [];
   };
   let visited=0,sliceStarted=performance.now();
-  function* visit(node, depth) {
+  function* visit(node, depth, inRuby=false) {
     // A spine containing a single long chapter must yield too. Use one
     // sampled deadline, not a new promise for each XML node.
     if ((++visited&127)===0&&performance.now()-sliceStarted>=IMPORT_SLICE_MS)yield;
@@ -189,11 +189,15 @@ async function readChapter(source, fallback, signal) {
     if (node.nodeType === 3 || node.nodeType === 4) { buffer.push(node.nodeValue); return; }
     if (node.nodeType !== 1 || node.namespaceURI !== XHTML_NS || OMIT.has(node.localName) || node.hasAttribute('hidden')) return;
     const tag = node.localName, block = BLOCK.has(tag);
+    // This reader stores plain text. Keep ruby bases (including <rb>) rather
+    // than spelling them twice for lookup, translation and narration.
+    if(inRuby&&(tag==='rt'||tag==='rp'||tag==='rtc'))return;
     if (tag === 'br') { buffer.push(' '); return; }
     if (block) flush();
     const heading = /^h[1-6]$/.test(tag);
     const before = paragraphs.length;
-    for (const n of node.childNodes) yield* visit(n, depth + 1);
+    const rubyChild=inRuby||tag==='ruby';
+    for (const n of node.childNodes) yield* visit(n, depth + 1, rubyChild);
     if (block) {
       if (heading && before === 0 && !firstHeading) {
         firstHeading = clean(buffer.join(''));
