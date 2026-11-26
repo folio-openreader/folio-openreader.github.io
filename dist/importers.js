@@ -202,6 +202,41 @@ function readChapter(source, fallback) {
   return {title: candidate || metadata(child(root, XHTML_NS, 'head'), XHTML_NS, 'title') || fallback, paragraphs};
 }
 
+const XMLENC_NS='http://www.w3.org/2001/04/xmlenc#', EPUB_FONT_OBFUSCATION='http://www.idpf.org/2008/embedding';
+const FONT_MEDIA=new Set(['font/ttf','font/otf','font/woff','font/woff2','application/vnd.ms-opentype','application/font-woff','application/font-sfnt']);
+// EPUB 3.3 §4.4.5 puts non-DRM font obfuscation in encryption.xml.
+// Ignore those assets entirely; do not read, unpack, deobfuscate or load them.
+// Every unknown method, non-font target or unexpected XML structure stays blocked.
+async function unusedEpubFonts(archive,readXmlResource,opfPath,manifest,signal){
+  const skipped=new Set();
+  if(!archive.has('META-INF/encryption.xml'))return skipped;
+  const one=(node,tag)=>node?.children.length===1?child(node,XMLENC_NS,tag):undefined;
+  try{
+    const source=await readXmlResource('META-INF/encryption.xml');
+    if(source.length>128*1024)throw protectedBook();
+    const root=xml(source).documentElement;
+    if(root.namespaceURI!==OCF_NS||root.localName!=='encryption'||!root.children.length||root.children.length>256)throw protectedBook();
+    const declaredFonts=new Set();
+    for(const item of manifest.values()){
+      if(!FONT_MEDIA.has(item.getAttribute('media-type')))continue;
+      // A manifest entry may be remote; it can never justify a local encrypted resource.
+      try{declaredFonts.add(resolvePath(opfPath,item.getAttribute('href')||''))}catch{}
+    }
+    for(const data of root.children){
+      if(data.namespaceURI!==XMLENC_NS||data.localName!=='EncryptedData'||data.children.length!==2)throw protectedBook();
+      const method=child(data,XMLENC_NS,'EncryptionMethod');
+      const reference=one(child(data,XMLENC_NS,'CipherData'),'CipherReference');
+      const uri=reference?.getAttribute('URI');
+      if(method?.getAttribute('Algorithm')!==EPUB_FONT_OBFUSCATION||method.children.length||
+        !uri||/[?#]/u.test(uri)||reference.children.length)throw protectedBook();
+      const path=resolvePath('',uri);
+      if(path===opfPath||!(/\.(?:ttf|otf|woff2?)$/iu.test(path))||!archive.has(path)||!declaredFonts.has(path)||skipped.has(path))throw protectedBook();
+      skipped.add(path);
+    }
+    return skipped;
+  }catch(e){checkImport(signal);throw protectedBook()}
+}
+
 async function parseEpub(file,signal) {
   if (file.size > MAX_EPUB) throw new Error('Choose an EPUB smaller than 24 MB.');
   let archive;
@@ -212,9 +247,7 @@ async function parseEpub(file,signal) {
       checkImport(signal);
       return decodeUnicodeText(bytes);
     };
-    // Some valid DRM-free books obscure embedded fonts. We skip all non-text assets;
-    // reject any encryption declarations conservatively instead of attempting decryption.
-    if (archive.has('META-INF/encryption.xml') || archive.has('META-INF/rights.xml')) throw protectedBook();
+    if (archive.has('META-INF/rights.xml')) throw protectedBook();
     if (!archive.has('META-INF/container.xml')) throw invalid();
     if (archive.has('mimetype') && (await archive.read('mimetype')).trim() !== 'application/epub+zip') throw invalid();
     const container = xml(await readXmlResource('META-INF/container.xml')).documentElement;
@@ -225,6 +258,7 @@ async function parseEpub(file,signal) {
     if (pkg.namespaceURI !== OPF_NS || pkg.localName !== 'package') throw invalid();
     const meta = child(pkg, OPF_NS, 'metadata');
     const manifest = new Map(children(child(pkg, OPF_NS, 'manifest'), OPF_NS, 'item').map(n => [n.getAttribute('id'), n]));
+    const unusedFonts=await unusedEpubFonts(archive,readXmlResource,opfPath,manifest,signal);
     const spine = children(child(pkg, OPF_NS, 'spine'), OPF_NS, 'itemref');
     if (!spine.length) throw invalid();
     if (spine.length > MAX_SPINE) throw oversized();
@@ -243,6 +277,7 @@ async function parseEpub(file,signal) {
       if ((item.getAttribute('properties') ?? '').split(/\s+/).includes('nav')) continue;
       if (item.getAttribute('media-type') !== 'application/xhtml+xml') { skipped++; continue; }
       const path = resolvePath(opfPath, item.getAttribute('href') ?? '');
+      if(unusedFonts.has(path))throw protectedBook(); // An alias must not make a skipped asset readable.
       const section=await readXmlResource(path);checkImport(signal);
       const c = readChapter(section, `Chapter ${chapters.length + 1}`);
       if (!c.paragraphs.length) { skipped++; continue; }
