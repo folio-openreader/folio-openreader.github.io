@@ -94,6 +94,10 @@ button:not(.word):not(:disabled):active,.brand:active{transform:scale(.97);opaci
    splitting a dictionary token into multiple controls. */
 .chapter-heading h1{letter-spacing:-.045em;overflow-wrap:anywhere}
 .reading-paragraph .word{max-inline-size:100%;overflow-wrap:anywhere;text-align:start}
+.reading-illustration{position:relative;margin:0 auto 1.5em;inline-size:min(100%,var(--art-width),calc(min(50vh,420px)*var(--art-ratio)));aspect-ratio:var(--art-ratio);background:var(--bg);border-radius:8px;overflow:hidden}
+.reading-illustration img{position:absolute;inset:0;inline-size:100%;block-size:100%;object-fit:contain}
+.reading-illustration img:not([src]),.reading-illustration:not([data-image-unavailable])>.muted{visibility:hidden}
+.reading-illustration>.muted{position:absolute;inset:0;display:grid;place-items:center;text-align:center;padding:8px}
 .chapter-heading h1:focus{outline:none}
 :where(html:not([data-pointer-ui])) .chapter-heading h1:focus-visible{outline:2px solid var(--focus,var(--accent));outline-offset:4px;border-radius:3px}
 .reading-footer{height:calc(44px + var(--safe-bottom));padding-inline:max(18px,var(--safe-left),calc((100% - 750px)/2)) max(18px,var(--safe-right),calc((100% - 750px)/2));padding-bottom:var(--safe-bottom)}

@@ -6,6 +6,7 @@ import {isComic,comicBook,booksOnly,putComic,readComicPage,dropComic,comicOCRCha
 import {COMIC_OCR_OPTIONS,comicPageModel,comicModelTag} from './comic-languages.js';
 import {demoChapters, dictionary} from './data.js';
 import {parseBook, pairBooks, singleBook} from './importers.js';
+import {createIllustrationLayer, dropIllustrations, putIllustrations, readIllustration} from './epub-illustrations.js';
 import {DEMO_ID, ACCENTS, DEFAULT_PREFS, THEMES, BACKUP_LIMIT, contrast, accentPalette, sanitizeOcr, sanitizePrefs, sanitizeSaved, safePosition, searchKey, serializeBackup, parseBackup} from './release-core.js';
 import {bootMobileViewport} from './mobile-viewport.js';
 import {READING_FONTS, populateReadingFontPicker, readingFontStack} from './reading-fonts.js';
@@ -186,7 +187,8 @@ function refreshSelectedStage(){if(wordAnchor?.button?.isConnected)attachStage(w
 const legacyBookmark=Number(storedValue('folio-bookmark'));if(storedValue('folio-bookmark')!==null&&!state.bookmarks[DEMO_ID]&&Number.isInteger(legacyBookmark)&&legacyBookmark>=0&&legacyBookmark<3)state.bookmarks[DEMO_ID]=[{chapter:legacyBookmark,paragraph:0,fraction:0}];
 let storageWarning='',backupDraft=null,backupSequence=0,restoring=false;
 let lexicon=null,lexiconPending=null,lexiconFailures=0,lexiconRetryAt=0,selectedWordSequence=0,importingDictionary=false;
-let paragraphObserver=null,importSequence=0;
+let paragraphObserver=null,illustrationLayer=null,illustratedRows=null,importSequence=0;
+function clearIllustrations(){illustrationLayer?.destroy();illustrationLayer=null;illustratedRows=null}
 let books=[demo],current=null,chapter=0,paragraph=0,selectedWord='',wordAnchor=null,previewBook=null,db=null,toastTimer,saveTimer,suppressScroll=false,ribbonManual=false,drag=null;
 const starterSource=createStarterSource();
 let starterIntent=0;
@@ -354,7 +356,7 @@ function alignmentLabel(book){if(isComic(book))return book.comicPages.length+' �
 let bookDeleteDialog=null;
 async function deleteBook(book){
   if(book.id===DEMO_ID||!books.some(b=>b.id===book.id))throw new Error('Book unavailable');
-  if(isComic(book))await dropComic(db,book.id,book.comicPages.length);else await dbAction('readwrite',store=>{clearTextBookTranslations(store,[book.id]);return store.delete(book.id)});
+  if(isComic(book))await dropComic(db,book.id,book.comicPages.length);else await dbAction('readwrite',store=>{clearTextBookTranslations(store,[book.id]);if(book.chapters.some(c=>c.illustrations?.length))dropIllustrations(store,book.id);return store.delete(book.id)});
   books=books.filter(b=>b.id!==book.id);
   delete state.positions[book.id];delete state.bookmarks[book.id];localAuto.forget(book.id);
   if(state.lastBook===book.id)state.lastBook=DEMO_ID;
@@ -604,7 +606,7 @@ const navMotion=installNavMotion($('.nav-dock'));
 function homeRoute(){const view=location.hash.slice(1);if(view.startsWith('profile/'))return 'profile';return HOME_ROUTES.includes(view)?view:'home'}
 function showHome(which='home',{motion=false,focus=false}={}){
   const leavingReader=!$('#reader').hidden,changed=homeView!==which,forward=HOME_ROUTES.indexOf(which)>HOME_ROUTES.indexOf(homeView);
-  if(leavingReader){cancelLocalQueue({abortAutomatic:true});readingHome.leaveReader();closeReaderSheets();capturePosition(true);closeComicView();renderEpoch++;$('#passage').removeAttribute('aria-busy');suppressScroll=false;clearTimeout(saveTimer);clearTimeout(seenTimer)}
+  if(leavingReader){cancelLocalQueue({abortAutomatic:true});readingHome.leaveReader();closeReaderSheets();capturePosition(true);closeComicView();clearIllustrations();renderEpoch++;$('#passage').removeAttribute('aria-busy');suppressScroll=false;clearTimeout(saveTimer);clearTimeout(seenTimer)}
   if(!leavingReader&&!changed&&homeLeaving===false&&$('#home').dataset.ready==='true')return;
   cancelSpeech();cancelMotion($('#reader'));
   document.body.classList.remove('reading');setChromeColor();$('#reader').hidden=true;$('#home').hidden=false;$('#home').dataset.ready='true';
@@ -883,7 +885,7 @@ function wordNodes(text,language){
 }
 function renderChapter(position={chapter,paragraph:0,fraction:0},{bookmark=false,focus=false}={}){
   const host=$('#passage'),sc=$('#reading-scroll'),book=current,chapterIndex=chapter;
-  listenButton.hidden=isComic(book);
+  clearIllustrations();listenButton.hidden=isComic(book);
   if(isComic(book)){host.removeAttribute('aria-busy');void renderComicPage(position,{bookmark});return}
   const epoch=++renderEpoch,c=book.chapters[chapterIndex],language=book.language||'';
   // Use estimated off-screen row sizes only for substantial chapters. A
@@ -917,6 +919,17 @@ function renderChapter(position={chapter,paragraph:0,fraction:0},{bookmark=false
     }
   },{root:sc,rootMargin:'600px'});
   const passage=document.createDocumentFragment(),large=c.paragraphs.length>640;
+  const layer=c.illustrations?.length
+    ?(illustrationLayer=createIllustrationLayer(sc,index=>dbAction('readonly',store=>readIllustration(store,book.id,index)))):null;
+  const drawings=new Map();
+  if(layer)for(const illustration of c.illustrations){
+    if(!drawings.has(illustration.before))drawings.set(illustration.before,[]);
+    drawings.get(illustration.before).push(illustration);
+  }
+  const appendArt=layer?index=>{
+    const slots=drawings.get(index);
+    if(slots)for(const illustration of slots)passage.append(layer.mount(document,illustration,language));
+  }:null;
   let next=0;
   if(large){
     const status=node('p','Открываем главу…','muted');status.setAttribute('role','status');
@@ -928,12 +941,14 @@ function renderChapter(position={chapter,paragraph:0,fraction:0},{bookmark=false
     while(next<end){
       const i=next++,el=node('p',null,'reading-paragraph');
       el.dataset.paragraph=i;el.id=`paragraph-${i}`;el.lang=language;el.dir='auto';el.textContent=c.paragraphs[i].text;
-      passage.append(el);observer.observe(el);
+      appendArt?.(i);passage.append(el);observer.observe(el);
     }
     // During a large chapter, let Back or a chapter change cancel the
     // detached build. Commit once so partial geometry never saves a position.
     if(next<c.paragraphs.length){setTimeout(appendRows,0);return}
-    host.replaceChildren(passage);host.removeAttribute('aria-busy');
+    appendArt?.(c.paragraphs.length);host.replaceChildren(passage);host.removeAttribute('aria-busy');
+    // Position and translation binary-search only text rows, never figures.
+    if(layer)illustratedRows=host.querySelectorAll(':scope > .reading-paragraph');
     requestAnimationFrame(()=>{
       if(!alive())return;
       restorePosition(position);setActiveParagraph(paragraph,true);
@@ -1095,7 +1110,7 @@ function resumeReadingTranslation(){
 function markReadingScrollAnchor(dirty=false){readingScrollAnchor={epoch:renderEpoch,top:$('#reading-scroll').scrollTop,dirty}}
 function readingScrollParagraph(sc){
     const max=sc.scrollHeight-sc.clientHeight,atEnd=max>0&&max-sc.scrollTop<2;
-    const anchor=sc.getBoundingClientRect().top+(atEnd?Math.min(220,sc.clientHeight*.45):65),rows=$('#passage').children;
+    const anchor=sc.getBoundingClientRect().top+(atEnd?Math.min(220,sc.clientHeight*.45):65),rows=illustratedRows||$('#passage').children;
     // Scrolling generally stays in the current row. Read live geometry (no height
     // cache invalidation on font, width or hydration), then binary-search only on a jump.
     const top=i=>rows[i].getBoundingClientRect().top;
@@ -1983,6 +1998,7 @@ function renderImportPreview(a,b,event,{originalLanguage}={}){
   }
   else warnings.unshift('Готовый перевод не добавлен.');
   warnings.forEach(w=>box.append(node('p',w,'warning')));
+  if(a.epubImages?.length)box.append(node('p','Встроенных изображений: '+a.epubImages.length+' · Хранятся на этом устройстве.','muted'));
   for(const [role,parsed] of [['original',a],['translation',b]]){
     if(!parsed||!['PDF','PNG','JPEG','WEBP'].includes(parsed.format))continue;
     const suffix=b?' ('+(role==='original'?'оригинал':'перевод')+')':'';
@@ -2032,7 +2048,7 @@ async function previewImport(event){
     parsedImport.delete(item);
     let complete=true;
     const stillHere=()=>sequence===importSequence&&!controller.signal.aborted;
-    const parsed=await parseBook(file,{ocr,languages:choice?choice.split('+'):undefined,preferredLanguages,
+    const parsed=await parseBook(file,{ocr,languages:choice?choice.split('+'):undefined,preferredLanguages,includeIllustrations:item==='original',
       signal:controller.signal,onOcrUnavailable:()=>{complete=false},onProgress:update=>{
         if(stillHere())showImportProgress(item,update);
       }});
@@ -2061,7 +2077,7 @@ function setupOcr(role){
   $('#ocr-'+role).focus();
 }
 $('#retry-ocr').onclick=()=>setupOcr($('#retry-ocr').dataset.role);
-async function saveImport(event){if(!previewBook||$('#import-dialog').hasAttribute('data-saving'))return;if(previewBook.alignment==='positional-unverified'&&!$('#alignment-check').checked)return;$('#save-import').disabled=$('#remove-translation-file').disabled=true;$('#import-dialog').setAttribute('data-saving','');const book=stampTextBook({...previewBook,id:'book-'+crypto.randomUUID(),createdAt:Date.now()});for(const key of ['ocr','translationOcr'])if(book[key])book[key]=sanitizeOcr(book[key]);try{await dbAction('readwrite',s=>s.put(book));books.push(book);previewBook=null;$('#import-dialog').close();$('#original-file').value='';$('#translation-file').value='';acceptedImportFiles.clear();fileTile($('#original-file'));fileTile($('#translation-file'));resetOcrSettings();invalidateImport();toast('Книга добавлена.');openBook(book.id,undefined,{motion:!!event?.detail,focus:!event?.detail,trigger:'continue'})}catch(e){toast(e.name==='QuotaExceededError'?'Недостаточно памяти браузера для книги. Освободите место или выберите меньший файл.':e.message);$('#save-import').disabled=false}finally{$('#import-dialog').removeAttribute('data-saving');$('#remove-translation-file').disabled=false}}
+async function saveImport(event){if(!previewBook||$('#import-dialog').hasAttribute('data-saving'))return;if(previewBook.alignment==='positional-unverified'&&!$('#alignment-check').checked)return;$('#save-import').disabled=$('#remove-translation-file').disabled=true;$('#import-dialog').setAttribute('data-saving','');const {epubImages,...textBook}=previewBook;const book=stampTextBook({...textBook,id:'book-'+crypto.randomUUID(),createdAt:Date.now()});for(const key of ['ocr','translationOcr'])if(book[key])book[key]=sanitizeOcr(book[key]);try{await dbAction('readwrite',s=>{putIllustrations(s,book.id,epubImages);return s.add(book)});books.push(book);previewBook=null;$('#import-dialog').close();$('#original-file').value='';$('#translation-file').value='';acceptedImportFiles.clear();fileTile($('#original-file'));fileTile($('#translation-file'));resetOcrSettings();invalidateImport();toast('Книга добавлена.');openBook(book.id,undefined,{motion:!!event?.detail,focus:!event?.detail,trigger:'continue'})}catch(e){toast(e.name==='QuotaExceededError'?'Недостаточно памяти браузера для книги. Освободите место или выберите меньший файл.':e.message);$('#save-import').disabled=false}finally{$('#import-dialog').removeAttribute('data-saving');$('#remove-translation-file').disabled=false}}
 // Touch pans are native. Only actual ribbon scrolling indicates exploration.
 const ribbon=$('#translation-ribbon');
 ribbon.addEventListener('pointerdown',e=>{

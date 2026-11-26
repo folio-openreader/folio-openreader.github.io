@@ -24,3 +24,13 @@ test('large backup support does not accept duplicate IDs or malformed individual
   file.books[1]=book(2);file.books[1].chapters[0].paragraphs[0].text='';
   assert.throws(()=>parseBackup(JSON.stringify(file),demo),/повреждённым форматом/);
 });
+
+test('a text backup contains neither EPUB illustration slots nor asset data',()=>{
+  const art=book(1);
+  art.format='EPUB';
+  art.chapters[0].illustrations=[{asset:0,before:0,width:120,height:160,alt:'Local illustration'}];
+  const file=serializeBackup([art],state,[]);
+  assert(!file.includes('illustrations'));
+  assert(!file.includes('Local illustration'));
+  assert.deepEqual(parseBackup(file,demo).books[0].chapters[0].paragraphs,[{text:'A local sample.',translation:null}]);
+});

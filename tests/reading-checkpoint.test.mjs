@@ -53,7 +53,8 @@ function session(disk=new Map(),step=100,rowHeight=step){
   const lifecycle=part("window.addEventListener('pagehide',()=>{practiceAudio.stop()", "let syncEpoch=");
   const handlers=[line("document.addEventListener('visibilitychange',()=>{if(document.hidden){wordSpeech.reset()"),
     line("window.addEventListener('pagehide',cancelSpeech);"),lifecycle,line("window.addEventListener('pageshow',e=>{if(e.persisted&&(wordDisk")];
-  runInNewContext([part('let rememberedReadingPositions=','function escapeHTML('),part('function showHome(','let comicView='),
+  runInNewContext([part('let paragraphObserver=null','let books=[demo]'),
+    part('let rememberedReadingPositions=','function escapeHTML('),part('function showHome(','let comicView='),
     part('function scheduleSeen(','function wordNodes('),part('function renderChapter(','let ribbonBook='),
     part('function comicPageGeometry(','function updateComicProgress('),
     part('let prefsLayoutEpoch=','function renderProfileStats('),part('function switchChapter(','function updateBookmark('),part('function openReaderContents(','function sourceLanguage('),

@@ -139,7 +139,7 @@ function bookFromBackup(b) {
 export function serializeBackup(books,state,words,learning) {
   const included=books.filter(b=>b.id!==DEMO_ID&&b.kind!=='comic');
   if(included.length>BACKUP_BOOK_LIMIT)throw new RangeError('Не удалось создать копию: больше '+BACKUP_BOOK_LIMIT+' текстовых книг.');
-  return JSON.stringify({format:'folio-backup',version:1,createdAt:new Date().toISOString(),books:included.map(({localTranslationGeneration,...book})=>book),state:{positions:state.positions,bookmarks:state.bookmarks,lastBook:state.lastBook,prefs:sanitizePrefs(state.prefs)},words:sanitizeSaved(words),...(learning?{learning}:{})});
+  return JSON.stringify({format:'folio-backup',version:1,createdAt:new Date().toISOString(),books:included.map(({localTranslationGeneration,...book})=>({...book,chapters:book.chapters.map(({illustrations,...chapter})=>chapter)})),state:{positions:state.positions,bookmarks:state.bookmarks,lastBook:state.lastBook,prefs:sanitizePrefs(state.prefs)},words:sanitizeSaved(words),...(learning?{learning}:{})});
 }
 export function parseBackup(text,demo) {
   let raw;try{raw=JSON.parse(text)}catch{throw new Error('Не удалось прочитать JSON. Выберите копию Folio.')};

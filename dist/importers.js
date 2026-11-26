@@ -6,6 +6,10 @@ const MAX_TEXT = 4 * MiB;
 const MAX_ENTRIES = 4096;
 const MAX_PARAGRAPHS = 16000;
 const MAX_SPINE = 1024;
+const MAX_ART_REFS = 80;
+const MAX_ART_BYTES = 8 * MiB;
+const MAX_ART_ONE = 3 * MiB;
+const ART_TYPES = new Map([['image/png','PNG'],['image/jpeg','JPEG'],['image/webp','WEBP']]);
 const UTR = new TextDecoder('utf-8', {fatal: true});
 const OPF_NS = 'http://www.idpf.org/2007/opf';
 const OCF_NS = 'urn:oasis:names:tc:opendocument:xmlns:container';
@@ -62,6 +66,7 @@ export function zip(buffer, {maxDocument = MAX_DOCUMENT, maxTotal = 20 * MiB, si
   return {
     has: name => entries.has(name),
     names: () => [...entries.keys()],
+    size: name => entries.get(name)?.unpacked,
     async read(name, {binary = false} = {}) {
       checkImport(signal);
       const e = entries.get(name);
@@ -167,7 +172,7 @@ const OMIT = new Set(['script', 'style', 'template', 'nav', 'svg', 'math', 'ifra
 const BLOCK = new Set(['h1','h2','h3','h4','h5','h6','p','li','dt','dd','section','div','article','pre','blockquote','figcaption','tr','hr']);
 const yieldImportTurn=()=>new Promise(resolve=>setTimeout(resolve,0));
 const IMPORT_SLICE_MS=12;
-async function readChapter(source, fallback, signal) {
+async function readChapter(source, fallback, signal, captureArt) {
   const doc = xml(source);
   const root = doc.documentElement;
   if (root.namespaceURI !== XHTML_NS || root.localName !== 'html') throw invalid();
@@ -188,8 +193,10 @@ async function readChapter(source, fallback, signal) {
     if ((++visited&127)===0&&performance.now()-sliceStarted>=IMPORT_SLICE_MS)yield;
     if (depth > 128) throw invalid();
     if (node.nodeType === 3 || node.nodeType === 4) { buffer.push(node.nodeValue); return; }
-    if (node.nodeType !== 1 || node.namespaceURI !== XHTML_NS || OMIT.has(node.localName) || node.hasAttribute('hidden')) return;
+    if (node.nodeType !== 1 || node.namespaceURI !== XHTML_NS || node.hasAttribute('hidden')) return;
     const tag = node.localName, block = BLOCK.has(tag);
+    if(tag==='img')captureArt?.(node,paragraphs.length,()=>!!clean(buffer.join('')));
+    if(OMIT.has(tag))return;
     // This reader stores plain text. Keep ruby bases (including <rb>) rather
     // than spelling them twice for lookup, translation and narration.
     if(inRuby&&(tag==='rt'||tag==='rp'||tag==='rtc'))return;
@@ -263,7 +270,7 @@ async function unusedEpubFonts(archive,readXmlResource,opfPath,manifest,signal){
   }catch(e){checkImport(signal);throw protectedBook()}
 }
 
-async function parseEpub(file,signal) {
+async function parseEpub(file,{signal,includeIllustrations=true}={}) {
   if (file.size > MAX_EPUB) throw new Error('Choose an EPUB smaller than 24 MB.');
   let archive;
   try {
@@ -288,7 +295,16 @@ async function parseEpub(file,signal) {
     const spine = children(child(pkg, OPF_NS, 'spine'), OPF_NS, 'itemref');
     if (!spine.length) throw invalid();
     if (spine.length > MAX_SPINE) throw oversized();
-    const chapters = [], contentLanguages=new Set();
+    const chapters = [], contentLanguages=new Set(), localArt=new Map(), slots=[];
+    if(includeIllustrations)for(const item of manifest.values()){
+      const type=item.getAttribute('media-type');
+      if(!ART_TYPES.has(type))continue;
+      try{
+        const path=resolvePath(opfPath,item.getAttribute('href')||'');
+        if(!unusedFonts.has(path))localArt.set(path,type);
+      }catch{} // Ignore invalid or nonlocal optional resources.
+    }
+    let refs=0, skippedArt=0;
     let chars = 0, count = 0, skipped = 0, sliceStarted=performance.now();
     for (const ref of spine) {
       // ZIP members stored without compression settle in microtasks only.
@@ -305,8 +321,20 @@ async function parseEpub(file,signal) {
       const path = resolvePath(opfPath, item.getAttribute('href') ?? '');
       if(unusedFonts.has(path))throw protectedBook(); // An alias must not make a skipped asset readable.
       const section=await readXmlResource(path);checkImport(signal);
-      const {contentLanguage,...c} = await readChapter(section, `Chapter ${chapters.length + 1}`,signal);
-      if (!c.paragraphs.length) { skipped++; continue; }
+      const refsHere=[];
+      const captureArt=includeIllustrations?(el,before,hasText)=>{
+        if(refs>=MAX_ART_REFS){skippedArt++;return;}
+        refs++;
+        try{
+          const imagePath=resolvePath(path,el.getAttribute('src')||'');
+          if(!localArt.has(imagePath)){skippedArt++;return;}
+          const raw=el.getAttribute('alt');
+          refsHere.push({path:imagePath,before:before+(hasText()?1:0),alt:raw==null?'Иллюстрация':clean(raw).slice(0,600)});
+        }catch{skippedArt++}
+      }:null;
+      const {contentLanguage,...c} = await readChapter(section, `Chapter ${chapters.length + 1}`,signal,captureArt);
+      if (!c.paragraphs.length) { skipped++;skippedArt+=refsHere.length;continue; }
+      if(refsHere.length)slots.push({chapter:c,refs:refsHere});
       contentLanguages.add(contentLanguage);
       count += c.paragraphs.length;
       chars += c.paragraphs.reduce((n, p) => n + p.length, 0);
@@ -314,14 +342,48 @@ async function parseEpub(file,signal) {
       chapters.push(c);
     }
     if (!chapters.length) throw new Error('No readable text was found. Folio opens text-based EPUBs, not image-only books.');
-    const warnings = ['Text only: illustrations and original page layout are not imported.'];
+    // Optional images are read only after the complete text, so a damaged
+    // picture or the archive's inflate budget cannot change text alignment.
+    const epubImages=[], loaded=new Map();
+    let artBytes=0,imageDimensions;
+    if(slots.length)try{({imageDimensions}=await import('./ocr-engine.js'));}catch{checkImport(signal)}
+    if(!imageDimensions)skippedArt+=slots.reduce((n,slot)=>n+slot.refs.length,0);
+    else{
+      for(const {chapter,refs} of slots)for(const {path,before,alt} of refs){
+        checkImport(signal);
+        if(!loaded.has(path)){
+          const type=localArt.get(path),size=archive.size(path);
+          let asset=null;
+          if(size>0&&size<=MAX_ART_ONE&&artBytes+size<=MAX_ART_BYTES){
+            artBytes+=size; // Failed extraction counts toward the scan budget.
+            try{
+              const bytes=await archive.read(path,{binary:true});
+              const {w,h,format}=imageDimensions(bytes);
+              if(format===ART_TYPES.get(type)&&w*h<=8_000_000){
+                asset={asset:epubImages.length,width:w,height:h};
+                epubImages.push(new Blob([bytes],{type}));
+              }
+            }catch{checkImport(signal)}
+          }
+          loaded.set(path,asset);
+          if(performance.now()-sliceStarted>=IMPORT_SLICE_MS){
+            await yieldImportTurn();sliceStarted=performance.now();
+          }
+        }
+        const asset=loaded.get(path);
+        if(asset)(chapter.illustrations??=[]).push({...asset,before:Math.min(before,chapter.paragraphs.length),alt});
+        else skippedArt++;
+      }
+    }
+    const warnings = [];
+    if(skippedArt)warnings.push('Не все иллюстрации можно открыть. Folio сохраняет небольшие встроенные PNG, JPEG и WebP; внешний и неподдерживаемый контент пропускается.');
     if (skipped) warnings.push(`${skipped} non-text or empty section(s) skipped.`);
     let language=metadata(meta, DC_NS, 'language');
     // Package metadata takes precedence. Fall back only if every readable
     // chapter explicitly agrees, so mixed or untagged books keep the chooser.
     if((!language||language.toLowerCase()==='und')&&contentLanguages.size===1&&!contentLanguages.has(''))
       [language]=contentLanguages;
-    return {title: metadata(meta, DC_NS, 'title') || fallbackTitle(file.name), author: metadata(meta, DC_NS, 'creator'), language, chapters, warnings, format: 'EPUB'};
+    return {title: metadata(meta, DC_NS, 'title') || fallbackTitle(file.name), author: metadata(meta, DC_NS, 'creator'), language, chapters, warnings, ...(epubImages.length?{epubImages}:{}), format: 'EPUB'};
   } catch (err) {
     if (err instanceof TypeError || err instanceof RangeError || err instanceof URIError) throw invalid();
     throw err;
@@ -355,7 +417,7 @@ async function parseTxt(file,signal) {
 export async function parseBook(file, options = {}) {
   if (!file?.name) throw new Error('Выберите EPUB, PDF, TXT, PNG, JPEG или WebP.');
   checkImport(options.signal);
-  if (/\.epub$/i.test(file.name)) return parseEpub(file,options.signal);
+  if (/\.epub$/i.test(file.name)) return parseEpub(file,options);
   if (/\.txt$/i.test(file.name)) return parseTxt(file,options.signal);
   if (/\.(pdf|png|jpe?g|webp)$/i.test(file.name)) {
     const image=/\.(png|jpe?g|webp)$/i.test(file.name);
