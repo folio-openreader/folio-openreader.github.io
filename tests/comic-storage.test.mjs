@@ -24,6 +24,9 @@ test('comic metadata is light, can save the page position, and knows OCR languag
   for(const value of [null,'0',NaN,Infinity,-.1,1.001]){
     assert.deepEqual(safePosition({...position,comicImageOffset:value},b),position);
   }
+  assert.deepEqual(safePosition({...position,comicLayout:'strip'},b),{...position,comicLayout:'strip'});
+  assert.deepEqual(safePosition({...position,comicLayout:'invalid'},b),position);
+  assert.deepEqual(safePosition({...position,comicLayout:'strip'},{chapters:b.chapters}),position);
   assert.equal(safePosition({chapter:2,paragraph:0},b),null);
 });
 test('legacy JSON backup never writes empty or invalid image-based book entries',()=>{

@@ -45,3 +45,10 @@
 .comic-language[data-busy=true]::after{content:'';position:absolute;top:8px;right:8px;width:5px;height:5px;border-radius:50%;background:var(--accent)}
 @media(prefers-reduced-motion:no-preference){.comic-language[data-busy=true]::after{animation:comic-ocr-pulse 900ms ease-in-out infinite alternate}}
 @keyframes comic-ocr-pulse{to{opacity:.42}}
+
+#reader.comic-strip-mode #reading-scroll{overflow-anchor:none}
+#comic-layout[aria-pressed=true]{background:var(--soft);color:var(--accent)}
+.comic-strip{position:relative;inline-size:100%;min-inline-size:0;background:var(--bg)}
+.comic-strip-bar{position:sticky;inset-block-start:0;z-index:2;display:flex;align-items:center;justify-content:space-between;gap:8px;min-block-size:44px;padding-inline:max(14px,env(safe-area-inset-left)) max(4px,env(safe-area-inset-right));background:var(--surface);border-bottom:1px solid var(--line)}
+.comic-strip-frame{position:relative;inline-size:100%;min-block-size:14vh;margin:0;overflow:hidden}
+.comic-strip-frame .comic-strip-art{display:block;position:absolute;inset:0;inline-size:100%;block-size:100%;object-fit:contain}

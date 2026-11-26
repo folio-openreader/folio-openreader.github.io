@@ -30,7 +30,7 @@ function session(disk=new Map(),step=100,rowHeight=step){
       n.getBoundingClientRect=()=>({top:40+Number(n.dataset.paragraph)*step-sc.scrollTop});return n},
     localStorage:{getItem:k=>disk.get(k),setItem(k,v){if(failWrites&&k==='folio-v2'){failWrites--;throw Error('storage blocked')}disk.set(k,String(v));writes.push([k,String(v)])}},
     state:JSON.parse(disk.get('folio-v2')||'{"positions":{}}'),safePosition,isComic,books:[book],current:null,chapter:0,paragraph:0,
-    renderEpoch:0,suppressScroll:false,frame:0,seenTimer:0,saveTimer:0,paragraphObserver:null,activeComicPage:null,
+    renderEpoch:0,suppressScroll:false,frame:0,seenTimer:0,saveTimer:0,paragraphObserver:null,activeComicPage:null,comicStrip:null,
     followingBook:false,bookSpeech:{stop(){this.playing=false},playing:false,pause(){this.playing=false}},wordSpeech:{reset:noop,warm:noop},practiceAudio:{stop:noop},
     homeView:'home',readerReturn:'home',readerBackPending:false,comicResizeAnchor:null,readerTrigger:'',homeLeaving:false,routeScroll:{},learningDirty:false,
     location:{hash:'#read/test'},returnRoute:()=>'home',listenButton:node(),storageWarning:'',DEMO_ID:'demo',IntersectionObserver:class{observe(){}disconnect(){}},

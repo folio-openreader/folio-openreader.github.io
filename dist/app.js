@@ -52,6 +52,7 @@ let aiWordHint=null;
 const glyphs={
   research:'M4 3h11l5 5v13H4z M14 3v6h6M8 16l3-3 2 2 3-4',
   comicBook:'M3 4h18v16H3z M13 4v16M3 12h10m0 3h8',
+  comicStrip:'M6 3h12v7H6z M6 14h12v7H6z M9 6h6M9 17h6',
   haptic:'M9 5h6v14H9z M6 8c-1.5 2-1.5 6 0 8m12-8c1.5 2 1.5 6 0 8M3 6c-2.5 3-2.5 9 0 12m18-12c2.5 3 2.5 9 0 12',
   theme:'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z M12 3v18m1-15 2 1m-2 2 4 2m-4 1 4 2m-4 1 2 1',
   type:'M3 18 8 5l5 13M5 14h6m4-4h6m-3 0v8',
@@ -235,7 +236,7 @@ function toast(message){$('#toast').textContent=message;$('#toast').style.displa
 function updateStorageStatus(){const status=$('#local-storage-status');if(status)status.textContent=storageWarning||(!db?'Хранилище книг недоступно. Восстановление книг отключено.':'')}
 let rememberedReadingPositions={...state.positions},rememberedBookmarks={...record(prior.bookmarks)};
 function sameReadingPosition(a,b){
-  return a===b||!!a&&!!b&&['chapter','paragraph','fraction','viewportDelta','chapterTop','textEnd','comicImageOffset','soloScrollProgress'].every(k=>a[k]===b[k]);
+  return a===b||!!a&&!!b&&['chapter','paragraph','fraction','viewportDelta','chapterTop','textEnd','comicImageOffset','comicLayout','soloScrollProgress'].every(k=>a[k]===b[k]);
 }
 function readingPositionsToSave(stored,previous,local){
   // A stale tab only owns reading positions it actually changed. Do not
@@ -681,7 +682,7 @@ function openBook(id,explicit,{motion=false,focus=false,trigger=''}={}){
   revealMotion($('#reader'),'reader',{enabled:motion});
   if(focus)scroll.focus({preventScroll:true});
 }
-let comicView=null,activeComicPage=null,comicOCR=null,comicImportJob=null,comicCorrection=null;
+let comicView=null,comicStrip=null,activeComicPage=null,comicOCR=null,comicImportJob=null,comicCorrection=null;
 let comicResizeAnchor=null;
 const comicOCRDialog=$('#comic-ocr-dialog'),comicOCRLanguage=$('#comic-ocr-language'),comicOCRStart=$('#comic-ocr-start');
 const comicOCRSheet=installSheet(comicOCRDialog);
@@ -714,8 +715,26 @@ $('#comic-ocr-form').onsubmit=event=>{
 function readingSourceLanguage(book,index){
   return isComic(book)?comicModelTag(comicPageModel(book,index)):book?.language;
 }
+function clearComicStrip(){
+  comicStrip?.destroy();comicStrip=null;
+  $('#reader').classList.remove('comic-strip-mode');
+}
+function paintComicLayout(strip){
+  $('#comic-layout').setAttribute('aria-pressed',String(strip));
+  $('#reading-scroll').setAttribute('aria-describedby',strip?'reader-comic-strip-keys':'reader-comic-keys');
+}
+function changeComicLayout(strip,{focusOcr=false}={}){
+  if(!current||!isComic(current)||$('#reader').hidden)return;
+  capturePosition(true);dismissWord();
+  const p=safePosition(state.positions[current.id],current)||{chapter,paragraph,fraction:0};
+  if(strip){p.comicLayout='strip';p.paragraph=0;}
+  else delete p.comicLayout;
+  chapter=p.chapter;paragraph=p.paragraph;
+  renderChapter(p,{focusOcr});saveState();
+}
+$('#comic-layout').onclick=()=>changeComicLayout(state.positions[current?.id]?.comicLayout!=='strip');
 function closeComicView(){
-  comicResizeAnchor=null;closeComicCorrection();
+  clearComicStrip();comicResizeAnchor=null;closeComicCorrection();
   comicOCR?.abort();comicOCR=null;activeComicPage=null;
   comicView?.destroy();comicView=null;
   $('#reader').classList.remove('comic-mode');$('.translation-wrap').hidden=false;$('#translation-full').hidden=false;
@@ -744,7 +763,8 @@ function updateComicProgress(){
   $('#reading-progress').textContent=`${chapter+1} / ${current.comicPages.length}`;
   $('#progress-fill').style.transform=`scaleX(${percentage/100})`;updateBookmark();
 }
-async function renderComicPage(position,{bookmark=false}={}){
+async function renderComicPage(position,{bookmark=false,focusOcr=false}={}){
+  clearComicStrip();paintComicLayout(false);
   const epoch=++renderEpoch,book=current,index=chapter,meta=book.comicPages[index],sc=$('#reading-scroll');
   const visible=()=>epoch===renderEpoch&&current===book&&chapter===index&&!$('#reader').hidden;
   closeComicCorrection();comicOCR?.abort();comicOCR=null;activeComicPage=null;
@@ -773,12 +793,59 @@ async function renderComicPage(position,{bookmark=false}={}){
       restoreComicPosition(sc,position);suppressScroll=false;
       rememberComicResizeAnchor(sc,state.positions[book.id]);
       if(bookmark)outcomeCue($('#chapter-open'),'bookmark',1000);
+      // Focus the page's existing tools without automatically running OCR.
+      if(focusOcr&&!document.querySelector('dialog[open]')&&document.activeElement===sc)
+        ($('#passage .comic-scan:not([hidden])')||$('#passage .comic-text-toggle:not([hidden])')||sc).focus({preventScroll:true});
     });
   }catch{
     if(!visible())return;
     comicView?.destroy();comicView=null;
     $('#passage').replaceChildren(node('p','Не удалось открыть страницу на этом устройстве.','comic-storage-error'));
     suppressScroll=false;
+  }
+}
+async function renderComicStrip(position,{bookmark=false}={}){
+  const epoch=++renderEpoch,book=current,sc=$('#reading-scroll'),host=$('#passage');
+  const owns=()=>epoch===renderEpoch&&current===book&&!$('#reader').hidden;
+  clearComicStrip();comicView?.destroy();comicView=null;
+  closeComicCorrection();comicOCR?.abort();comicOCR=null;activeComicPage=null;comicResizeAnchor=null;
+  cancelSpeech();paragraphObserver?.disconnect();suppressScroll=true;
+  chapter=position.chapter;paragraph=0;
+  state.positions[book.id]={...position,chapter,paragraph,comicLayout:'strip'};
+  $('#reader').classList.add('comic-mode','comic-strip-mode');
+  $('.translation-wrap').hidden=true;$('#translation-full').hidden=true;paintComicLayout(true);
+  const paint=()=>{
+    const label='Страница '+(chapter+1)+' из '+book.comicPages.length;
+    if($('#chapter-title').textContent!==label)$('#chapter-title').textContent=label;
+    updateComicProgress();
+  };
+  paint();host.replaceChildren(node('p','Открываем ленту…','comic-note'));
+  try{
+    const {createComicStrip}=await import('./comic-strip.js');
+    if(!owns())return;
+    comicStrip=createComicStrip(host,sc,book.comicPages,{
+      load:index=>readComicPage(db,book.id,index),
+      onPosition:pos=>{
+        if(!owns())return;
+        const moved=chapter!==pos.chapter;
+        chapter=pos.chapter;paragraph=0;state.positions[book.id]=pos;
+        if(moved)paint();
+      },
+      onReadPage:()=>{
+        if(!owns())return;
+        sc.focus({preventScroll:true});changeComicLayout(false,{focusOcr:true});
+      },
+    });
+    requestAnimationFrame(()=>{
+      if(!owns())return;
+      comicStrip.seek(position);suppressScroll=false;paint();
+      if(bookmark)outcomeCue($('#chapter-open'),'bookmark',1000);
+    });
+  }catch{
+    if(!owns())return;
+    const fallback={...position};delete fallback.comicLayout;
+    toast('Не удалось открыть ленту. Показана текущая страница.');
+    void renderComicPage(fallback,{bookmark});saveState();
   }
 }
 async function recognizeCurrentComicPage(index,language,{replace=false}={}){
@@ -883,10 +950,15 @@ function wordNodes(text,language){
   if(cursor<text.length)fragment.append(document.createTextNode(text.slice(cursor)));
   return fragment;
 }
-function renderChapter(position={chapter,paragraph:0,fraction:0},{bookmark=false,focus=false}={}){
+function renderChapter(position={chapter,paragraph:0,fraction:0},{bookmark=false,focus=false,focusOcr=false}={}){
   const host=$('#passage'),sc=$('#reading-scroll'),book=current,chapterIndex=chapter;
-  clearIllustrations();listenButton.hidden=isComic(book);
-  if(isComic(book)){host.removeAttribute('aria-busy');void renderComicPage(position,{bookmark});return}
+  const comic=isComic(book);clearIllustrations();listenButton.hidden=comic;$('#comic-layout').hidden=!comic;
+  if(comic){
+    host.removeAttribute('aria-busy');
+    if(position.comicLayout==='strip')void renderComicStrip(position,{bookmark});
+    else void renderComicPage(position,{bookmark,focusOcr});
+    return;
+  }
   const epoch=++renderEpoch,c=book.chapters[chapterIndex],language=book.language||'';
   // Use estimated off-screen row sizes only for substantial chapters. A
   // small chapter is cheap to lay out and its exact geometry stays stable
@@ -1004,6 +1076,7 @@ function capturePosition(quiet=false){
   if(suppressScroll){if(quiet)return saveState();return}
   const sc=$('#reading-scroll');
   if(isComic(current)){
+    if(comicStrip){comicStrip.position();return saveState();}
     const g=comicPageGeometry(sc);
     if(!g)return saveState(); // A page that failed to load has no position to replace the saved one.
     const atEnd=g.maxScroll>0&&g.maxScroll-sc.scrollTop<1;
@@ -1477,8 +1550,9 @@ function switchChapter(next,{focus=false}={}){
   if(!current?.chapters[next])return;
   const comic=isComic(current);
   if(comic){dismissWord();capturePosition()}
+  const layout=comic&&state.positions[current.id]?.comicLayout==='strip'?{comicLayout:'strip'}:{};
   chapter=next;paragraph=0;
-  renderChapter({chapter,paragraph:0,fraction:0,...(comic?{}:{chapterTop:true})},{focus});saveState();
+  renderChapter({chapter,paragraph:0,fraction:0,...(comic?layout:{chapterTop:true})},{focus});saveState();
 }
 function updateBookmark(){const list=state.bookmarks[current.id]||[];const active=list.some(x=>x.chapter===chapter&&x.paragraph===paragraph);$('#reader-bookmark').setAttribute('aria-pressed',String(active));$('#reader-bookmark').setAttribute('aria-label',active?'Удалить закладку':'Сохранить закладку')}
 function openReaderContents(){
@@ -1512,7 +1586,13 @@ function renderReaderBookmarks(){
   bookmarks.forEach((p,index)=>{
     const row=node('div',null,'bookmark-row'),label=`${current.chapters[p.chapter]?.title||'Глава'} · абзац ${p.paragraph+1}`;
     const b=node('button',label,'chapter-row');
-    b.onclick=event=>{capturePosition();chapter=p.chapter;paragraph=p.paragraph;$('#contents-dialog').close();renderChapter(p,{bookmark:true,focus:event?.detail===0})};
+    b.onclick=event=>{
+      capturePosition();chapter=p.chapter;paragraph=p.paragraph;$('#contents-dialog').close();
+      const selected={...p};
+      if(isComic(current)&&state.positions[current.id]?.comicLayout==='strip')selected.comicLayout='strip';
+      else delete selected.comicLayout;
+      renderChapter(selected,{bookmark:true,focus:event?.detail===0});
+    };
     const del=node('button','×','icon-button');del.setAttribute('aria-label','Удалить закладку: '+label);
     del.onclick=()=>{
       const ownsFocus=document.activeElement===del;
