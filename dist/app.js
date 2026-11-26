@@ -1583,7 +1583,8 @@ function prefsChanged(change){
   });
 }
 function renderProfileStats(total){$('#profile-book-count').textContent=books.filter(b=>!editorialKind(b.id)).length;$('#profile-word-count').textContent=total;$('#profile-mark-count').textContent=Object.values(state.bookmarks).reduce((n,m)=>n+(Array.isArray(m)?m.length:0),0);updateStorageStatus()}
-function downloadText(text,type,name){const blob=new Blob([text],{type}),url=URL.createObjectURL(blob),a=node('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)}
+function downloadText(text,type,name){downloadBlob(new Blob([text],{type}),name)}
+function downloadBlob(blob,name){const url=URL.createObjectURL(blob),a=node('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)}
 async function arrangeBackup(file){
   backupDraft=null;const sequence=++backupSequence,status=$('#backup-preview');$('#restore-backup').disabled=true;
   if(!file){status.textContent='Выберите файл копии Folio.';return}
@@ -2406,7 +2407,14 @@ $('#pref-sound-test').onclick=e=>{
 };
 window.matchMedia('(prefers-reduced-motion: reduce)').addEventListener?.('change',applyFeedbackPrefs);
 $('#profile-size').oninput=e=>prefsChanged({size:+e.target.value});$('#profile-theme').onchange=e=>prefsChanged({theme:e.target.value});$('#profile-font').onchange=e=>prefsChanged({font:e.target.value});
-$('#export-backup').onclick=()=>{const text=serializeBackup(books,state,legacyWords(),packLearning(learning));const blob=new Blob([text]);if(blob.size>BACKUP_LIMIT)return toast('Копия больше 50 МБ. Скачивание такой копии пока не поддерживается.');downloadText(text,'application/json;charset=utf-8',`folio-backup-${new Date().toISOString().slice(0,10)}.json`)};
+$('#export-backup').onclick=()=>{
+  try{
+    const text=serializeBackup(books,state,legacyWords(),packLearning(learning));
+    const blob=new Blob([text],{type:'application/json;charset=utf-8'});
+    if(blob.size>BACKUP_LIMIT)return toast('Копия больше 50 МБ. Скачивание такой копии пока не поддерживается.');
+    downloadBlob(blob,'folio-backup-'+new Date().toISOString().slice(0,10)+'.json');
+  }catch(e){toast(e?.message||'Не удалось создать резервную копию.')}
+};
 $('#open-backup').onclick=()=>{$('#backup-file').value='';$('#backup-prefs').checked=false;arrangeBackup(null);$('#backup-dialog').showModal()};$('#backup-file').onchange=e=>arrangeBackup(e.target.files[0]);$('#restore-backup').onclick=restoreBackup;
 $('#dictionary-import').onclick=importDictionaryFile;
 window.addEventListener('pagehide',()=>{practiceAudio.stop();suspendReading();if(learningDirty)saveState()});

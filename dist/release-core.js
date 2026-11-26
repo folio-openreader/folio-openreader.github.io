@@ -25,6 +25,7 @@ export const THEMES = Object.freeze({
   night:{surface:'#171717',bg:'#101010',ink:'#f5f5f5',scheme:'dark'},
 });
 export const BACKUP_LIMIT = 50 * 1024 * 1024;
+export const BACKUP_BOOK_LIMIT = 1000;
 const HEX=/^#[0-9a-f]{6}$/i, BOOK_ID=/^book-[0-9a-f-]{36}$/i;
 const object=value=>typeof value==='object'&&value!==null&&!Array.isArray(value);
 const safeString=(value,limit=300)=>typeof value==='string'?value.slice(0,limit):'';
@@ -125,11 +126,14 @@ function bookFromBackup(b) {
   return {...(kind?{kind}:{}),...(edition?{edition}:{}),...(ocr?{ocr}:{}),...(translationOcr?{translationOcr}:{}),...(warnings.length?{warnings}:{}),id:b.id,title:safeString(b.title,1000)||'Без названия',author:safeString(b.author,1000),language:safeString(b.language,40),translationTitle:safeString(b.translationTitle,1000),translationLanguage:safeString(b.translationLanguage,40),format:b.format,alignment:anyTranslation?'positional-unverified':'none',chapters,createdAt:Number.isFinite(b.createdAt)?b.createdAt:0};
 }
 export function serializeBackup(books,state,words,learning) {
-  return JSON.stringify({format:'folio-backup',version:1,createdAt:new Date().toISOString(),books:books.filter(b=>b.id!==DEMO_ID&&b.kind!=='comic').map(({localTranslationGeneration,...book})=>book),state:{positions:state.positions,bookmarks:state.bookmarks,lastBook:state.lastBook,prefs:sanitizePrefs(state.prefs)},words:sanitizeSaved(words),...(learning?{learning}:{})});
+  const included=books.filter(b=>b.id!==DEMO_ID&&b.kind!=='comic');
+  if(included.length>BACKUP_BOOK_LIMIT)throw new RangeError('Не удалось создать копию: больше '+BACKUP_BOOK_LIMIT+' текстовых книг.');
+  return JSON.stringify({format:'folio-backup',version:1,createdAt:new Date().toISOString(),books:included.map(({localTranslationGeneration,...book})=>book),state:{positions:state.positions,bookmarks:state.bookmarks,lastBook:state.lastBook,prefs:sanitizePrefs(state.prefs)},words:sanitizeSaved(words),...(learning?{learning}:{})});
 }
 export function parseBackup(text,demo) {
   let raw;try{raw=JSON.parse(text)}catch{throw new Error('Не удалось прочитать JSON. Выберите копию Folio.')};
-  if(!object(raw)||raw.format!=='folio-backup'||raw.version!==1||!Array.isArray(raw.books)||raw.books.length>500||!object(raw.state)||!Array.isArray(raw.words))throw new Error('Файл не похож на поддерживаемую копию Folio.');
+  if(!object(raw)||raw.format!=='folio-backup'||raw.version!==1||!Array.isArray(raw.books)||!object(raw.state)||!Array.isArray(raw.words))throw new Error('Файл не похож на поддерживаемую копию Folio.');
+  if(raw.books.length>BACKUP_BOOK_LIMIT)throw new RangeError('В копии больше '+BACKUP_BOOK_LIMIT+' текстовых книг.');
   const books=raw.books.map(bookFromBackup),ids=new Set(books.map(b=>b.id));
   if(ids.size!==books.length)throw new Error('В копии есть повторяющиеся идентификаторы книг.');
   const positions=Object.create(null),bookmarks=Object.create(null);
