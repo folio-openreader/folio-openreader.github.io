@@ -1,5 +1,5 @@
 import {editorialCoverInfo,makeEditorialCover,makeEditorialCredit} from './editorial-cover.js';
-export function installResearchCatalog(root,{loadCatalog,openBook,progress,makeIcon}){
+export function installResearchCatalog(root,{loadCatalog,loadStoredCatalog,openBook,progress,makeIcon}){
   const cards=root.querySelector('.research-cards'),status=root.querySelector('[role=status]'),retry=root.querySelector('[data-research-retry]');
   let pending=null,entries=null,request=0;
   const node=(tag,text,cls)=>{const n=document.createElement(tag);if(text)n.textContent=text;if(cls)n.className=cls;return n};
@@ -34,15 +34,22 @@ export function installResearchCatalog(root,{loadCatalog,openBook,progress,makeI
     card.append(open);const credit=makeEditorialCredit(entry,cover);if(credit)card.append(credit);buttons.set(entry.id,{open,meter});return card;
   }
   function update(){for(const [id,{meter}] of buttons){const value=progress(id);meter.textContent=Number.isFinite(value)&&value>0?value+'%':'';meter.hidden=!meter.textContent}}
+  function paint(next){
+    if(!entries||JSON.stringify(entries)!==JSON.stringify(next)){entries=next;buttons.clear();cards.replaceChildren(...entries.map(makeCard));}
+    update();
+  }
   async function refresh({force=false,live=false}={}){
     if(entries&&!force&&!live){update();return}
     if(pending)return pending;
+    if(!entries&&loadStoredCatalog){
+      const cached=loadStoredCatalog();
+      if(cached.length)paint(cached);
+    }
     if(!entries)status.textContent='Загружаем…'; retry.hidden=true;
     pending=(async()=>{
       try{
         const next=await loadCatalog({force});
-        if(!entries||JSON.stringify(entries)!==JSON.stringify(next)){entries=next;buttons.clear();cards.replaceChildren(...entries.map(makeCard));}
-        update();status.textContent=entries.length?'':'Пока нет материалов.';
+        paint(next);status.textContent=entries.length?'':'Пока нет материалов.';
       }catch{entries=null;status.textContent='Каталог недоступен.';retry.hidden=false}
       finally{pending=null}
     })();

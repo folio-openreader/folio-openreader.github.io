@@ -30,7 +30,7 @@ import {mountAiWordHint,requestAiWordHint} from './byok-word.js';
 import {createStarterSource,isStarterId,starterSourceURL} from './starter-core.js';
 import {installStarterShelf} from './starter-shelf.js';
 import {createResearchSource,isResearchId} from './research-core.js';
-import {loadNewsFeed,loadNewsBook,isNewsId} from './news-core.js';
+import {loadNewsFeed,loadNewsBook,isNewsId,readSavedNewsFeed} from './news-core.js';
 import {makeEditorialCover,makeEditorialCredit} from './editorial-cover.js';
 import {installResearchCatalog} from './research-ui.js';
 import {normalizeWord,loadLearning,packLearning,mergeLearning,trackWord,getWord,removeWord,detachWord,noteLookup,recordEncounter,markKnown,resumeLearning,review,stage,encounterCount,passageCount,due,stats as learningStats,bookStats} from './learning-core.js';
@@ -262,7 +262,15 @@ function openDB(){return new Promise((resolve,reject)=>{const request=indexedDB.
 function dbAction(mode,action){return new Promise((resolve,reject)=>{if(!db)return reject(new Error('Хранилище книг недоступно в этом браузере.'));const tx=db.transaction('books',mode);let result;const request=action(tx.objectStore('books'));request.onsuccess=()=>result=request.result;tx.oncomplete=()=>resolve(result);tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(tx.error)})}
 
 const researchSource=createResearchSource();
-const editorial=Object.freeze({research:researchSource,news:{loadCatalog:async options=>{const feed=await loadNewsFeed(options);$('#news-freshness').textContent=feed.stale?(feed.items.length?'Сводка Wikipedia · сохранённая версия':'Не удалось обновить сводку Wikipedia'):'Сводка Wikipedia';return feed.items},loadBook:loadNewsBook}});
+function paintNewsFreshness(feed){
+  $('#news-freshness').textContent=feed.stale?(feed.items.length?'Сводка Wikipedia · сохранённая версия':'Не удалось обновить сводку Wikipedia'):'Сводка Wikipedia';
+  return feed.items;
+}
+const editorial=Object.freeze({research:researchSource,news:{
+  loadStoredCatalog:()=>{const feed=readSavedNewsFeed();return feed.items.length?paintNewsFreshness(feed):[]},
+  loadCatalog:async options=>paintNewsFreshness(await loadNewsFeed(options)),
+  loadBook:loadNewsBook,
+}});
 let catalogKind='books',editorialIntent=0;
 const catalogMotion=installNavMotion($('.catalog-switch'),{indicator:'.catalog-current',keyAttribute:'catalog'});
 const editorialKind=id=>isResearchId(id)?'research':isNewsId(id)?'news':null;
@@ -274,7 +282,7 @@ catalogPanels.news.querySelector('.section-title').append(newsRefresh);
 const editorialUI={};
 newsRefresh.onclick=async()=>{newsRefresh.disabled=true;try{await editorialUI.news.refresh({force:true})}finally{newsRefresh.disabled=false}};
 for(const kind of ['research','news']) editorialUI[kind]=installResearchCatalog(catalogPanels[kind],{
-  loadCatalog:editorial[kind].loadCatalog,
+  loadCatalog:editorial[kind].loadCatalog,loadStoredCatalog:editorial[kind].loadStoredCatalog,
   openBook:(entry,e)=>openEditorialBook(entry.id,{motion:e.detail>0,focus:e.detail===0,trigger:'editorial:'+entry.id}),
   progress:id=>{const book=books.find(b=>b.id===id);return book?progress(book):null},
   makeIcon:key=>{const el=node('i',null,'icon-glyph');el.innerHTML=iconMarkup(key);return el},

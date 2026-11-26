@@ -128,9 +128,13 @@ export function createNewsSource({fetcher=(...a)=>globalThis.fetch(...a),now=()=
   if(!current.length&&seed.date>=cut&&seed.date<=today)current.push(seed);
   return {items:current.map(summary),checkedAt:checked?new Date(checked).toISOString():null,stale,offline};
  }
+ const recentlyChecked=()=>checked&&ISO(checked)===ISO(now())&&now()-checked<TTL;
+ function readSavedNewsFeed(){
+  restore();return feed(!recentlyChecked()||partial,false);
+ }
  async function loadNewsFeed({force=false,signal}={}){
   cancelled(signal);restore();
-  if(!force&&checked&&ISO(checked)===ISO(now())&&now()-checked<TTL)return feed(partial,false);
+  if(!force&&recentlyChecked())return feed(partial,false);
   const dates=[0,1,2].map(i=>ISO(now()-i*DAY));
   const results=await Promise.allSettled(dates.map(d=>fetchDay(d,signal)));cancelled(signal);
   await enrichPhotos(results.flatMap(r=>r.status==='fulfilled'&&r.value?[r.value]:[]),signal);cancelled(signal);
@@ -146,7 +150,7 @@ export function createNewsSource({fetcher=(...a)=>globalThis.fetch(...a),now=()=
   if(d>ISO(now())||d<ISO(now()-6*DAY))bad();
   const row=await fetchDay(d,signal);cancelled(signal);if(!row)bad();await enrichPhotos([row],signal);cancelled(signal);rows.set(d,row);save();return makeBook(row);
  }
- return {loadNewsFeed,loadNewsBook};
+ return {loadNewsFeed,loadNewsBook,readSavedNewsFeed};
 }
 const news=createNewsSource();
-export const loadNewsFeed=news.loadNewsFeed,loadNewsBook=news.loadNewsBook;
+export const {loadNewsFeed,loadNewsBook,readSavedNewsFeed}=news;
