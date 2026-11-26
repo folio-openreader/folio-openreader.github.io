@@ -1841,7 +1841,7 @@ function finishImportJob(){
 function invalidateImport(){
   importSequence++;importJob?.abort();finishImportJob();previewBook=null;
   $('#import-preview').hidden=true;$('#import-confirm').hidden=true;$('#retry-ocr').hidden=true;
-  $('#alignment-check').checked=false;importStatus('');syncOcrControls();
+  $('#alignment-check').checked=false;$('#import-file-warning').textContent='';importStatus('');syncOcrControls();
 }
 function cancelImport(){
   if(!importJob)return;
@@ -2043,10 +2043,16 @@ function installFileTiles(){
     label.addEventListener('dragleave',e=>{if(!label.contains(e.relatedTarget))fx.leave()});
     label.addEventListener('drop',e=>{
       if(!hasFiles(e))return;e.preventDefault();const files=e.dataTransfer.files,file=files[0];
+      const reject=message=>{
+        fx.leave();if(!input.files.length)fx.state('rejected');
+        // The previous files, preview and running parser still own this import.
+        $('#import-file-warning').textContent=message+(input.files.length?' Прежний файл не изменён.':'');
+      };
       const issue=files.length>1?'Добавьте по одному файлу.':bookFileError(file);
-      if(issue||!file){invalidateImport();setBookTiles('selected');fx.leave();fx.state('rejected');if(issue)importStatus(issue,'error');return}
-      try{const data=new DataTransfer();data.items.add(file);input.files=data.files;fileTile(input,{dropped:true});resetOcrSettings(role);invalidateImport()}
-      catch{invalidateImport();setBookTiles('selected');fx.leave();fx.state('rejected');importStatus('Нажмите «Выбрать», чтобы добавить файл.','error')}
+      if(issue||!file){reject(issue||'Не удалось прочитать файл. Нажмите «Выбрать».');return}
+      try{const data=new DataTransfer();data.items.add(file);input.files=data.files}
+      catch{reject('Нажмите «Выбрать», чтобы добавить файл.');return}
+      fileTile(input,{dropped:true});resetOcrSettings(role);invalidateImport();
     })
   }
   $('#import-dialog').addEventListener('close',()=>{if($('#import-dialog').open)return;resetOcrSettings();invalidateImport();for(const fx of dropMotions.values())fx.settle()});

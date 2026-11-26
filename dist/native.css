@@ -298,6 +298,7 @@ dialog.word-quick{width:min(420px,calc(100% - 24px));padding:17px 18px 16px;max-
 #import-dialog [hidden]{display:none!important}
 #import-status:empty{margin:0}
 #import-status{overflow-wrap:anywhere}
+#import-file-warning:empty{margin:0;padding:0}
 #import-preview .preview-pair p{overflow-wrap:anywhere}
 #import-progress{display:block;width:100%;height:5px;accent-color:var(--accent);margin:8px 0 14px}
 .ocr-review{margin:12px 0;padding:13px;border:1px solid var(--line);border-radius:12px;min-width:0}
