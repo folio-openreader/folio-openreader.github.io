@@ -1162,7 +1162,7 @@ function paintLocalRibbon(loc,target){
   const show=!loc.p.translation&&canLocal(loc),value=!loc.p.translation?peekLocal(loc):null;
   const enabled=show&&autoLocal(loc),failure=localFailureFor(loc);
   open.hidden=!show;open.textContent=enabled&&!failure?'Пауза':failure?'Повторить':value?'Продолжить':'Перевести';
-  open.setAttribute('aria-label',enabled&&!failure?'Приостановить локальный перевод':value&&!failure?'Продолжить локальный перевод':'Локальный перевод абзаца');
+  open.setAttribute('aria-label',enabled&&!failure?'Приостановить автоперевод':value&&!failure?'Продолжить автоперевод':'Локальный перевод абзаца');
   if(paintingLocalSegment&&(paintingLocalSegment.parentElement!==target||!value)){
     paintingLocalSegment.textContent='[У этого абзаца нет перевода]';paintingLocalSegment.removeAttribute('lang');paintingLocalSegment=null;
   }
@@ -1340,6 +1340,9 @@ $('#local-translation-start').onclick=()=>{
   setAutoLocal(loc,true);
   if(sameLocalPair(localFailure,loc))localFailure=null;
   queueLocal(loc,{explicit:true});paintLocalDialog(loc);
+  // The underlying control already pauses automatic work; reflect that
+  // immediately if the reader closes the sheet while the manual job runs.
+  if(!$('#reader').hidden&&!ribbonManual&&sameLocal(loc,currentLocalTarget()))syncTranslation();
 };
 $('#translation-dialog').addEventListener('close',()=>{if(!$('#translation-dialog').open){localDialogTarget=null;localDialogProbe=null}});
 window.addEventListener('storage',e=>localAuto.refresh(e.key));

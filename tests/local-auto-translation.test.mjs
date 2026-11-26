@@ -266,6 +266,7 @@ test('Pause keeps an explicitly requested translation running and its completed 
   const books=[makeBook('book-one')],cache=new Map();
   const h=session(new Map(),new Set(),books,cache);
   h.open();h.$('#translation-full').onclick();h.$('#local-translation-start').onclick();
+  assert.equal(h.$('#local-translation-open').textContent,'Пауза','manual request must immediately update the ribbon');
   h.c.deferNext=true;const work=h.drain();await turn();
   assert.equal(h.calls[0].allowNetwork,true);
   h.$('#translation-dialog').close();h.c.syncTranslation();

@@ -50,18 +50,14 @@ def run(dist, chromium):
         dialog.locator("[data-sheet-handle]").click()
         expect(dialog).to_be_hidden()
         toggle = p.locator("#local-translation-open")
-        # Move to another paragraph while the manual job is pending, so
-        # the ribbon updates and the reader can pause automatic work.
-        word_sheet = p.locator("#word-dialog")
-        p.locator("#paragraph-1 .word").first.tap()
-        word_sheet.locator("[data-sheet-handle]").tap()
-        expect(word_sheet).to_be_hidden()
-        expect(toggle).to_have_text("Пауза")
+        # Without scrolling or selecting another word, this action must
+        # already describe what it does rather than inviting a second tap.
+        expect(toggle).to_have_text("Пауза",timeout=1500)
+        expect(toggle).to_have_accessible_name("Приостановить автоперевод")
+        expect(p.locator("#translation-track")).to_contain_text("Переводим на устройстве")
+        assert p.evaluate("paragraphModelCalls") == [{"allowNetwork":True}]
         toggle.click()
         expect(toggle).to_have_text("Перевести")
-        p.locator("#paragraph-0 .word").first.tap()
-        word_sheet.locator("[data-sheet-handle]").tap()
-        expect(word_sheet).to_be_hidden()
         assert p.evaluate(COUNT_CACHE) == 0
         p.evaluate("releaseParagraph()")
         expect(toggle).to_have_text("Продолжить")
@@ -75,6 +71,7 @@ def run(dist, chromium):
         assert p.evaluate("window.paragraphModelCalls") == []
         # The word's context is its own entry point. Search it before opening
         # the translation sheet or the model's fresh memory will mask the bug.
+        word_sheet = p.locator("#word-dialog")
         p.locator("#paragraph-0 .word").first.tap()
         word_sheet.locator("#word-context-toggle").tap()
         context = word_sheet.locator("#word-context")
