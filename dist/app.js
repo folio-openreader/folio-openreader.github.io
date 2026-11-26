@@ -230,7 +230,7 @@ function toast(message){$('#toast').textContent=message;$('#toast').style.displa
 function updateStorageStatus(){const status=$('#local-storage-status');if(status)status.textContent=storageWarning||(!db?'Хранилище книг недоступно. Восстановление книг отключено.':'')}
 let rememberedReadingPositions={...state.positions},rememberedBookmarks={...record(prior.bookmarks)};
 function sameReadingPosition(a,b){
-  return a===b||!!a&&!!b&&['chapter','paragraph','fraction','viewportDelta','comicImageOffset'].every(k=>a[k]===b[k]);
+  return a===b||!!a&&!!b&&['chapter','paragraph','fraction','viewportDelta','comicImageOffset','soloScrollProgress'].every(k=>a[k]===b[k]);
 }
 function readingPositionsToSave(stored,previous,local){
   // A stale tab only owns reading positions it actually changed. Do not
@@ -338,7 +338,14 @@ async function openEditorialBook(id,options={}){
 }
 
 function totalParagraphs(book){return book.chapters.reduce((n,c)=>n+c.paragraphs.length,0)}
-function progress(book){const p=safePosition(state.positions[book.id],book)||{chapter:0,paragraph:0};if(isComic(book))return Math.round((p.chapter+1)/book.comicPages.length*100);const before=book.chapters.slice(0,p.chapter).reduce((n,c)=>n+c.paragraphs.length,0);return Math.min(100,Math.round((before+p.paragraph)/Math.max(1,totalParagraphs(book)-1)*100))}
+function progress(book){
+  const p=safePosition(state.positions[book.id],book)||{chapter:0,paragraph:0};
+  if(isComic(book))return Math.round((p.chapter+1)/book.comicPages.length*100);
+  if(book.chapters.length===1&&book.chapters[0].paragraphs.length===1)
+    return Math.round((p.soloScrollProgress??p.fraction??0)*100);
+  const before=book.chapters.slice(0,p.chapter).reduce((n,c)=>n+c.paragraphs.length,0);
+  return Math.min(100,Math.round((before+p.paragraph)/Math.max(1,totalParagraphs(book)-1)*100));
+}
 function alignmentLabel(book){if(isComic(book))return book.comicPages.length+' стр.';return book.alignment==='demo'?'Демо · EN / RU':book.alignment==='none'?'Без перевода':'Пара файлов · сверить соответствие'}
 let bookDeleteDialog=null;
 async function deleteBook(book){
@@ -985,16 +992,32 @@ function capturePosition(quiet=false){
   // can still be above the selected row or inside the gap below its last line.
   const remainder=offset-fraction*height;
   if(Math.abs(remainder)>.01&&Math.abs(remainder)<=512&&readingScrollParagraph(sc)===paragraph)position.viewportDelta=remainder;
+  // A whole article or long note can be one paragraph. Use its actual
+  // scroll progress for display, independent of the exact text restore anchor.
+  const solo=current.chapters.length===1&&current.chapters[0].paragraphs.length===1;
+  if(solo){
+    // The initial checkpoint can already scroll the chapter heading away.
+    const start=Math.max(0,sc.scrollTop-offset),range=sc.scrollHeight-sc.clientHeight-start;
+    const prior=state.positions[current.id]?.soloScrollProgress;
+    if(range>0)position.soloScrollProgress=Math.max(0,Math.min(1,(sc.scrollTop-start)/range));
+    else if(Number.isFinite(prior))position.soloScrollProgress=prior;
+  }
   state.positions[current.id]=position;
+  if(solo&&!quiet)paintTextReadingProgress();
   if(current.id===DEMO_ID)try{localStorage.setItem('folio-page',chapter)}catch{}
   return saveState();
+}
+function paintTextReadingProgress(){
+  const percentage=progress(current);
+  $('#reading-progress').textContent=`${percentage}% · абзац ${paragraph+1} / ${current.chapters[chapter].paragraphs.length}`;
+  $('#progress-fill').style.transform=`scaleX(${percentage/100})`;
 }
 function setActiveParagraph(i,sync=false){
  pendingReadingScroll=null;deferredReadingTranslationEpoch=-1; // Explicit selections supersede older manual scrolls.
  if(!followingBook&&i!==paragraph)bookSpeech.stop();
  if(isComic(current)){paragraph=i;const p=state.positions[current.id];state.positions[current.id]={...p,chapter,paragraph,fraction:p?.fraction||0};updateComicProgress();return}
  markReadingScrollAnchor();
- const previous=paragraph;$('#paragraph-'+paragraph)?.classList.remove('active');paragraph=i;$(`#paragraph-${i}`)?.classList.add('active');if(previous!==i)state.positions[current.id]={chapter,paragraph,fraction:state.positions[current.id]?.fraction||0};const percentage=progress(current);$('#reading-progress').textContent=`${percentage}% · абзац ${i+1} / ${current.chapters[chapter].paragraphs.length}`;$('#progress-fill').style.transform=`scaleX(${percentage/100})`;updateBookmark();
+ const previous=paragraph;$('#paragraph-'+paragraph)?.classList.remove('active');paragraph=i;$(`#paragraph-${i}`)?.classList.add('active');if(previous!==i)state.positions[current.id]={chapter,paragraph,fraction:state.positions[current.id]?.fraction||0};paintTextReadingProgress();updateBookmark();
  if(readerSuspended){if(sync)deferredReadingTranslationEpoch=renderEpoch;return}
  if(sync)syncTranslation();clearTimeout(saveTimer);saveTimer=setTimeout(capturePosition,180);scheduleSeen()}
 let pendingReadingScroll=null,readingScrollAnchor=null,deferredReadingTranslationEpoch=-1,readerSuspended=false,checkpointSaved=false;

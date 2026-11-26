@@ -387,3 +387,14 @@ test('leaving the reader dismisses its stacked sheets without losing the current
   h.c.openBook('test');h.drain();
   assert.equal(h.c.paragraph,6);
 });
+
+test('verify single-paragraph scroll progress independently of a portable text anchor',()=>{
+  const book={chapters:[{paragraphs:[{text:'A long note.'}]}]};
+  const anchor={chapter:0,paragraph:0,fraction:.42},enriched={...anchor,soloScrollProgress:.55};
+  assert.deepEqual(safePosition(enriched,book),enriched);
+  for(const invalid of [null,'0.55',true,Infinity,-.01,1.01])
+    assert.deepEqual(safePosition({...anchor,soloScrollProgress:invalid},book),anchor);
+  assert.deepEqual(safePosition({...anchor,soloScrollProgress:1},book),{...anchor,soloScrollProgress:1});
+  assert.deepEqual(safePosition(enriched,{kind:'comic',chapters:book.chapters}),anchor);
+  assert.deepEqual(safePosition(enriched,{chapters:[...book.chapters,...book.chapters]}),anchor);
+});
