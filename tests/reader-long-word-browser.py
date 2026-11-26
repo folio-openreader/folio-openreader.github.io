@@ -57,7 +57,16 @@ def run(dist, chromium):
         assert_fits(page.locator("#chapter-heading"),left,right,"chapter heading",wraps=True)
         last=target.evaluate(RECTS)[-1]
         page.touchscreen.tap((last["left"]+last["right"])/2,last["y"]+7)
-        expect(page.locator("#word-sheet-heading")).to_have_text(WORD)
+        heading=page.locator("#word-sheet-heading")
+        expect(heading).to_have_text(WORD)
+        page.evaluate("document.fonts.ready")
+        height=heading.evaluate("el=>({visible:el.clientHeight,content:el.scrollHeight})")
+        # Serif glyph ink can extend a few pixels outside the CSS line box.
+        assert height["content"]<=height["visible"]+5, ("word sheet clips selected word",height)
+        expect(heading).to_have_css("overflow-y","visible")
+        extent=heading.bounding_box()
+        assert_fits(heading,extent["x"],extent["x"]+extent["width"],"word sheet heading",wraps=True)
+        expect(page.locator("#word-ai-entry")).to_be_visible()
         page.locator("#word-context-toggle").tap()
         excerpt=page.locator(".word-original")
         extent=excerpt.bounding_box()
@@ -75,7 +84,7 @@ def run(dist, chromium):
         extent=bookmark.bounding_box()
         assert_fits(bookmark,extent["x"],extent["x"]+extent["width"],"bookmark title")
         assert not errors,errors
-        print("320px/30px reader: compound wraps and its last line opens one exact word; full title, context and contents fit.")
+        print("320px/30px reader: compound wraps and its last line opens one exact word; full word-sheet heading, chapter title, context and contents fit.")
         browser.close()
 
 

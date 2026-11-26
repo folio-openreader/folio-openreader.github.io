@@ -224,7 +224,8 @@ dialog.word-quick{width:min(420px,calc(100% - 24px));padding:17px 18px 16px;max-
 .words-heading-row{align-items:center}
 .words-heading-row h1{font:500 clamp(22px,5.5vw,34px)/1.13 Georgia,serif;letter-spacing:-.03em;margin:0}
 #local-storage-status:empty{display:none}
-.word-quick-head h2,.word-quick-head .word-lookup{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden}
+/* Preview only two gloss lines; keep the selected word readable and selectable in full. */
+.word-quick-head .word-lookup{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden}
 /* DesignBookmark File Drop interaction in Folio's theme. */
 .drop-field{isolation:isolate;overflow:hidden;grid-template-columns:46px minmax(0,1fr) auto;border-style:solid;min-height:66px}
 .drop-field:after{content:"";position:absolute;inset:0;background:var(--soft);opacity:var(--drop-lift,0);pointer-events:none;z-index:-1}
