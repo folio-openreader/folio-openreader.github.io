@@ -185,7 +185,7 @@ function refreshSelectedStage(){if(wordAnchor?.button?.isConnected)attachStage(w
 
 const legacyBookmark=Number(storedValue('folio-bookmark'));if(storedValue('folio-bookmark')!==null&&!state.bookmarks[DEMO_ID]&&Number.isInteger(legacyBookmark)&&legacyBookmark>=0&&legacyBookmark<3)state.bookmarks[DEMO_ID]=[{chapter:legacyBookmark,paragraph:0,fraction:0}];
 let storageWarning='',backupDraft=null,backupSequence=0,restoring=false;
-let lexicon=null,lexiconPending=null,selectedWordSequence=0,importingDictionary=false;
+let lexicon=null,lexiconPending=null,lexiconFailures=0,lexiconRetryAt=0,selectedWordSequence=0,importingDictionary=false;
 let paragraphObserver=null,importSequence=0;
 let books=[demo],current=null,chapter=0,paragraph=0,selectedWord='',wordAnchor=null,previewBook=null,db=null,toastTimer,saveTimer,suppressScroll=false,ribbonManual=false,drag=null;
 const starterSource=createStarterSource();
@@ -1457,7 +1457,18 @@ function trackingLanguage(token){
   if(knownLanguage(raw)||getWord(learning,token,raw))return raw;
   return sourceLanguage(token,raw);
 }
-async function loadLexicon(){return lexicon||(lexiconPending??=import('./lexicon.js').then(mod=>lexicon=mod).catch(()=>null))}
+async function loadLexicon(){
+  if(lexicon||lexiconPending)return lexicon||lexiconPending;
+  if(performance.now()<lexiconRetryAt)return null;
+  // The browser remembers a failed module URL for the lifetime of the page.
+  // Change only our local URL on retry and share one attempt across all lookups.
+  const path=lexiconFailures?'./lexicon.js?retry='+lexiconFailures:'./lexicon.js';
+  lexiconPending=import(path).then(mod=>lexicon=mod).catch(error=>{
+    lexiconRetryAt=error instanceof TypeError?performance.now()+Math.min(3000,300*++lexiconFailures):Infinity;
+    return null;
+  }).finally(()=>{lexiconPending=null});
+  return lexiconPending;
+}
 function showGloss(result,lang,target){
   const lookup=$('.word-lookup'),entry=result?.entries?.find(item=>item.translation?.trim()||item.definition?.trim());
   delete lookup.dataset.source;delete lookup.dataset.headword;lookup.lang=entry?.target||'ru';
@@ -1762,6 +1773,13 @@ const dictUI=dictionaryControls({
   load:loadLexicon,getPrefs:()=>state.prefs,
   changePrefs:saveLanguagePrefs,onSources:()=>languageUI?.refresh(),
   onChange:()=>{if($('#word-dialog').open)void refreshWordGloss();if(!$('#words-view').hidden)renderWords()}
+});
+window.addEventListener('online',async()=>{
+  if(lexicon)return;
+  await lexiconPending;
+  if(lexicon||!lexiconFailures||!Number.isFinite(lexiconRetryAt)||document.hidden)return;
+  const visible=$('#word-dialog').open||(!$('#home').hidden&&['profile','words'].includes(homeView));
+  if(visible){lexiconRetryAt=0;void dictUI.refresh({repaintWord:true})}
 });
 async function importDictionaryFile(){
   const input=$('#dict-file'),file=input.files[0];if(!file){dictUI.status('Выберите файл словаря.');return}
