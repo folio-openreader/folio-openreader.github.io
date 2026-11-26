@@ -1,6 +1,6 @@
 // Choosing a language is not a claim that a dictionary, OCR, or translation model exists.
 export const languages=Object.freeze({en:'Английский',ru:'Русский',hi:'Хинди',es:'Испанский',kk:'Казахский',de:'Немецкий',fr:'Французский'});
-const aliases={eng:'en',rus:'ru',hin:'hi',spa:'es',kaz:'kk',deu:'de',ger:'de',fra:'fr',fre:'fr',jpn:'ja',kor:'ko'};
+const aliases={eng:'en',rus:'ru',hin:'hi',spa:'es',kaz:'kk',deu:'de',ger:'de',fra:'fr',fre:'fr',jpn:'ja',kor:'ko',zho:'zh',chi:'zh'};
 export function knownLanguage(tag){
   const code=String(tag||'').trim().toLowerCase().split(/[-_]/)[0];
   return /^[a-z]{2,8}$/.test(code)&&!['und','zxx','mul'].includes(code)?(Object.hasOwn(aliases,code)?aliases[code]:code):'';
@@ -42,18 +42,26 @@ export function fillLanguages(select,value,{unknown=false}={}){
 
 
 // Preserve the existing boundaries for spaced text, apostrophes and hyphens.
-// Japanese needs word segmentation inside a continuous run of letters.
+// Chinese and Japanese need boundaries inside continuous letter runs.
 const readingWords=/[\p{L}][\p{L}\p{M}]*(?:['‘’ʼ‐‑\u00ad-][\p{L}][\p{L}\p{M}]*)*/gu;
-const japaneseScript=/[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}]/u;
-let japaneseSegmenter;
+const joinedScripts=new Map([
+  ['ja',/[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}]/u],
+  ['zh',/\p{Script=Han}/u],
+]);
+const segmenters=new Map();
 export function* readingWordSegments(text,language){
-  const japanese=knownLanguage(language)==='ja'&&typeof Intl.Segmenter==='function';
+  const locale=knownLanguage(language);
+  const script=typeof Intl.Segmenter==='function'&&joinedScripts.get(locale);
+  let segmenter=segmenters.get(locale);
   for(const match of text.matchAll(readingWords)){
     const [word]=match,offset=match.index;
     // Bound the extra button work for unusually long continuous runs.
-    if(japanese&&word.length<=4096&&japaneseScript.test(word)){
-      japaneseSegmenter??=new Intl.Segmenter('ja',{granularity:'word'});
-      for(const {segment,index,isWordLike} of japaneseSegmenter.segment(word)){
+    if(script&&word.length<=4096&&script.test(word)){
+      if(!segmenter){
+        segmenter=new Intl.Segmenter(locale,{granularity:'word'});
+        segmenters.set(locale,segmenter);
+      }
+      for(const {segment,index,isWordLike} of segmenter.segment(word)){
         if(isWordLike)yield {word:segment,offset:offset+index};
       }
     }else yield {word,offset};

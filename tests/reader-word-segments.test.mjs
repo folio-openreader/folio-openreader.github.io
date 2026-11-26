@@ -27,3 +27,19 @@ test('discretionary hyphens stay in source spans but not dictionary or saved wor
   assert.equal(wordKey('lan\u00adtern','en'),wordKey('lantern','en'));
   assert.equal(normalizeWord('co-operate','en'),'co-operate');
 });
+
+test('tagged Chinese prose exposes words with exact UTF-16 offsets in either script and ISO alias',()=>{
+  for(const [language,text,want] of [
+    ['zh-Hans','📚今天我们去公园。 Jean-Luc',['今天','我们','去','公园','Jean-Luc']],
+    ['zh-Hant','📚我們明天去公園。 Jean-Luc',['我們','明天','去','公園','Jean-Luc']],
+    ['zho','今天我们去公园',['今天','我们','去','公园']],
+    ['chi','我們明天去公園',['我們','明天','去','公園']],
+  ]){
+    const result=[...readingWordSegments(text,language)];
+    assert.deepEqual(result.map(x=>x.word),want);
+    for(const {word,offset} of result)assert.equal(text.slice(offset,offset+word.length),word);
+  }
+  assert.deepEqual([...readingWordSegments('今天我们去公园','und')],[{word:'今天我们去公园',offset:0}]);
+  const large='文'.repeat(4500);
+  assert.deepEqual([...readingWordSegments(large,'zh')],[{word:large,offset:0}]);
+});
