@@ -285,7 +285,11 @@ function paintNewsFreshness(feed){
   $('#news-freshness').textContent=feed.stale?(feed.items.length?'Сводка Wikipedia · сохранённая версия':'Не удалось обновить сводку Wikipedia'):'Сводка Wikipedia';
   return feed.items;
 }
-const editorial=Object.freeze({research:researchSource,news:{
+const editorial=Object.freeze({research:{...researchSource,
+  loadStoredCatalog:()=>books.filter(b=>b.kind==='research'&&isResearchId(b.id)).map(b=>({
+    id:b.id,title:b.title,journal:b.edition?.source||b.author,topic:'На устройстве',year:b.edition?.publicationYear,
+  })),
+},news:{
   loadStoredCatalog:()=>{const feed=readSavedNewsFeed();return feed.items.length?paintNewsFreshness(feed):[]},
   loadCatalog:async options=>paintNewsFreshness(await loadNewsFeed(options)),
   loadBook:loadNewsBook,

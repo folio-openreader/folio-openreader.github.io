@@ -1,7 +1,7 @@
 import {editorialCoverInfo,makeEditorialCover,makeEditorialCredit} from './editorial-cover.js';
 export function installResearchCatalog(root,{loadCatalog,loadStoredCatalog,openBook,progress,makeIcon}){
   const cards=root.querySelector('.research-cards'),status=root.querySelector('[role=status]'),retry=root.querySelector('[data-research-retry]');
-  let pending=null,entries=null,request=0;
+  let pending=null,entries=null,loaded=false,request=0;
   const node=(tag,text,cls)=>{const n=document.createElement(tag);if(text)n.textContent=text;if(cls)n.className=cls;return n};
   const buttons=new Map();
   function makeCard(entry){
@@ -35,11 +35,15 @@ export function installResearchCatalog(root,{loadCatalog,loadStoredCatalog,openB
   }
   function update(){for(const [id,{meter}] of buttons){const value=progress(id);meter.textContent=Number.isFinite(value)&&value>0?value+'%':'';meter.hidden=!meter.textContent}}
   function paint(next){
-    if(!entries||JSON.stringify(entries)!==JSON.stringify(next)){entries=next;buttons.clear();cards.replaceChildren(...entries.map(makeCard));}
+    if(!entries||JSON.stringify(entries)!==JSON.stringify(next)){
+      const active=document.activeElement,focused=[...buttons].find(([,card])=>card.open===active)?.[0];
+      entries=next;buttons.clear();cards.replaceChildren(...entries.map(makeCard));
+      if(focused)buttons.get(focused)?.open.focus({preventScroll:true});
+    }
     update();
   }
   async function refresh({force=false,live=false}={}){
-    if(entries&&!force&&!live){update();return}
+    if(loaded&&!force&&!live){update();return}
     if(pending)return pending;
     if(!entries&&loadStoredCatalog){
       const cached=loadStoredCatalog();
@@ -49,8 +53,11 @@ export function installResearchCatalog(root,{loadCatalog,loadStoredCatalog,openB
     pending=(async()=>{
       try{
         const next=await loadCatalog({force});
-        paint(next);status.textContent=entries.length?'':'Пока нет материалов.';
-      }catch{entries=null;status.textContent='Каталог недоступен.';retry.hidden=false}
+        paint(next);loaded=true;status.textContent=entries.length?'':'Пока нет материалов.';
+      }catch{
+        loaded=false;status.textContent=entries?.length?'Каталог не обновился. Показан сохранённый список.':'Каталог недоступен.';
+        retry.hidden=false;
+      }
       finally{pending=null}
     })();
     return pending;
