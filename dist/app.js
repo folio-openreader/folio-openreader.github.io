@@ -935,8 +935,11 @@ function renderChapter(position={chapter,paragraph:0,fraction:0},{bookmark=false
       if(bookmark)outcomeCue($('#paragraph-'+paragraph),'bookmark',1000);
       if(!alive())return;
       suppressScroll=false;scheduleSeen();queueColdAnchorCorrection(position,epoch);
-      // Keyboard/AT chapter changes move focus only after the new anchor.
-      if(focus&&!document.hidden&&!document.querySelector('dialog[open]'))$('#chapter-heading').focus({preventScroll:true});
+      // Keyboard/AT jumps move focus only after settling their viewport.
+      if(focus&&!document.hidden&&!document.querySelector('dialog[open]')){
+        const target=bookmark?$('#paragraph-'+paragraph):$('#chapter-heading');
+        if(target){if(bookmark)target.tabIndex=-1;target.focus({preventScroll:true})}
+      }
     });
   }
   appendRows();
@@ -1446,7 +1449,7 @@ function renderReaderBookmarks(){
   bookmarks.forEach((p,index)=>{
     const row=node('div',null,'bookmark-row'),label=`${current.chapters[p.chapter]?.title||'Глава'} · абзац ${p.paragraph+1}`;
     const b=node('button',label,'chapter-row');
-    b.onclick=()=>{capturePosition();chapter=p.chapter;paragraph=p.paragraph;$('#contents-dialog').close();renderChapter(p,{bookmark:true})};
+    b.onclick=event=>{capturePosition();chapter=p.chapter;paragraph=p.paragraph;$('#contents-dialog').close();renderChapter(p,{bookmark:true,focus:event?.detail===0})};
     const del=node('button','×','icon-button');del.setAttribute('aria-label','Удалить закладку: '+label);
     del.onclick=()=>{
       const ownsFocus=document.activeElement===del;
