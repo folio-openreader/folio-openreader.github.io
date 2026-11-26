@@ -32,7 +32,7 @@ function session(disk=new Map(),step=100,rowHeight=step){
     state:JSON.parse(disk.get('folio-v2')||'{"positions":{}}'),safePosition,isComic,books:[book],current:null,chapter:0,paragraph:0,
     renderEpoch:0,suppressScroll:false,frame:0,seenTimer:0,saveTimer:0,paragraphObserver:null,activeComicPage:null,
     followingBook:false,bookSpeech:{stop(){this.playing=false},playing:false,pause(){this.playing=false}},wordSpeech:{reset:noop,warm:noop},practiceAudio:{stop:noop},
-    homeView:'home',readerReturn:'home',readerTrigger:'',homeLeaving:false,routeScroll:{},learningDirty:false,
+    homeView:'home',readerReturn:'home',readerBackPending:false,readerTrigger:'',homeLeaving:false,routeScroll:{},learningDirty:false,
     location:{hash:'#read/test'},returnRoute:()=>'home',listenButton:node(),storageWarning:'',DEMO_ID:'demo',IntersectionObserver:class{observe(){}disconnect(){}},
     requestAnimationFrame(cb){frames.push(cb);return ++serial},clearTimeout:id=>timers.delete(id),
     setTimeout(cb,ms){const id=++serial;timers.set(id,{cb,ms});return id},
@@ -58,7 +58,7 @@ function session(disk=new Map(),step=100,rowHeight=step){
     part('function comicPageGeometry(','function updateComicProgress('),
     part('let prefsLayoutEpoch=','function renderProfileStats('),part('function switchChapter(','function updateBookmark('),part('function openReaderContents(','function sourceLanguage('),
     part("$('#reading-scroll').addEventListener('scroll'", ";$('#sync-translation')"),
-    part("$('#reader-back').onclick=e=>", ";$('#previous-chapter')"),
+    part("$('#reader-back').onclick=e=>", "\n$('#previous-chapter')"),
     part("$('#previous-chapter').onclick=", ";$('#reader-bookmark')"),...handlers,
     part("window.addEventListener('hashchange',readHash)", "for(const b of $$('[data-catalog]'))"),
     'const speechHooks={'+part('onPosition({book,chapter:ci,paragraph:pi}){','\n});\nlistenButton.onclick=')+'};globalThis.speechHooks=speechHooks;'

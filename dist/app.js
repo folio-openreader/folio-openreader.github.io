@@ -86,6 +86,7 @@ function iconMarkup(name){return `<svg viewBox="0 0 24 24" aria-hidden="true" fo
 function paintIcons(scope=document){scope.querySelectorAll('[data-icon]').forEach(el=>{el.classList.add('icon-glyph');el.innerHTML=iconMarkup(el.dataset.icon)})}
 let renderEpoch=0;
 let homeView='home',readerReturn='home',readerTrigger='',homeLeaving=false,lastPointerInput=false;
+let readerBackPending=false;
 const routeScroll={home:0,library:0};
 const returnRoute=()=>history.state?.folioReaderReturn==='library'?'library':'home';
 let touchRibbon=null,programmaticRibbonLeft=0;
@@ -644,6 +645,8 @@ function navigateHome(which,event){
   showHome(which,{motion:!!event?.detail,focus:!!event&&event.detail===0});
 }
 function openBook(id,explicit,{motion=false,focus=false,trigger=''}={}){
+  if(readerBackPending)return;
+  const fromShelf=$('#reader').hidden&&!$('#home').hidden;
   if(!$('#reader').hidden){
     if(current?.id!==id)cancelLocalQueue({abortAutomatic:true});
     dismissWord();capturePosition(true);closeComicView();
@@ -659,7 +662,10 @@ function openBook(id,explicit,{motion=false,focus=false,trigger=''}={}){
   cancelMotion($('#'+homeView+'-view'));$('#home').hidden=true;$('#reader').hidden=false;document.body.classList.add('reading');setChromeColor();
   $('#book-title').textContent=current.title;renderStarterEdition(current);if(!isComic(current))renderRibbon();renderChapter(pos);saveState();
   const url='#read/'+encodeURIComponent(current.id);
-  if(location.hash!==url)history.pushState({...history.state,folioReaderReturn:readerReturn},'',url);
+  if(location.hash!==url){
+    const shelfParent=fromShelf&&(location.hash==='#'+readerReturn||(!location.hash&&readerReturn==='home'));
+    history.pushState({...history.state,folioReaderReturn:readerReturn,folioReaderShelfParent:shelfParent},'',url);
+  }
   readingHome.enterReader();
   revealMotion($('#reader'),'reader',{enabled:motion});
   if(focus)$('#reading-scroll').focus({preventScroll:true});
@@ -2034,7 +2040,22 @@ passageEl.addEventListener('keydown',e=>{
 passageEl.onclick=e=>{
   const b=e.target.closest('[data-word]');
   if(b){setReadingWordTabStop(b);showWord(b,e)}
-};$('#reader-back').onclick=e=>{history.replaceState(null,'','#'+readerReturn);showHome(readerReturn,{motion:e.detail>0,focus:e.detail===0})};$('#previous-chapter').onclick=e=>switchChapter(chapter-1,{focus:e.detail===0});$('#next-chapter').onclick=e=>switchChapter(chapter+1,{focus:e.detail===0});$('#chapter-open').onclick=openReaderContents;$('#reader-bookmark').onclick=()=>{capturePosition();const list=state.bookmarks[current.id]||[],key=chapter+'/'+paragraph;const rest=list.filter(p=>bookmarkLocation(p)!==key);if(rest.length<list.length){state.bookmarks[current.id]=rest;toast('Закладка удалена')}else{state.bookmarks[current.id]=[...list,{...state.positions[current.id]}];toast('Абзац сохранён в закладках')}saveState();updateBookmark()};$('#translation-full').onclick=()=>openLocalDialog(currentLocalTarget());$('#word-save').onclick=toggleWordSaved;
+};
+$('#reader-back').onclick=e=>{
+  if($('#reader').hidden||readerBackPending)return;
+  const options={motion:e.detail>0,focus:e.detail===0};
+  if(history.state?.folioReaderShelfParent===true){
+    // Checkpoint and cancel reader work now, but keep this entry available to Forward.
+    readerBackPending=true;
+    showHome(readerReturn,options);
+    history.back();
+  }else{
+    // A direct (or old) link cannot assume what precedes it in browser history.
+    history.replaceState(null,'','#'+readerReturn);
+    showHome(readerReturn,options);
+  }
+};
+$('#previous-chapter').onclick=e=>switchChapter(chapter-1,{focus:e.detail===0});$('#next-chapter').onclick=e=>switchChapter(chapter+1,{focus:e.detail===0});$('#chapter-open').onclick=openReaderContents;$('#reader-bookmark').onclick=()=>{capturePosition();const list=state.bookmarks[current.id]||[],key=chapter+'/'+paragraph;const rest=list.filter(p=>bookmarkLocation(p)!==key);if(rest.length<list.length){state.bookmarks[current.id]=rest;toast('Закладка удалена')}else{state.bookmarks[current.id]=[...list,{...state.positions[current.id]}];toast('Абзац сохранён в закладках')}saveState();updateBookmark()};$('#translation-full').onclick=()=>openLocalDialog(currentLocalTarget());$('#word-save').onclick=toggleWordSaved;
 const wordSpeech=createWordSpeech({publish:({status,language,apple})=>{
   const button=$('#word-speech'),guide=$('#word-speech-guide'),notice=$('#word-speech-status');
   button.dataset.speechState=status;
@@ -2582,6 +2603,7 @@ function recoverCatalogLink(url,kind,intent){
     'Не удалось загрузить текст. Попробуйте открыть его из каталога.');
 }
 function readHash(){
+  readerBackPending=false;
   if(!location.hash.startsWith('#read/')){starterIntent++;editorialIntent++;showHome(homeRoute());return}
   let id='';try{id=decodeURIComponent(location.hash.slice(6))}catch{/* Invalid links use the same shelf fallback. */}
   if(id==='demo')id=DEMO_ID; // Preserve old example links without accepting arbitrary IDs.

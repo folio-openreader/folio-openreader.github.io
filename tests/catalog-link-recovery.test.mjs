@@ -15,7 +15,7 @@ function fixture(kind,{cached=false}={}){
   const id=kinds[kind],hash='#read/'+id,nav=[],hints=[],calls=[],categories=[],replacements=[];
   const requests=[];
   const env={location:{hash},history:{replaceState(_state,_title,next){env.location.hash=next;replacements.push(next)}},
-    current:null,books:cached?[{id}]:[],starterIntent:0,editorialIntent:0,DEMO_ID:'folio-night-ferry',
+    current:null,readerBackPending:false,books:cached?[{id}]:[],starterIntent:0,editorialIntent:0,DEMO_ID:'folio-night-ferry',
     $:()=>({hidden:true}),isStarterId:s=>s.startsWith('starter-'),
     editorialKind:s=>s.startsWith('research-')?'research':s.startsWith('news-')?'news':null,
     showHome:(route,options)=>nav.push([route,Boolean(options?.focus)]),homeRoute:()=>env.location.hash.slice(1),

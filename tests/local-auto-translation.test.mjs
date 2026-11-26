@@ -30,7 +30,7 @@ function session(disk=new Map(),models=new Set(),books=[makeBook('book-one'),mak
   const localStorage={getItem:key=>disk.get(key)??null,setItem:(key,value)=>disk.set(key,value)};
   const c={
     $,localStorage,createAutoTranslationPreferences,supportsTranslation,translationPack,current:null,books:[...books],
-    chapter:0,paragraph:0,readerReturn:'home',homeView:'home',routeScroll:{},history:{state:{},pushState:noop},location:{hash:'#home'},
+    chapter:0,paragraph:0,readerReturn:'home',readerBackPending:false,homeView:'home',routeScroll:{},history:{state:{},pushState:noop},location:{hash:'#home'},
     state:{prefs:{readingLanguage:'en',dictionaryTarget:'ru'},positions:{},bookmarks:{}},
     node:(_tag,text,className)=>makeNode(text,className),
     document:{hidden:false,getElementById:()=>null,body:makeNode(),createDocumentFragment:()=>({...makeNode(),fragment:true}),
