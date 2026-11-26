@@ -1487,6 +1487,10 @@ async function restoreBackup(){
       const marks=Array.isArray(state.bookmarks[b.id])?state.bookmarks[b.id]:[],added=backup.bookmarks[b.id]||[];
       if(added.length)state.bookmarks[b.id]=[...new Map([...added,...marks].map(p=>[`${p.chapter}/${p.paragraph}`,p])).values()];
     }
+    // A fresh reader can continue the restored book immediately. In a
+    // merged library the currently selected local book keeps its priority.
+    if(ids.size===1&&ids.has(DEMO_ID)&&state.lastBook===DEMO_ID&&fresh.some(b=>b.id===backup.lastBook))
+      state.lastBook=backup.lastBook;
     if($('#backup-prefs').checked){const {theme,accent,font,size}=backup.prefs;Object.assign(state.prefs,{theme,accent,font,size});applyPrefs()}
     const savedOK=saveState();renderHomePanel();$('#backup-dialog').close();
     toast(savedOK?'Копия восстановлена.':'Данные добавлены, но настройки и слова могут не сохраниться.');
