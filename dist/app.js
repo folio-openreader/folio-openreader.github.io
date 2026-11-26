@@ -662,11 +662,14 @@ function openBook(id,explicit,{motion=false,focus=false,trigger=''}={}){
   }
   resetWordView();
   current=books.find(b=>b.id===id)||demo;state.lastBook=current.id;readerTrigger=trigger;homeLeaving=true;
+  const comic=isComic(current),scroll=$('#reading-scroll');
+  scroll.setAttribute('aria-label',comic?'Просмотр комикса':'Оригинал книги');
+  scroll.setAttribute('aria-describedby',comic?'reader-comic-keys':'reader-word-keys');
   const pos=safePosition(explicit||state.positions[current.id],current)||
-    {chapter:0,paragraph:0,fraction:0,...(isComic(current)?{}:{chapterTop:true})};
+    {chapter:0,paragraph:0,fraction:0,...(comic?{}:{chapterTop:true})};
   chapter=pos.chapter;paragraph=pos.paragraph;
   cancelMotion($('#'+homeView+'-view'));$('#home').hidden=true;$('#reader').hidden=false;document.body.classList.add('reading');setChromeColor();
-  $('#book-title').textContent=current.title;renderStarterEdition(current);if(!isComic(current))renderRibbon();renderChapter(pos);saveState();
+  $('#book-title').textContent=current.title;renderStarterEdition(current);if(!comic)renderRibbon();renderChapter(pos);saveState();
   const url='#read/'+encodeURIComponent(current.id);
   if(location.hash!==url){
     const shelfParent=fromShelf&&(location.hash==='#'+readerReturn||(!location.hash&&readerReturn==='home'));
@@ -674,7 +677,7 @@ function openBook(id,explicit,{motion=false,focus=false,trigger=''}={}){
   }
   readingHome.enterReader();
   revealMotion($('#reader'),'reader',{enabled:motion});
-  if(focus)$('#reading-scroll').focus({preventScroll:true});
+  if(focus)scroll.focus({preventScroll:true});
 }
 let comicView=null,activeComicPage=null,comicOCR=null,comicImportJob=null,comicCorrection=null;
 let comicResizeAnchor=null;
