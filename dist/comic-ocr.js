@@ -3,6 +3,7 @@
 import { check, canvasAt, hasPageMarks, ocrSession } from './ocr-engine.js';
 import { comicImageHeader, decodeComicImage, COMIC_LIMITS as L } from './comic-import.js';
 import { COMIC_OCR_LANGUAGES } from './comic-languages.js';
+import {comicRegionPixels,comicRegionWord} from './comic-region.js';
 export { COMIC_OCR_LANGUAGES };
 const PAGE_WORDS=5000, PAGE_PARAGRAPHS=2000, PAGE_CHARS=160_000;
 const lexical=/[\p{L}\p{N}][\p{L}\p{M}\p{N}]*(?:['’‐‑-][\p{L}\p{N}][\p{L}\p{M}\p{N}]*)*/gu;
@@ -171,7 +172,7 @@ export function stitchComicContext(paragraphs,words,language){
   })};
 }
 function uniqueCandidate(map,key,value){map.set(key,map.has(key)?-1:value)}
-export async function recognizeComicPage(blob,{language='eng',signal,onProgress}={}){
+export async function recognizeComicPage(blob,{language='eng',signal,onProgress,region}={}){
   check(signal);
   if(!COMIC_OCR_LANGUAGES.includes(language))throw new Error('Выберите доступный язык OCR.');
   if(!(blob instanceof Blob)||!blob.size||blob.size>L.imageBytes)throw new Error('Выберите изображение до 16 МБ.');
@@ -184,9 +185,12 @@ export async function recognizeComicPage(blob,{language='eng',signal,onProgress}
     onProgress?.({stage:'render',page:1,total:1,progress:0});check(signal);
     source=await decodeComicImage(blob.type===type?blob:blob.slice(0,blob.size,type),signal,
       'Для распознавания страниц нужен современный браузер.');check(signal);
-    const tiles=comicOCRTiles(source.width,source.height), paragraphs=[],words=[];
+    const rect=region?comicRegionPixels(region,source.width,source.height):
+      {x:0,y:0,w:source.width,h:source.height};
+    if(!rect)throw new Error('Выберите область немного больше.');
+    const tiles=comicOCRTiles(rect.w,rect.h), paragraphs=[],words=[];
     let chars=0;
-    session=ocrSession([language],signal,onProgress,{positioned:true});
+    session=ocrSession([language],signal,onProgress,{positioned:true,singleBlock:!!region&&language==='kor'});
     for(const [i,tile] of tiles.entries()){
       check(signal);
       const vertical=language==='jpn_vert';
@@ -196,7 +200,7 @@ export async function recognizeComicPage(blob,{language='eng',signal,onProgress}
       // The vertical model reads rotated glyphs. Present vertical columns as
       // sparse horizontal lines instead of treating artwork as one text block.
       if(vertical){ctx.translate(0,tile.w);ctx.rotate(-Math.PI/2);}
-      ctx.drawImage(source.image,0,tile.top,source.width,tile.end-tile.top,0,0,tile.w,tile.h);
+      ctx.drawImage(source.image,rect.x,rect.y+tile.top,rect.w,tile.end-tile.top,0,0,tile.w,tile.h);
       if(!await hasPageMarks(canvas,signal)){
         // White spacer tiles are common between panels. Start no worker for a
         // fully blank page and preserve the source coordinate grid for others.
@@ -211,7 +215,9 @@ export async function recognizeComicPage(blob,{language='eng',signal,onProgress}
       for(const word of found.words)words.push({...word,paragraphIndex:word.paragraphIndex+shift});
       canvas.width=canvas.height=0;canvas=null;
     }
-    return {...stitchComicContext(paragraphs,words,language),status:words.length?'ready':'empty'};
+    const result=stitchComicContext(paragraphs,words,language);
+    if(region)result.words=result.words.map(w=>comicRegionWord(w,rect,source.width,source.height));
+    return {...result,status:words.length?'ready':'empty'};
   } catch(e){check(signal);throw e;}
   finally{session?.close();source?.close();if(canvas)canvas.width=canvas.height=0;}
 }

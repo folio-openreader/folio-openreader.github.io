@@ -273,7 +273,7 @@ function sameBytes(a,b){
 }
 // Positioned comic recognition is opt-in. It uses untouched full tile coordinates
 // and never shares PDF paragraph filtering, crop geometry, or the repeat cache.
-export function ocrSession(selected, signal, onProgress, {positioned=false,preserveLoadDeadline=false}={}) {
+export function ocrSession(selected, signal, onProgress, {positioned=false,preserveLoadDeadline=false,singleBlock=false}={}) {
   let previous=null;
   let worker,seq=0,current=null,ready=false,closed=false, page=0,total=0;
   const emit=(stage,progress)=>onProgress?.({stage,page,total,progress});
@@ -312,7 +312,7 @@ export function ocrSession(selected, signal, onProgress, {positioned=false,prese
         await run('load',{options:{lstmOnly:true,corePath:root.href,logging:false}});
         await run('loadLanguage',{langs:selected,options:{langPath:root.href,cacheMethod:'none',gzip:true,lstmOnly:true}});
         await run('initialize',{langs:selected.join('+'),oem:1,config:{}});
-        await run('setParameters',{params:{tessedit_pageseg_mode:positioned?'11':'3',preserve_interword_spaces:'1',user_defined_dpi:'220'}});
+        await run('setParameters',{params:{tessedit_pageseg_mode:positioned&&!singleBlock?'11':singleBlock?'6':'3',preserve_interword_spaces:'1',user_defined_dpi:'220'}});
         ready=true;
       }catch(e){check(signal);if(e?.name==='AbortError'||(preserveLoadDeadline&&e?.code==='OCR_JOB_TIMEOUT'))throw e;throw modelUnavailable();}
     }

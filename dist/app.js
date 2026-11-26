@@ -683,14 +683,14 @@ function openBook(id,explicit,{motion=false,focus=false,trigger=''}={}){
   if(focus)scroll.focus({preventScroll:true});
 }
 let comicView=null,comicStrip=null,activeComicPage=null,comicOCR=null,comicImportJob=null,comicCorrection=null;
-let comicResizeAnchor=null;
+let comicResizeAnchor=null,comicRegionPicker=null,comicRegionEpoch=0,comicRegionRun=null;
 const comicOCRDialog=$('#comic-ocr-dialog'),comicOCRLanguage=$('#comic-ocr-language'),comicOCRStart=$('#comic-ocr-start');
 const comicOCRSheet=installSheet(comicOCRDialog);
 for(const [id,option] of Object.entries(COMIC_OCR_OPTIONS)){
   const choice=node('option',option.label);choice.value=id;comicOCRLanguage.append(choice);
 }
 function closeComicCorrection(){
-  comicCorrection=null;if(comicOCRDialog.open)comicOCRDialog.close();
+  comicRegionEpoch++;comicRegionPicker?.leave();comicCorrection=null;if(comicOCRDialog.open)comicOCRDialog.close();
 }
 function openComicCorrection(index,opener){
   if(!isComic(current)||index!==chapter||activeComicPage?.index!==index||comicOCR)return;
@@ -711,6 +711,24 @@ $('#comic-ocr-form').onsubmit=event=>{
   closeComicCorrection();
   $('#reading-scroll').focus({preventScroll:true});
   void recognizeCurrentComicPage(target.index,model,{replace:true});
+};
+$('#comic-region-open').onclick=async()=>{
+  const target=comicCorrection,stored=activeComicPage;
+  if(!target||target.book!==current||target.index!==chapter||stored?.index!==chapter||comicOCR)return;
+  const model=stored.ocr?.ocrLanguage||comicOCRLanguage.value;
+  if(!Object.hasOwn(COMIC_OCR_OPTIONS,model))return;
+  capturePosition(true);
+  const offset=state.positions[current.id]?.comicImageOffset??0,meta=current.comicPages[chapter];
+  closeComicCorrection();const intent=++comicRegionEpoch;
+  try{
+    const {createComicRegionPicker}=await import('./comic-region.js');
+    if(intent!==comicRegionEpoch||target.book!==current||stored!==activeComicPage||$('#reader').hidden||comicOCR)return;
+    comicRegionPicker??=createComicRegionPicker($('#comic-region-dialog'));
+    comicRegionPicker.open({...meta,blob:stored.blob,offset,opener:target.opener,apply(region){
+      if(target.book===current&&stored===activeComicPage&&!$('#reader').hidden)
+        void recognizeCurrentComicPage(target.index,model,{replace:true,region});
+    }});
+  }catch{if(intent===comicRegionEpoch)toast('Не удалось открыть выбор области. Попробуйте ещё раз.');}
 };
 function readingSourceLanguage(book,index){
   return isComic(book)?comicModelTag(comicPageModel(book,index)):book?.language;
@@ -783,7 +801,7 @@ async function renderComicPage(position,{bookmark=false,focusOcr=false}={}){
       onNavigate:next=>switchChapter(next),
       onWord:({button,event})=>{if(isComic(current)&&activeComicPage?.index===chapter)void showWord(button,event)},
       onRecognize:idx=>void recognizeCurrentComicPage(idx),
-      onCorrection:openComicCorrection,
+      onCorrection:openComicCorrection,onCancel:cancelComicRegionOCR,
       decorateWord:(button,word)=>attachStage(button,getWord(learning,word,trackingLanguage(word))),
     });
     const data=stored.ocr||{};
@@ -848,38 +866,57 @@ async function renderComicStrip(position,{bookmark=false}={}){
     void renderComicPage(fallback,{bookmark});saveState();
   }
 }
-async function recognizeCurrentComicPage(index,language,{replace=false}={}){
+function cancelComicRegionOCR(index){
+  const job=comicRegionRun;
+  if(!job||job.index!==index||job.controller!==comicOCR||chapter!==index)return;
+  comicRegionRun=null;comicOCR=null;job.controller.abort();
+  comicView?.setOCR({status:'idle'});
+}
+async function recognizeCurrentComicPage(index,language,{replace=false,region}={}){
   const book=current,stored=activeComicPage;
   if(!isComic(book)||index!==chapter||stored?.index!==index||comicOCR||(stored.ocr&&!replace))return;
   language??=comicPageModel(book,index);
   if(!Object.hasOwn(COMIC_OCR_OPTIONS,language))return;
   cancelLocalQueue();
-  const signal=(comicOCR=new AbortController()).signal;
+  const controller=comicOCR=new AbortController(),signal=controller.signal;
+  if(region)comicRegionRun={index,controller};
   const active=()=>!signal.aborted&&current===book&&chapter===index&&activeComicPage===stored&&!$('#reader').hidden;
-  comicView.setOCR({status:'loading'});
+  comicView.setOCR({status:'loading',cancellable:!!region});
   try{
     const {recognizeComicPage}=await import('./comic-ocr.js');
-    const result=await recognizeComicPage(stored.blob,{language,signal,onProgress:update=>{
+    const result=await recognizeComicPage(stored.blob,{language,signal,region,onProgress:update=>{
       if(active())comicView.setOCRProgress(update);
     }});
     if(!active())return;
     const found=result.paragraphs||[];
     if(!found.some(p=>typeof p?.text==='string'&&p.text.trim())){comicView.setOCR({status:'empty'});return}
-    const ocr={status:'ready',ocrLanguage:language,text:found.map(p=>p.text).join('\n\n'),paragraphs:found,words:result.words||[]};
+    let merged=result;
+    const priorText=region?stored.ocr?.paragraphs?.[paragraph]?.text:null;
+    if(region&&stored.ocr){
+      const {mergeComicRegion}=await import('./comic-region.js');
+      if(!active())return;
+      merged=mergeComicRegion(stored.ocr,result,region);
+    }
+    if(merged.paragraphs.length>2000||(merged.words?.length??0)>5000||
+       merged.paragraphs.reduce((n,p)=>n+p.text.length,0)>160_000)throw Error('Слишком много текста на странице.');
+    const ocr={status:'ready',ocrLanguage:language,text:merged.paragraphs.map(p=>p.text).join('\n\n'),paragraphs:merged.paragraphs,words:merged.words||[]};
     const updatedChapter=comicOCRChapter(book.chapters[index],ocr);
     // A failed retry, or one the browser cannot persist, must not replace
     // the last usable transcription and its dictionary language.
+    if(comicRegionRun?.controller===controller)comicRegionRun=null;
     comicView.setOCRProgress({stage:'save'});
     await updateComicPage(db,book.id,{...stored,ocr});
     book.chapters[index]=updatedChapter;stored.ocr=ocr;
     if(active()){
       dismissWord();
       if($('#translation-dialog').open)$('#translation-dialog').close();
-      if(paragraph>=updatedChapter.paragraphs.length)setActiveParagraph(0);
+      const retain=priorText?updatedChapter.paragraphs.findIndex(p=>p.text===priorText):-1;
+      if(retain>=0&&retain!==paragraph)setActiveParagraph(retain);
+      else if(paragraph>=updatedChapter.paragraphs.length)setActiveParagraph(0);
       comicView.setOCR({...ocr,language:readingSourceLanguage(book,index)});
     }
   }catch(e){if(active())comicView.setOCR({status:'error'})}
-  finally{if(comicOCR?.signal===signal)comicOCR=null}
+  finally{if(comicRegionRun?.controller===controller)comicRegionRun=null;if(comicOCR?.signal===signal)comicOCR=null}
 }
 const comicImportDialog=$('#comic-import-dialog'),comicFiles=$('#comic-files'),comicImportStart=$('#comic-import-start'),comicImportStatus=$('#comic-import-status'),comicImportCancel=$('#comic-import-cancel');
 const comicImportSheet=installSheet(comicImportDialog,{opener:$('#comic-import-open'),canDismiss:()=>!comicImportDialog.hasAttribute('data-saving')});

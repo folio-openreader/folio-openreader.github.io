@@ -80,7 +80,7 @@ const ink={
   prev:'m14 6-6 6 6 6', next:'m10 6 6 6-6 6',
   scan:'M8 4H5a1 1 0 0 0-1 1v3m12-4h3a1 1 0 0 1 1 1v3M4 16v3a1 1 0 0 0 1 1h3m12-4v3a1 1 0 0 1-1 1h-3M8 15l3-7h2l3 7m-6.7-2.5h5.4',
   language:'M3 5h12M9 3v2m3 0c-.5 4.5-3 7.2-7 9m1-7c.8 2.5 2.2 4.4 4.5 6m2 7 4.5-10 4.5 10m-7.7-3h6.4',
-  transcript:'M5 6h14M5 10h10M5 14h14M5 18h9'
+  transcript:'M5 6h14M5 10h10M5 14h14M5 18h9',cancel:'m6 6 12 12M18 6 6 18'
 };
 function icon(doc,id) {
   const ns='http://www.w3.org/2000/svg',svg=doc.createElementNS(ns,'svg'),p=doc.createElementNS(ns,'path');
@@ -90,7 +90,7 @@ function icon(doc,id) {
 
 let serial=0;
 const instances=new WeakMap();
-export function createComicReader(host,{onNavigate,onRecognize,onCorrection,onWord,decorateWord}={}) {
+export function createComicReader(host,{onNavigate,onRecognize,onCorrection,onCancel,onWord,decorateWord}={}) {
   instances.get(host)?.destroy();
   const doc=host.ownerDocument, stamp='folio-comic-'+(++serial);
   const el=(tag,cls,label)=>element(doc,tag,cls,label);
@@ -109,9 +109,10 @@ export function createComicReader(host,{onNavigate,onRecognize,onCorrection,onWo
   const ocr=b('scan','Распознать слова на странице','Распознать');
   const transcript=b('transcript','Показать распознанный текст','Текст');transcript.setAttribute('aria-controls',stamp+'-text');
   const correction=b('language','Язык распознавания страницы');correction.setAttribute('aria-haspopup','dialog');
+  const cancel=b('cancel','Отменить распознавание области');cancel.hidden=true;
   const progress=el('progress','comic-ocr-progress');
   progress.max=1;progress.hidden=true;progress.setAttribute('aria-label','Ход распознавания страницы');
-  tools.append(ocr,correction,transcript);bar.append(nav,tools,progress);
+  tools.append(ocr,correction,cancel,transcript);bar.append(nav,tools,progress);
   const stateNote=el('p','comic-note');stateNote.setAttribute('role','status');
   const panel=el('div','comic-transcript');panel.id=stamp+'-text';panel.setAttribute('role','region');panel.setAttribute('aria-label','Распознанный текст');
   const panelKeys=el('span',null,'Tab переходит между абзацами. Стрелки влево и вправо выбирают слово, Enter открывает словарь.');
@@ -122,7 +123,7 @@ export function createComicReader(host,{onNavigate,onRecognize,onCorrection,onWo
   const status=el('span','comic-sr');status.setAttribute('role','status');
   root.append(bar,stateNote,panelKeys,panel,frame,status);host.replaceChildren(root);
   let img=null,url=null,page={},content={paragraphs:[],marks:[]},state='idle',dead=false,drawMarks=true,readText=false,panelBuilt=false;
-  let waiting=false,notice='',workStage='';
+  let waiting=false,notice='',workStage='',canCancel=false;
   function revoke(){
     if(img){img.onload=img.onerror=null;img.removeAttribute('src');img.remove();img=null;}
     if(url){URL.revokeObjectURL(url);url=null;}
@@ -165,7 +166,10 @@ export function createComicReader(host,{onNavigate,onRecognize,onCorrection,onWo
     if(busy&&!ready)ocr.setAttribute('aria-disabled','true');
     else ocr.removeAttribute('aria-disabled');
     ocr.removeAttribute('aria-pressed');
-    correction.hidden=!onCorrection||!page.blob;correction.disabled=busy;correction.dataset.busy=String(busy);
+    const stop=busy&&canCancel&&!!onCancel,stopFocused=doc.activeElement===cancel;
+    cancel.hidden=!stop;
+    correction.hidden=!onCorrection||!page.blob||stop;correction.disabled=busy;
+    if(!stop&&stopFocused)(correction.disabled||correction.hidden?count:correction).focus({preventScroll:true});correction.dataset.busy=String(busy);
     ocr.dataset.busy=String(busy&&!ready);
     stateNote.hidden=true;
     if (ready && hasMarks){
@@ -209,7 +213,7 @@ export function createComicReader(host,{onNavigate,onRecognize,onCorrection,onWo
     let label,value;
     if(stage==='render')label='Подготовка изображения';
     else if(stage==='load')label='Загрузка локального OCR';
-    else if(stage==='save'){label='Сохранение результата';value=1;}
+    else if(stage==='save'){label='Сохранение результата';value=1;if(canCancel){canCancel=false;paintControls();}}
     else if(stage==='recognize'&&Number.isInteger(page)&&Number.isInteger(total)&&page>0&&page<=total){
       label='Фрагмент '+page+' из '+total;
       const next=(page-1+Math.max(0,Math.min(1,Number(fraction)||0)))/total;
@@ -223,7 +227,7 @@ export function createComicReader(host,{onNavigate,onRecognize,onCorrection,onWo
   function setOCR(data={}) {
     if(dead || (Number.isInteger(data.index)&&data.index!==page.index))return;
     state=data.status||'ready';
-    waiting=state==='loading';notice='';
+    waiting=state==='loading';canCancel=waiting&&data.cancellable===true;notice='';
     const hadText=content.paragraphs.some(p=>p.trim());
     if(state==='ready'){
       const nextText=comicPageText({...data,width:page.width,height:page.height});
@@ -285,6 +289,7 @@ export function createComicReader(host,{onNavigate,onRecognize,onCorrection,onWo
     if(!target||target.disabled||target.getAttribute('aria-disabled')==='true')return;
     if(target===prev || target===next){onNavigate?.(page.index+(target===prev?-1:1));return;}
     if(target===correction){onCorrection?.(page.index,correction);return;}
+    if(target===cancel){onCancel?.(page.index);return;}
     if(target===ocr){
       if(content.marks.length){drawMarks=!drawMarks;paintControls();}
       else void recognize();

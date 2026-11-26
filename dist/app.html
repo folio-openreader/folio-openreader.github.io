@@ -355,6 +355,18 @@ html{background-color:var(--boot-bg)}
     <select id="comic-ocr-language" aria-label="Язык распознавания"></select>
     <button id="comic-ocr-start" class="primary" type="submit">Распознать</button>
   </form>
+  <button type="button" class="quiet" id="comic-region-open">Выбрать область</button>
+</dialog>
+<dialog id="comic-region-dialog" aria-labelledby="comic-region-heading">
+  <header class="dialog-heading"><h2 id="comic-region-heading">Область распознавания</h2><button type="button" class="icon-button" data-region-cancel aria-label="Отменить выбор области" autofocus><i data-icon="close"></i></button></header>
+  <p class="comic-region-help muted" id="comic-region-help" role="status"></p>
+  <div class="comic-region-viewport">
+    <figure tabindex="0" aria-label="Углы области: стрелки перемещают курсор, Enter выбирает угол" aria-describedby="comic-region-help">
+      <img alt="Страница комикса">
+      <span class="comic-region-pin" hidden aria-hidden="true"></span><span class="comic-region-box" hidden aria-hidden="true"></span>
+    </figure>
+  </div>
+  <div class="comic-region-actions"><button type="button" class="quiet" data-region-reset>Сбросить</button><button type="button" class="primary" data-region-start disabled>Распознать область</button></div>
 </dialog>
 <dialog id="comic-import-dialog" aria-labelledby="comic-import-heading">
   <button type="button" data-sheet-handle aria-label="Закрыть панель" autofocus></button>
