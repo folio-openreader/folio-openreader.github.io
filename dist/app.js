@@ -1729,7 +1729,9 @@ for(const role of importRoles){
   const select=$('#ocr-'+role),automatic=node('option','Автоматически');automatic.value='';select.append(automatic);
   for(const [code,label] of ocrLanguageChoices){const option=node('option',label);option.value=code;select.append(option)}
 }
+const importParseKey=(role,preferred=preferredOcr(role))=>[$('#ocr-'+role).value,ocrRecovery.has(role)?'thorough':'auto',...preferred].join(':');
 function syncOcrControls(){
+  $('#remove-translation-file').hidden=!getFile('translation');
   const hasSettings=role=>isImage(getFile(role))||(isPdf(getFile(role))&&ocrRecovery.has(role));
   const panel=$('#ocr-panel');
   panel.hidden=!importRoles.some(hasSettings);
@@ -1787,7 +1789,7 @@ function appendOcrReview(box,parsed,role){
   };
   select.onchange=draw;draw();box.append(review);
 }
-function renderImportPreview(a,b,event){
+function renderImportPreview(a,b,event,{originalLanguage}={}){
   previewBook=b?pairBooks(a,b):singleBook(a);
   const box=$('#import-preview'),unit=['PDF','PNG','JPEG','WEBP'].includes(a.format)?'Страниц':'Глав';
   box.replaceChildren(node('h3',previewBook.title),node('p',`${previewBook.author||'Автор не указан'} · ${unit}: ${previewBook.chapters.length} · Абзацев: ${totalParagraphs(previewBook)}`,'muted'));
@@ -1797,7 +1799,8 @@ function renderImportPreview(a,b,event){
     if(knownLanguage(tag)){box.append(node('p',label+': '+(languages[knownLanguage(tag)]||tag),'muted'));continue}
     const select=node('select'),wrapper=node('label',label+' (не указан в файле)','field');
     const inferred=resolveLanguage(tag,choice,parsed.chapters[0]?.paragraphs[0]||'');
-    fillLanguages(select,Object.hasOwn(languages,inferred)?inferred:'',{unknown:true});
+    const selected=field==='language'&&originalLanguage!==undefined?originalLanguage:inferred;
+    fillLanguages(select,Object.hasOwn(languages,selected)?selected:'',{unknown:true});
     const book=previewBook;const commit=()=>{book[field]=select.value||tag||'und'};
     select.onchange=commit;commit();wrapper.append(select);box.append(wrapper);
   }
@@ -1828,6 +1831,21 @@ function renderImportPreview(a,b,event){
   box.hidden=false;$('#import-confirm').hidden=false;$('#import-confirm .check-field').hidden=!b;$('#save-import').disabled=!!b;
   importStatus('Проверьте предпросмотр.','ready');setBookTiles('ready');revealMotion(box,'panel',{enabled:!!event?.detail});
 }
+$('#remove-translation-file').onclick=event=>{
+  const input=$('#translation-file');
+  if(!input.files.length||$('#import-dialog').hasAttribute('data-saving'))return;
+  const original=getFile('original'),cached=parsedImport.get('original'),originalLanguage=previewBook?.language;
+  input.value='';fileTile(input,{animate:false});resetOcrSettings('translation');invalidateImport();
+  if(cached?.file===original&&cached?.key===importParseKey('original')){
+    renderImportPreview(cached.parsed,null,event,{originalLanguage});
+    importStatus('Файл перевода убран. Проверьте оригинал.','ready');
+    if(event.detail===0)$('#save-import').focus();
+  }else{
+    setBookTiles('selected');
+    importStatus('Файл перевода убран. Можно продолжить с оригиналом.');
+    if(event.detail===0)$('#preview-import').focus();
+  }
+};
 async function previewImport(event){
   const original=getFile('original'),translation=getFile('translation');invalidateImport();
   if(!original){importStatus('Выберите файл оригинала.','error');return}
@@ -1837,7 +1855,7 @@ async function previewImport(event){
   let role='original';
   const read=async(file,item)=>{
     const choice=$('#ocr-'+item).value,ocr=ocrRecovery.has(item)?'thorough':'auto',preferredLanguages=preferredOcr(item);
-    const key=[choice,ocr,...preferredLanguages].join(':');
+    const key=importParseKey(item,preferredLanguages);
     const cached=parsedImport.get(item);
     if(cached?.file===file&&cached.key===key)return cached.parsed;
     parsedImport.delete(item);
@@ -1872,7 +1890,7 @@ function setupOcr(role){
   $('#ocr-'+role).focus();
 }
 $('#retry-ocr').onclick=()=>setupOcr($('#retry-ocr').dataset.role);
-async function saveImport(event){if(!previewBook||$('#import-dialog').hasAttribute('data-saving'))return;if(previewBook.alignment==='positional-unverified'&&!$('#alignment-check').checked)return;$('#save-import').disabled=true;$('#import-dialog').setAttribute('data-saving','');const book=stampTextBook({...previewBook,id:'book-'+crypto.randomUUID(),createdAt:Date.now()});for(const key of ['ocr','translationOcr'])if(book[key])book[key]=sanitizeOcr(book[key]);try{await dbAction('readwrite',s=>s.put(book));books.push(book);previewBook=null;$('#import-dialog').close();$('#original-file').value='';$('#translation-file').value='';fileTile($('#original-file'));fileTile($('#translation-file'));resetOcrSettings();invalidateImport();toast('Книга добавлена.');openBook(book.id,undefined,{motion:!!event?.detail,focus:!event?.detail,trigger:'continue'})}catch(e){toast(e.name==='QuotaExceededError'?'Недостаточно памяти браузера для книги. Освободите место или выберите меньший файл.':e.message);$('#save-import').disabled=false}finally{$('#import-dialog').removeAttribute('data-saving')}}
+async function saveImport(event){if(!previewBook||$('#import-dialog').hasAttribute('data-saving'))return;if(previewBook.alignment==='positional-unverified'&&!$('#alignment-check').checked)return;$('#save-import').disabled=$('#remove-translation-file').disabled=true;$('#import-dialog').setAttribute('data-saving','');const book=stampTextBook({...previewBook,id:'book-'+crypto.randomUUID(),createdAt:Date.now()});for(const key of ['ocr','translationOcr'])if(book[key])book[key]=sanitizeOcr(book[key]);try{await dbAction('readwrite',s=>s.put(book));books.push(book);previewBook=null;$('#import-dialog').close();$('#original-file').value='';$('#translation-file').value='';fileTile($('#original-file'));fileTile($('#translation-file'));resetOcrSettings();invalidateImport();toast('Книга добавлена.');openBook(book.id,undefined,{motion:!!event?.detail,focus:!event?.detail,trigger:'continue'})}catch(e){toast(e.name==='QuotaExceededError'?'Недостаточно памяти браузера для книги. Освободите место или выберите меньший файл.':e.message);$('#save-import').disabled=false}finally{$('#import-dialog').removeAttribute('data-saving');$('#remove-translation-file').disabled=false}}
 // Touch pans are native. Only actual ribbon scrolling indicates exploration.
 const ribbon=$('#translation-ribbon');
 ribbon.addEventListener('pointerdown',e=>{

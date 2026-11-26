@@ -289,6 +289,7 @@ dialog.word-quick{width:min(420px,calc(100% - 24px));padding:17px 18px 16px;max-
 .ocr-languages select,.ocr-review select{width:100%;max-width:100%;min-width:0;min-height:44px;margin:0;font-size:16px}
 #ocr-settings p,.ocr-review p{font-size:14px;line-height:1.45;overflow-wrap:anywhere}
 #ocr-settings p{color:var(--muted);margin:8px 0 11px}
+.import-remove-pair{display:block;margin-block:-4px 0;margin-inline-start:auto;min-height:44px;font-size:13px}
 .import-actions{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
 #import-dialog [hidden]{display:none!important}
 #import-status:empty{margin:0}
