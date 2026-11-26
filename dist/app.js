@@ -1274,7 +1274,8 @@ async function pumpLocal(){
         if(!localWorkPaused())paintLocalDialog(job);
       }});
       if(localJob!==job)return;
-      if(entry&&books.includes(job.book)&&autoLocal(job))void writeParagraphCache(db,entry,value).catch(()=>{});
+      // Pause stops automatic work, not saving a translation the reader explicitly requested.
+      if(entry&&books.includes(job.book)&&(job.explicit||autoLocal(job)))void writeParagraphCache(db,entry,value).catch(()=>{});
     }
     if(job.explicit&&!saved){
       const key=pairCode(job.source,job.target);

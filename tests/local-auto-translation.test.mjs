@@ -262,8 +262,10 @@ test('Pause stops an already-running automatic paragraph without painting the ca
   assert.equal(fresh.calls.at(-1).allowNetwork,true);
 });
 
-test('Pause does not abort a separate explicit translation already requested by the reader',async()=>{
-  const h=session();h.open();h.$('#translation-full').onclick();h.$('#local-translation-start').onclick();
+test('Pause keeps an explicitly requested translation running and its completed result durable',async()=>{
+  const books=[makeBook('book-one')],cache=new Map();
+  const h=session(new Map(),new Set(),books,cache);
+  h.open();h.$('#translation-full').onclick();h.$('#local-translation-start').onclick();
   h.c.deferNext=true;const work=h.drain();await turn();
   assert.equal(h.calls[0].allowNetwork,true);
   h.$('#translation-dialog').close();h.c.syncTranslation();
@@ -271,6 +273,10 @@ test('Pause does not abort a separate explicit translation already requested by 
   assert.equal(h.stops,0);
   h.resolveLate();await work;
   assert.equal(h.$('#local-translation-open').textContent,'Продолжить');
+  assert.match(cache.get('book-one|0|0|ru')||'',/A river crossed the city/, 'manual result must persist after pausing automatic translation');
+  const fresh=session(h.disk,new Set(),books,cache);fresh.open();await fresh.drain();
+  assert.deepEqual(fresh.calls,[]);
+  assert.match(fresh.$('#translation-track').querySelector('.translation-empty').textContent,/A river crossed the city/);
   h.select(1);await h.drain();assert.equal(h.calls.length,1);
 });
 

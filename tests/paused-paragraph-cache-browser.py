@@ -2,6 +2,7 @@
 from argparse import ArgumentParser
 from pathlib import Path
 import runpy
+from time import monotonic
 from playwright.sync_api import expect, sync_playwright
 
 suite = runpy.run_path(str(Path(__file__).with_name("paragraph-cache-browser.py")))
@@ -43,22 +44,37 @@ def run(dist, chromium):
         p.locator("#save-import").click()
         dialog = p.locator("#translation-dialog")
         p.locator("#translation-full").click()
+        p.evaluate("window.holdNextParagraph=true")
         p.locator("#local-translation-start").click()
-        expect(dialog.locator(".machine-result")).to_contain_text("The river enters the sea.")
-        p.wait_for_function(f"async () => (await ({COUNT_CACHE})()) === 1")
+        p.wait_for_function("typeof releaseParagraph === 'function'")
         dialog.locator("[data-sheet-handle]").click()
         expect(dialog).to_be_hidden()
         toggle = p.locator("#local-translation-open")
+        # Move to another paragraph while the manual job is pending, so
+        # the ribbon updates and the reader can pause automatic work.
+        word_sheet = p.locator("#word-dialog")
+        p.locator("#paragraph-1 .word").first.tap()
+        word_sheet.locator("[data-sheet-handle]").tap()
+        expect(word_sheet).to_be_hidden()
         expect(toggle).to_have_text("Пауза")
         toggle.click()
+        expect(toggle).to_have_text("Перевести")
+        p.locator("#paragraph-0 .word").first.tap()
+        word_sheet.locator("[data-sheet-handle]").tap()
+        expect(word_sheet).to_be_hidden()
+        assert p.evaluate(COUNT_CACHE) == 0
+        p.evaluate("releaseParagraph()")
         expect(toggle).to_have_text("Продолжить")
+        deadline = monotonic() + 2.5
+        while p.evaluate(COUNT_CACHE) != 1 and monotonic() < deadline:
+            p.wait_for_timeout(60)
+        assert p.evaluate(COUNT_CACHE) == 1, "Finished manual translation was not stored after Pause"
         p.reload()
         p.locator("#folio-boot").wait_for(state="detached")
         expect(dialog).to_be_hidden()
         assert p.evaluate("window.paragraphModelCalls") == []
         # The word's context is its own entry point. Search it before opening
         # the translation sheet or the model's fresh memory will mask the bug.
-        word_sheet = p.locator("#word-dialog")
         p.locator("#paragraph-0 .word").first.tap()
         word_sheet.locator("#word-context-toggle").tap()
         context = word_sheet.locator("#word-context")
@@ -88,7 +104,7 @@ def run(dist, chromium):
         expect(dialog.locator(".machine-result")).to_have_count(0)
         assert p.evaluate("window.paragraphModelCalls") == []
         assert not downloads and not errors, (downloads, errors)
-        print("Saved translated paragraph reopened while paused; uncached paragraph waited for explicit action.")
+        print("An in-flight manual translation was saved after Pause and survived reload; uncached text still waits.")
         b.close()
 
 
