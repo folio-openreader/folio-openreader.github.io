@@ -530,7 +530,7 @@ function revealWordStageButton(button){
 }
 wordStageFilters.addEventListener('focusin',e=>revealWordStageButton(e.target));
 
-function renderWords({motion=false}={}){
+function renderWords({motion=false,appendFrom=0}={}){
   const measures=learningStats(learning,Date.now());
   $('#word-count').textContent=measures.total;
   paintWordSelection(measures.total);
@@ -544,7 +544,11 @@ function renderWords({motion=false}={}){
   const matches=Object.values(learning.words).filter(r=>(filter==='all'||stage(r)===filter)&&(!key||searchKey(r.word).includes(key)||(!state.prefs.dictionaryPack&&state.prefs.dictionaryTarget==='ru'&&searchKey(baseForStudy(r)?.[0]||'').includes(key))));
   $('#word-matches').textContent=key||filter!=='all'?`Найдено: ${matches.length}`:'';
   $('#words-more').hidden=matches.length<=wordLimit;
-  list.replaceChildren();
+  // Appending an unchanged prefix keeps its controls and async glosses alive.
+  // Filtering or a changed word order still rebuilds the complete visible list.
+  let offset=appendFrom>0&&matches.length>appendFrom&&list.childElementCount===appendFrom?appendFrom:0;
+  for(let i=0;i<offset;i++)if(list.children[i].dataset.studyWord!==matches[i].key){offset=0;break}
+  if(!offset)list.replaceChildren();
   if(!matches.length){
     if(key||filter!=='all'){list.append(node('p',key?'Ничего не найдено.':'Пока нет слов с этим статусом.','empty-state'));return}
     const empty=node('div',null,'empty-state wordbook-empty'),link=node('a','Выбрать книгу','wordbook-link');
@@ -553,7 +557,7 @@ function renderWords({motion=false}={}){
     list.append(empty);return
   }
   const chunk=document.createDocumentFragment(),packId=state.prefs.dictionaryPack,target=state.prefs.dictionaryTarget,captions=[];
-  for(const record of matches.slice(0,wordLimit)){
+  for(const record of matches.slice(offset,wordLimit)){
     const row=node('div',null,'saved-row'),info=node('div',null,'saved-main'),title=node('div',null,'word-row-title'),word=node('strong',record.word);
     row.dataset.studyWord=record.key;word.lang=record.language;title.append(word,stageBadge(record));
     const base=packId||target!=='ru'?null:baseForStudy(record),caption=node('p',base?.[0]||'','word-list-gloss');
@@ -2562,7 +2566,7 @@ for(const b of wordStageButtons)b.onclick=e=>{
   wordFilter=b.dataset.stageFilter;wordLimit=48;renderWords({motion:e.detail>0});
   revealWordStageButton(b);
 };
-$('#words-more').onclick=()=>{const old=wordLimit;wordLimit+=48;renderWords();$$('#saved-list .saved-row')[old]?.querySelector('input,button')?.focus()};
+$('#words-more').onclick=()=>{const old=wordLimit;wordLimit+=48;renderWords({appendFrom:old});$$('#saved-list .saved-row')[old]?.querySelector('input,button')?.focus()};
 $('#word-selection-toggle').onclick=()=>{
   if(selectingWords)exitWordSelection();else selectingWords=true;
   renderWords();
