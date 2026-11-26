@@ -759,7 +759,7 @@ function wordNodes(text){
   });
   return fragment;
 }
-function renderChapter(position={chapter,paragraph:0,fraction:0},{bookmark=false,focus=false}={}){listenButton.hidden=isComic(current);if(isComic(current)){void renderComicPage(position,{bookmark});return}const epoch=++renderEpoch;suppressScroll=true;cancelSpeech();const c=current.chapters[chapter];paragraph=Math.max(0,Math.min(c.paragraphs.length-1,position.paragraph||0));state.positions[current.id]={...position,chapter,paragraph,fraction:position.fraction||0};$('#chapter-title').textContent=`${chapter+1} / ${current.chapters.length} · ${c.title}`;$('#chapter-meta').textContent=`ГЛАВА ${chapter+1} · ${current.language||'ОРИГИНАЛ'}`;$('#chapter-heading').textContent=c.title;paragraphObserver?.disconnect();paragraphObserver=new IntersectionObserver(entries=>{for(const entry of entries){if(entry.isIntersecting){const el=entry.target;if(!el.dataset.hydrated){el.replaceChildren(wordNodes(el.textContent));el.dataset.hydrated='true'}paragraphObserver.unobserve(el)}}},{root:$('#reading-scroll'),rootMargin:'600px'});const passage=document.createDocumentFragment();c.paragraphs.forEach((p,i)=>{const el=node('p',null,'reading-paragraph');el.dataset.paragraph=i;el.id=`paragraph-${i}`;el.lang=current.language||'';el.textContent=p.text;passage.append(el);paragraphObserver.observe(el)});$('#passage').replaceChildren(passage);$('#previous-chapter').disabled=chapter===0;$('#next-chapter').disabled=chapter===current.chapters.length-1;$('.reader-help').open=false;$('#reading-note').textContent=current.alignment==='demo'?'Демо: три фрагмента с готовым переводом.':current.alignment==='none'?(isStarterId(current.id)?'У издания нет готового парного текста. Словарь доступен по нажатию на слово.':'Файл перевода не добавлен.'):'Сопоставление по порядку, не по смыслу. Несовпавшие главы не переведены.';const pageNo=Number(/^Страница (\d+)$/.exec(c.title)?.[1]);if(current.ocr?.pages.includes(pageNo))$('#reading-note').textContent+=current.ocr.uncertain.includes(pageNo)?' На этой странице OCR не уверено в результате. Сверьте текст с оригиналом.':' Эта страница содержит распознанный текст.';requestAnimationFrame(()=>{if(epoch!==renderEpoch)return;restorePosition(position);setActiveParagraph(paragraph,true);if(bookmark)outcomeCue($('#paragraph-'+paragraph),'bookmark',1000);if(epoch===renderEpoch){suppressScroll=false;scheduleSeen();
+function renderChapter(position={chapter,paragraph:0,fraction:0},{bookmark=false,focus=false}={}){listenButton.hidden=isComic(current);if(isComic(current)){void renderComicPage(position,{bookmark});return}const epoch=++renderEpoch;suppressScroll=true;cancelSpeech();const c=current.chapters[chapter];paragraph=Math.max(0,Math.min(c.paragraphs.length-1,position.paragraph||0));state.positions[current.id]={...position,chapter,paragraph,fraction:position.fraction||0};$('#chapter-title').textContent=`${chapter+1} / ${current.chapters.length} · ${c.title}`;$('#chapter-meta').textContent=`ГЛАВА ${chapter+1} · ${current.language||'ОРИГИНАЛ'}`;$('#chapter-heading').textContent=c.title;paragraphObserver?.disconnect();paragraphObserver=new IntersectionObserver(entries=>{for(const entry of entries){if(entry.isIntersecting){const el=entry.target;if(!el.dataset.hydrated){el.replaceChildren(wordNodes(el.textContent));el.dataset.hydrated='true'}paragraphObserver.unobserve(el)}}},{root:$('#reading-scroll'),rootMargin:'600px'});const passage=document.createDocumentFragment();c.paragraphs.forEach((p,i)=>{const el=node('p',null,'reading-paragraph');el.dataset.paragraph=i;el.id=`paragraph-${i}`;el.lang=current.language||'';el.textContent=p.text;passage.append(el);paragraphObserver.observe(el)});$('#passage').replaceChildren(passage);$('#previous-chapter').disabled=chapter===0;$('#next-chapter').disabled=chapter===current.chapters.length-1;$('.reader-help').open=false;$('#reading-note').textContent=current.alignment==='demo'?'Демо: три фрагмента с готовым переводом.':current.alignment==='none'?(isStarterId(current.id)?'У издания нет готового парного текста. Словарь доступен по нажатию на слово.':'Файл перевода не добавлен.'):'Сопоставление по порядку, не по смыслу. Несовпавшие главы не переведены.';const pageNo=Number(/^Страница (\d+)$/.exec(c.title)?.[1]);if(current.ocr?.pages.includes(pageNo))$('#reading-note').textContent+=current.ocr.uncertain.includes(pageNo)?' На этой странице OCR не уверено в результате. Сверьте текст с оригиналом.':' Эта страница содержит распознанный текст.';requestAnimationFrame(()=>{if(epoch!==renderEpoch)return;restorePosition(position);setActiveParagraph(paragraph,true);if(bookmark)outcomeCue($('#paragraph-'+paragraph),'bookmark',1000);if(epoch===renderEpoch){suppressScroll=false;scheduleSeen();queueColdAnchorCorrection(position,epoch);
   // Move focus only for a keyboard/AT chapter command, after the new anchor
   // has been restored. Never pull focus out of another sheet or a hidden reader.
   if(focus&&!document.hidden&&!$('#reader').hidden&&!document.querySelector('dialog[open]'))$('#chapter-heading').focus({preventScroll:true});
@@ -771,6 +771,30 @@ function restorePosition(p){
   sc.scrollTop=Math.max(0,top-22+(p.fraction||0)*el.offsetHeight+(p.viewportDelta||0));
   markReadingScrollAnchor();
 }
+function queueColdAnchorCorrection(position,epoch){
+  if(!globalThis.CSS?.supports('content-visibility','auto')||
+    !(position.paragraph||position.fraction||position.viewportDelta)||document.hidden||readingScrollAnchor?.epoch!==epoch)return;
+  const sc=$('#reading-scroll'),stopper=new AbortController(),signal=stopper.signal;
+  const stop=()=>stopper.abort();
+  const input={capture:true,passive:true,signal};
+  for(const name of ['pointerdown','touchstart','wheel','keydown'])sc.addEventListener(name,stop,input);
+  window.addEventListener('pagehide',stop,{once:true,signal});
+  document.addEventListener('visibilitychange',stop,{once:true,signal});
+  let anchor=readingScrollAnchor,frames=4;
+  const settle=()=>{
+    if(signal.aborted)return;
+    if(epoch!==renderEpoch||document.hidden||readerSuspended||$('#reader').hidden||
+      anchor!==readingScrollAnchor||Math.abs(sc.scrollTop-anchor.top)>1||document.querySelector('dialog[open]')){stop();return;}
+    // On cold opens compositor layout may replace the upstream row estimates.
+    // Re-read only the original row during a short, gesture-cancellable window.
+    const before=sc.scrollTop;
+    restorePosition(position);anchor=readingScrollAnchor;
+    if(Math.abs(sc.scrollTop-before)>.5)scheduleSeen();
+    if(--frames)requestAnimationFrame(settle);else stop();
+  };
+  requestAnimationFrame(settle);
+}
+
 function capturePosition(quiet=false){
   if(!current||$('#reader').hidden)return;
   // Before a layout/seek finishes, renderChapter already holds the intended target.
