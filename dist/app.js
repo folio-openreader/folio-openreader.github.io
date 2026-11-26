@@ -1122,6 +1122,7 @@ let localPageAway=false,localResumeQueued=false;
 let localDownload={loaded:0,total:0};
 const localNotStored=new Set();
 let lastLocalCacheProbe=null,localRibbonProbe=null,localRibbonTimer=0;
+let wordContextTranslation=null;
 const localTarget=(book,ci,pi)=>{
   const p=book?.chapters[ci]?.paragraphs[pi];
   return p&&{book,ci,pi,p,source:sourceLanguage(p.text,readingSourceLanguage(book,ci)),target:state.prefs.dictionaryTarget};
@@ -1138,6 +1139,12 @@ function setAutoLocal(loc,enabled){
 const canLocal=loc=>!!loc&&localTranslator.capabilities()&&supportsTranslation(loc.source,loc.target);
 const canProbeLocalCache=loc=>!!db&&loc.book.id!==DEMO_ID&&!isComic(loc.book);
 const peekLocal=loc=>loc&&supportsTranslation(loc.source,loc.target)?localTranslator.peek(loc.p.text,{source:loc.source,target:loc.target}):null;
+function refreshWordContextTranslation(loc){
+  const context=wordContextTranslation;
+  // Keep the nested dialog's opener until the browser has returned focus.
+  if(!context||!sameLocal(context.loc,loc)||$('#translation-dialog').open)return;
+  const value=peekLocal(loc);if(value)context.refresh(value);
+}
 const localErrorMessages={
   length:'Этот абзац слишком длинный для локального перевода.',
   'not-installed':'Модель не найдена на устройстве. Скачайте её ещё раз.',
@@ -1357,7 +1364,7 @@ async function pumpLocal(){
     if(localJob===job){
       localJob=null;localDownload={loaded:0,total:0};
       if(!localWorkPaused()){
-        paintLocalDialog(job);
+        paintLocalDialog(job);refreshWordContextTranslation(job);
         if(sameLocal(job,currentLocalTarget())&&!$('#reader').hidden&&!ribbonManual)syncTranslation();
         if(localWanted)void pumpLocal();
       }
@@ -1383,7 +1390,11 @@ $('#local-translation-start').onclick=()=>{
   // immediately if the reader closes the sheet while the manual job runs.
   if(!$('#reader').hidden&&!ribbonManual&&sameLocal(loc,currentLocalTarget()))syncTranslation();
 };
-$('#translation-dialog').addEventListener('close',()=>{if(!$('#translation-dialog').open){localDialogTarget=null;localDialogProbe=null}});
+$('#translation-dialog').addEventListener('close',()=>{
+  if($('#translation-dialog').open)return;
+  const loc=localDialogTarget;localDialogTarget=null;localDialogProbe=null;
+  refreshWordContextTranslation(loc);
+});
 window.addEventListener('storage',e=>localAuto.refresh(e.key));
 window.addEventListener('pagehide',()=>{localPageAway=true;suspendLocalWork(true)});
 window.addEventListener('pageshow',()=>{localPageAway=false;resumeLocalWork()});
@@ -1561,6 +1572,7 @@ function toggleWordSaved(event){
   $('#word-count').textContent=Object.keys(learning.words).length;
 }
 function resetWordContext(){
+  wordContextTranslation=null;
   aiWordHint?.dispose();aiWordHint=null;
   const context=$('#word-context'),toggle=$('#word-context-toggle'),dialog=$('#word-dialog');
   context.hidden=true;context.replaceChildren();toggle.textContent='В контексте';toggle.setAttribute('aria-expanded','false');dialog.removeAttribute('data-expanded');
@@ -1591,21 +1603,27 @@ function openWordContext(event){
   }else{
     const loc=localTarget(current,anchor.location.chapter,anchor.location.paragraph),preview=node('div');
     context.append(preview);
+    const stillHere=()=>wordAnchor===anchor&&dialog.open&&!context.hidden&&preview.isConnected&&
+      !dialog.hasAttribute('data-sheet-exiting');
+    let shown=null;
     const paint=local=>{
       preview.removeAttribute('aria-busy');
+      if(shown&&(!local||shown===local))return;
       if(local){
+        shown=local;const restoreFocus=preview.contains(document.activeElement);
         const translated=node('p',local,'word-parallel');translated.lang=loc.target;translated.dir='auto';
         preview.replaceChildren(node('h3','Машинный перевод · '+loc.target.toUpperCase()),translated);
+        if(restoreFocus){translated.tabIndex=-1;translated.focus({preventScroll:true});}
       }else if(loc&&canLocal(loc)){
         const button=node('button','Перевести абзац','quiet');button.type='button';button.onclick=()=>openLocalDialog(loc);
         preview.replaceChildren(button);
       }else preview.replaceChildren(node('p','Для этого абзаца нет готового перевода.','muted'));
     };
+    if(loc&&supportsTranslation(loc.source,loc.target))
+      wordContextTranslation={loc,refresh:value=>{if(stillHere())paint(value)}};
     const local=loc&&peekLocal(loc);
     if(local)paint(local);
     else if(loc&&supportsTranslation(loc.source,loc.target)&&canProbeLocalCache(loc)){
-      const stillHere=()=>wordAnchor===anchor&&dialog.open&&!context.hidden&&preview.isConnected&&
-        !dialog.hasAttribute('data-sheet-exiting');
       preview.setAttribute('aria-busy','true');preview.append(node('p','Ищем сохранённый перевод…','muted'));
       // Looking at context reads only local data, even with auto-translate off.
       void savedLocalTranslation(loc,stillHere).then(saved=>{if(stillHere())paint(saved||peekLocal(loc))});
