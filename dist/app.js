@@ -2011,7 +2011,7 @@ function scopeLabel(){
   for(const id of manualWords)if(!Object.hasOwn(learning.words,id))manualWords.delete(id);
   $('#lesson-scope-label').textContent=manualWords.size?'Вы выбрали: '+wordCountText(manualWords.size):'Автоподбор слов';
   $('#lesson-scope-note').textContent=manualWords.size?'Только выбранные слова.':'Сначала трудные и те, которые пора повторить.';
-  $('#lesson-pick-count').textContent='Выбрано: '+manualWords.size+' / '+SERIES_LIMIT;
+  $('#lesson-pick-count').textContent='Выбрано: '+manualWords.size+(manualWords.size>SERIES_LIMIT?' · до '+SERIES_LIMIT+' за серию':' / '+SERIES_LIMIT);
   $('#lesson-clear').disabled=!manualWords.size;
 }
 function paintPicker(){
@@ -2075,7 +2075,8 @@ async function startSeries(event,explicitKeys=null){
     if(!doc){status.textContent=failures===ordered.length?'Местный словарь недоступен. Проверьте словари в профиле и попробуйте ещё раз.':'Не нашлось слов с подходящими значениями. Выберите другие слова или установите словарь в профиле.';return}
     activeSeriesKeys=selection.size?[...selection]:null;
     if(auto)recentSeriesWords=rememberStudyWords(recentSeriesWords,doc.words.map(c=>c.id));
-    const scopeNote=selection.size>doc.words.length?'Из выбранных в серию вошло '+doc.words.length+' из '+selection.size+': нужны различимые словарные значения.':'';
+    const part='В этой серии '+doc.words.length+' из '+selection.size+' выбранных слов.';
+    const scopeNote=selection.size>doc.words.length?part+(selection.size>SERIES_LIMIT?' Лимит серии: '+SERIES_LIMIT+'.':' Для заданий нужны различимые словарные значения.'):'';
     status.textContent='';$('#practice-menu').hidden=true;$('#match-game').hidden=true;
     player.start(doc,{scopeNote});
   }catch{if(alive())status.textContent='Не удалось собрать серию. Проверьте местные словари и попробуйте ещё раз.'}
@@ -2333,9 +2334,12 @@ $('#word-selection-remove').onclick=e=>{
 };
 $('#words-to-practice').onclick=e=>{
   if(!selectingWords||!selectedWordKeys.size)return;
-  const keys=[...selectedWordKeys];
+  // Use the same editable scope as the practice picker. A missing gloss or
+  // backing out must not turn the user's next attempt into automatic selection.
+  manualWords.clear();
+  for(const key of selectedWordKeys)manualWords.add(key);
   navigateHome('practice',e);
-  void startSeries(e,keys);
+  void startSeries(e);
 };
 $('#export-words').onclick=async()=>{
   const button=$('#export-words');button.disabled=true;
