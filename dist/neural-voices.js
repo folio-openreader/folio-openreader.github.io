@@ -101,13 +101,20 @@ export function stopNeural(){
   if(pending.size)dropWorker();else {clearTimeout(idle);if(worker||ctx)idle=setTimeout(dropWorker,20000)}
   pre=null;
 }
-// Keep only the current decoded segment and its elapsed audio time. The
-// caller retains this snapshot; stop still releases the worker and lookahead.
+const LOOKAHEAD_HOLD_MS=20000,LOOKAHEAD_HOLD_BYTES=2*1024*1024;
+// Keep the current segment at its audio offset. The same narration may also
+// reuse one small, already-generated next segment. Never keep inference
+// running to finish an unfinished prefetch while the reader is paused.
 export function pauseNeural(){
   let resume=null;
   if(ctx&&source&&playhead){
     const at=playhead.offset+Math.max(0,ctx.currentTime-playhead.startedAt);
     resume={key:playhead.key,buffer:source.buffer,offset:Math.min(at,source.buffer.duration)};
+    const result=pre?.ready;
+    if(result?.pcm?.byteLength>0&&result.pcm.byteLength<=LOOKAHEAD_HOLD_BYTES){
+      const ahead=resume.ahead={key:pre.key,result,expires:performance.now()+LOOKAHEAD_HOLD_MS};
+      setTimeout(()=>{ahead.result=null;},LOOKAHEAD_HOLD_MS);
+    }
   }
   stopNeural();return resume;
 }
@@ -122,6 +129,12 @@ function generate(h,params){
   return new Promise((resolve,reject)=>{const id=++serial;pending.set(id,{resolve,reject});worker.postMessage({...params,id})})
 }
 const key=x=>JSON.stringify([x.text,x.voice,x.rate]);
+function prefetch(h,spec,ahead){
+  const id=key(spec),ready=ahead?.key===id&&ahead.expires>performance.now()?ahead.result:null;
+  if(ahead)ahead.result=null;
+  const candidate=pre={key:id,ready,buffer:ready?Promise.resolve(ready):generate(h,spec)};
+  candidate.buffer.then(out=>{if(pre===candidate)candidate.ready=out;},()=>{});
+}
 export function playNeural(h,{text,voice,rate,next,resume,onstart,onend,onerror}){
   if(interrupt){const old=interrupt;stopNeural();old('interrupted')}
   const ticket=++run;interrupt=onerror;clearTimeout(idle);
@@ -141,7 +154,7 @@ export function playNeural(h,{text,voice,rate,next,resume,onstart,onend,onerror}
       source.onended=finish;
       const startedAt=ctx.currentTime;
       source.start(startedAt,offset);playhead={key:currentKey,startedAt,offset};onstart();
-      if(next&&ticket===run){const spec={text:next,voice,rate},buffer=generate(h,spec);buffer.catch(()=>{});pre={key:key(spec),buffer}}
+      if(next&&ticket===run)prefetch(h,{text:next,voice,rate},saved?.ahead);
     }).catch(e=>{if(ticket===run){stopNeural();onerror(e.message==='missing'?'missing':e.name==='NotAllowedError'||e.message==='blocked'?'blocked':'unavailable')}});
     return true;
   }catch{stopNeural();onerror('unavailable');return false}
