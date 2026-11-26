@@ -228,7 +228,7 @@ function renderStarterEdition(book){
 
 function toast(message){$('#toast').textContent=message;$('#toast').style.display='block';clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('#toast').style.display='none',4000)}
 function updateStorageStatus(){const status=$('#local-storage-status');if(status)status.textContent=storageWarning||(!db?'Хранилище книг недоступно. Восстановление книг отключено.':'')}
-let rememberedReadingPositions={...state.positions};
+let rememberedReadingPositions={...state.positions},rememberedBookmarks={...record(prior.bookmarks)};
 function sameReadingPosition(a,b){
   return a===b||!!a&&!!b&&['chapter','paragraph','fraction','viewportDelta','comicImageOffset'].every(k=>a[k]===b[k]);
 }
@@ -242,19 +242,38 @@ function readingPositionsToSave(stored,previous,local){
   }
   return merged;
 }
-function storedReadingPositions(){
+const bookmarkLocation=mark=>mark&&Number.isSafeInteger(mark.chapter)&&mark.chapter>=0&&Number.isSafeInteger(mark.paragraph)&&mark.paragraph>=0
+  ?mark.chapter+'/'+mark.paragraph:'';
+const bookmarkList=marks=>Array.isArray(marks)?marks.filter(bookmarkLocation):[];
+function bookmarksToSave(stored,previous,local,deletedBook){
+  const merged=Object.create(null);
+  for(const [id,marks] of Object.entries(stored))if(Array.isArray(marks))merged[id]=bookmarkList(marks);
+  // Apply only this tab's additions/removals, by chapter and paragraph. A
+  // checkpoint must never overwrite an unrelated explicitly saved bookmark.
+  for(const id of new Set([...Object.keys(previous),...Object.keys(local)])){
+    if(previous[id]===local[id])continue;
+    const index=marks=>new Map(bookmarkList(marks).map(mark=>[bookmarkLocation(mark),mark]));
+    const old=index(previous[id]),next=index(local[id]),latest=index(merged[id]);
+    for(const key of old.keys())if(!next.has(key))latest.delete(key);
+    for(const [key,mark] of next)if(!sameReadingPosition(old.get(key),mark))latest.set(key,mark);
+    if(latest.size)merged[id]=[...latest.values()];else delete merged[id];
+  }
+  if(deletedBook)delete merged[deletedBook];
+  return merged;
+}
+function storedReadingState(){
   const raw=localStorage.getItem('folio-v2');
   if(raw==null)return null;
-  try{
-    const positions=JSON.parse(raw)?.positions;
-    return positions&&typeof positions==='object'&&!Array.isArray(positions)?positions:null;
-  }catch{return null}
+  try{return record(JSON.parse(raw))}catch{return null}
 }
-function saveState(){try{
-  const latest=storedReadingPositions();
-  const positions=latest?readingPositionsToSave(latest,rememberedReadingPositions,state.positions):state.positions;
-  localStorage.setItem('folio-v2',JSON.stringify({...state,positions}));
+function saveState({deletedBook}={}){try{
+  const latest=storedReadingState(),savedPositions=latest?.positions;
+  const positions=savedPositions&&typeof savedPositions==='object'&&!Array.isArray(savedPositions)
+    ?readingPositionsToSave(savedPositions,rememberedReadingPositions,state.positions):state.positions;
+  const bookmarks=latest?bookmarksToSave(record(latest.bookmarks),rememberedBookmarks,state.bookmarks,deletedBook):state.bookmarks;
+  localStorage.setItem('folio-v2',JSON.stringify({...state,positions,bookmarks}));
   rememberedReadingPositions={...state.positions};
+  state.bookmarks=bookmarks;rememberedBookmarks={...bookmarks};
   saveLearning();storageWarning='';updateStorageStatus();return true}catch{if(!storageWarning)toast('Изменения работают в этой вкладке, но не сохраняются в браузере.');storageWarning='Хранилище настроек недоступно. Изменения будут потеряны после перезагрузки; их можно скачать в копию.';updateStorageStatus();return false}}
 function escapeHTML(t){return String(t).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 const node=(tag,text,className)=>{const e=document.createElement(tag);if(text!=null)e.textContent=text;if(className)e.className=className;return e};
@@ -324,7 +343,7 @@ async function deleteBook(book){
   books=books.filter(b=>b.id!==book.id);
   delete state.positions[book.id];delete state.bookmarks[book.id];localAuto.forget(book.id);
   if(state.lastBook===book.id)state.lastBook=DEMO_ID;
-  saveState();renderPersonalShelf();
+  saveState({deletedBook:book.id});renderPersonalShelf();
 }
 function renderPersonalShelf(){
   const last=books.find(b=>b.id===state.lastBook)||demo,pos=state.positions[last.id]||{chapter:0},pct=progress(last);
@@ -1283,7 +1302,7 @@ function syncTranslation(){
 function markExploring(){if(ribbonManual)return;ribbonManual=true;$('#sync-translation').textContent='Вернуться ↻';$('#ribbon-label').textContent='ПРОСМОТР ПЕРЕВОДА'}
 function switchChapter(next,{focus=false}={}){if(!current?.chapters[next])return;if(isComic(current)){dismissWord();capturePosition()}chapter=next;paragraph=0;renderChapter({chapter,paragraph:0,fraction:0},{focus});saveState()}
 function updateBookmark(){const list=state.bookmarks[current.id]||[];const active=list.some(x=>x.chapter===chapter&&x.paragraph===paragraph);$('#reader-bookmark').setAttribute('aria-pressed',String(active));$('#reader-bookmark').setAttribute('aria-label',active?'Удалить закладку':'Сохранить закладку')}
-function renderContents(){const list=$('#chapter-list');list.replaceChildren();current.chapters.forEach((c,i)=>{const b=node('button',`${i+1}. ${c.title}`,'chapter-row'+(i===chapter?' active':''));b.onclick=e=>{switchChapter(i,{focus:e.detail===0});$('#contents-dialog').close()};list.append(b)});const marks=$('#bookmarks-list');marks.replaceChildren();const tally=bookStats(learning,current.id);$('#reading-book-stats').textContent=`${wordCountText(tally.words)} · ${encounterText(tally.encounters)}`;const bookmarks=state.bookmarks[current.id]||[];if(!bookmarks.length)marks.append(node('p','Сохраните абзац значком закладки.','muted'));bookmarks.forEach((p,i)=>{const row=node('div',null,'bookmark-row');const b=node('button',`${current.chapters[p.chapter]?.title||'Глава'} · абзац ${p.paragraph+1}`,'chapter-row');b.onclick=()=>{capturePosition();chapter=p.chapter;paragraph=p.paragraph;$('#contents-dialog').close();renderChapter(p,{bookmark:true})};const del=node('button','×','icon-button');del.setAttribute('aria-label','Удалить закладку');del.onclick=()=>{state.bookmarks[current.id].splice(i,1);saveState();renderContents();updateBookmark()};row.append(b,del);marks.append(row)})}
+function renderContents(){const list=$('#chapter-list');list.replaceChildren();current.chapters.forEach((c,i)=>{const b=node('button',`${i+1}. ${c.title}`,'chapter-row'+(i===chapter?' active':''));b.onclick=e=>{switchChapter(i,{focus:e.detail===0});$('#contents-dialog').close()};list.append(b)});const marks=$('#bookmarks-list');marks.replaceChildren();const tally=bookStats(learning,current.id);$('#reading-book-stats').textContent=`${wordCountText(tally.words)} · ${encounterText(tally.encounters)}`;const bookmarks=state.bookmarks[current.id]||[];if(!bookmarks.length)marks.append(node('p','Сохраните абзац значком закладки.','muted'));bookmarks.forEach(p=>{const row=node('div',null,'bookmark-row');const b=node('button',`${current.chapters[p.chapter]?.title||'Глава'} · абзац ${p.paragraph+1}`,'chapter-row');b.onclick=()=>{capturePosition();chapter=p.chapter;paragraph=p.paragraph;$('#contents-dialog').close();renderChapter(p,{bookmark:true})};const del=node('button','×','icon-button');del.setAttribute('aria-label','Удалить закладку');del.onclick=()=>{state.bookmarks[current.id]=(state.bookmarks[current.id]||[]).filter(mark=>bookmarkLocation(mark)!==bookmarkLocation(p));saveState();renderContents();updateBookmark()};row.append(b,del);marks.append(row)})}
 function sourceLanguage(text,bookLanguage){return resolveLanguage(bookLanguage,state.prefs.readingLanguage,text)}
 function trackingLanguage(token){
   const raw=readingSourceLanguage(current,chapter)||'und';
@@ -1839,7 +1858,7 @@ passageEl.addEventListener('keydown',e=>{
 passageEl.onclick=e=>{
   const b=e.target.closest('[data-word]');
   if(b){setReadingWordTabStop(b);showWord(b,e)}
-};$('#reader-back').onclick=e=>{history.replaceState(null,'','#'+readerReturn);showHome(readerReturn,{motion:e.detail>0,focus:e.detail===0})};$('#previous-chapter').onclick=e=>switchChapter(chapter-1,{focus:e.detail===0});$('#next-chapter').onclick=e=>switchChapter(chapter+1,{focus:e.detail===0});$('#chapter-open').onclick=()=>{renderContents();$('#contents-dialog').showModal()};$('#reader-bookmark').onclick=()=>{capturePosition();const list=state.bookmarks[current.id]||=[];const i=list.findIndex(p=>p.chapter===chapter&&p.paragraph===paragraph);if(i>=0){list.splice(i,1);toast('Закладка удалена')}else{list.push({...state.positions[current.id]});toast('Абзац сохранён в закладках')}saveState();updateBookmark()};$('#translation-full').onclick=()=>openLocalDialog(currentLocalTarget());$('#word-save').onclick=toggleWordSaved;
+};$('#reader-back').onclick=e=>{history.replaceState(null,'','#'+readerReturn);showHome(readerReturn,{motion:e.detail>0,focus:e.detail===0})};$('#previous-chapter').onclick=e=>switchChapter(chapter-1,{focus:e.detail===0});$('#next-chapter').onclick=e=>switchChapter(chapter+1,{focus:e.detail===0});$('#chapter-open').onclick=()=>{renderContents();$('#contents-dialog').showModal()};$('#reader-bookmark').onclick=()=>{capturePosition();const list=state.bookmarks[current.id]||[],key=chapter+'/'+paragraph;const rest=list.filter(p=>bookmarkLocation(p)!==key);if(rest.length<list.length){state.bookmarks[current.id]=rest;toast('Закладка удалена')}else{state.bookmarks[current.id]=[...list,{...state.positions[current.id]}];toast('Абзац сохранён в закладках')}saveState();updateBookmark()};$('#translation-full').onclick=()=>openLocalDialog(currentLocalTarget());$('#word-save').onclick=toggleWordSaved;
 const wordSpeech=createWordSpeech({publish:({status,language,apple})=>{
   const button=$('#word-speech'),guide=$('#word-speech-guide'),notice=$('#word-speech-status');
   button.dataset.speechState=status;

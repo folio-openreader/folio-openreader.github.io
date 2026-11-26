@@ -46,6 +46,8 @@ function session(disk=new Map(),step=100,rowHeight=step){
     learning:{},bookStats:()=>({words:0,encounters:0}),wordCountText:()=>'',encounterText:()=>'',outcomeCue:noop,
     history:{state:{},pushState(_s,_t,url){c.location.hash=url},replaceState(_s,_t,url){c.location.hash=url}}});
   c.state.bookmarks??={};
+  c.prior={bookmarks:c.state.bookmarks};
+  c.record=v=>v&&typeof v==='object'&&!Array.isArray(v)?v:{};
   // Load the real DOM listeners on A8 (both on one line) and on the candidate.
   const lifecycle=part("window.addEventListener('pagehide',()=>{practiceAudio.stop()", "let syncEpoch=");
   const handlers=[line("document.addEventListener('visibilitychange',()=>{if(document.hidden){wordSpeech.reset()"),
@@ -353,4 +355,19 @@ test('an intervening open sheet or hidden reader prevents a delayed chapter focu
   assert.equal(h.doc.activeElement,h.$('#word-dialog'));
   h.$('#word-dialog').close();h.$('#previous-chapter').onclick({detail:0});
   h.hide('visibilitychange');h.drain();assert.equal(h.focused.length,0);
+});
+
+test('bookmark persistence combines independent edits and a stale checkpoint preserves removals',()=>{
+  const disk=new Map([['folio-v2',JSON.stringify({positions:{},bookmarks:{}})]]);
+  const left=session(disk),right=session(disk);
+  const first=pos(2,.2,0),second=pos(4,.4,1);
+  const marks=()=>JSON.parse(disk.get('folio-v2')).bookmarks;
+  left.c.state.bookmarks.test=[first];left.c.saveState();
+  right.c.state.bookmarks.test=[second];right.c.saveState();
+  assert.deepEqual(marks().test,[first,second]);
+  left.c.state.bookmarks.test=[];left.c.saveState();
+  right.c.saveState();
+  assert.deepEqual(marks().test,[second]);
+  left.c.saveState({deletedBook:'test'});
+  assert.equal(marks().test,undefined);
 });
