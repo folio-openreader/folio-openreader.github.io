@@ -1417,7 +1417,32 @@ function openReaderContents(){
   const row=active.getBoundingClientRect(),box=list.getBoundingClientRect();
   list.scrollTop+=row.top-box.top-(list.clientHeight-row.height)/2;
 }
-function renderReaderBookmarks(){const marks=$('#bookmarks-list');marks.replaceChildren();const tally=bookStats(learning,current.id);$('#reading-book-stats').textContent=`${wordCountText(tally.words)} · ${encounterText(tally.encounters)}`;const bookmarks=state.bookmarks[current.id]||[];if(!bookmarks.length)marks.append(node('p','Сохраните абзац значком закладки.','muted'));bookmarks.forEach(p=>{const row=node('div',null,'bookmark-row');const b=node('button',`${current.chapters[p.chapter]?.title||'Глава'} · абзац ${p.paragraph+1}`,'chapter-row');b.onclick=()=>{capturePosition();chapter=p.chapter;paragraph=p.paragraph;$('#contents-dialog').close();renderChapter(p,{bookmark:true})};const del=node('button','×','icon-button');del.setAttribute('aria-label','Удалить закладку');del.onclick=()=>{state.bookmarks[current.id]=(state.bookmarks[current.id]||[]).filter(mark=>bookmarkLocation(mark)!==bookmarkLocation(p));saveState();renderReaderBookmarks();updateBookmark()};row.append(b,del);marks.append(row)})}
+function renderReaderBookmarks(){
+  const marks=$('#bookmarks-list'),tally=bookStats(learning,current.id);
+  marks.replaceChildren();
+  $('#reading-book-stats').textContent=`${wordCountText(tally.words)} · ${encounterText(tally.encounters)}`;
+  const bookmarks=state.bookmarks[current.id]||[];
+  if(!bookmarks.length){
+    const hint=node('p','Сохраните абзац значком закладки.','muted');hint.tabIndex=-1;marks.append(hint);
+  }
+  bookmarks.forEach((p,index)=>{
+    const row=node('div',null,'bookmark-row'),label=`${current.chapters[p.chapter]?.title||'Глава'} · абзац ${p.paragraph+1}`;
+    const b=node('button',label,'chapter-row');
+    b.onclick=()=>{capturePosition();chapter=p.chapter;paragraph=p.paragraph;$('#contents-dialog').close();renderChapter(p,{bookmark:true})};
+    const del=node('button','×','icon-button');del.setAttribute('aria-label','Удалить закладку: '+label);
+    del.onclick=()=>{
+      const ownsFocus=document.activeElement===del;
+      state.bookmarks[current.id]=(state.bookmarks[current.id]||[]).filter(mark=>bookmarkLocation(mark)!==bookmarkLocation(p));
+      saveState();renderReaderBookmarks();updateBookmark();
+      if(ownsFocus&&$('#contents-dialog').open){
+        const remaining=marks.querySelectorAll('.bookmark-row .chapter-row');
+        // A different tab may have removed additional bookmarks before save.
+        (remaining[Math.min(index,remaining.length-1)]||marks.firstElementChild)?.focus({preventScroll:true});
+      }
+    };
+    row.append(b,del);marks.append(row);
+  });
+}
 function sourceLanguage(text,bookLanguage){return resolveLanguage(bookLanguage,state.prefs.readingLanguage,text)}
 function trackingLanguage(token){
   const raw=readingSourceLanguage(current,chapter)||'und';
