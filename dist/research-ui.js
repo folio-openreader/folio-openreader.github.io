@@ -18,11 +18,18 @@ export function installResearchCatalog(root,{loadCatalog,openBook,progress,makeI
     if(topic){const id='catalog-topic-'+entry.id;content.firstElementChild.id=id;open.setAttribute('aria-describedby',id)}
     const meter=node('span',null,'research-progress');content.append(meter);open.append(content);
     open.onclick=async e=>{
+      // Native disabled blurs a keyboard user's control before the request
+      // finishes. Keep it focusable, but explicitly reject another activation.
+      if(open.hasAttribute('aria-busy'))return;
       const current=++request,previous=open.getAttribute('aria-label');
-      open.disabled=true;open.setAttribute('aria-busy','true');open.setAttribute('aria-label','Открывается: '+entry.title);
-      status.textContent='';
-      try{await openBook(entry,e)}catch{if(current===request)status.textContent='Не удалось открыть текст. Попробуйте ещё раз.'}
-      finally{open.disabled=false;open.removeAttribute('aria-busy');open.setAttribute('aria-label',previous)}
+      open.setAttribute('aria-disabled','true');open.setAttribute('aria-busy','true');open.setAttribute('aria-label','Открывается: '+entry.title);
+      status.textContent='Открываем «'+entry.title+'»…';
+      let error='';
+      try{await openBook(entry,e)}catch{error='Не удалось открыть текст. Попробуйте ещё раз.'}
+      finally{
+        open.removeAttribute('aria-disabled');open.removeAttribute('aria-busy');open.setAttribute('aria-label',previous);
+        if(current===request)status.textContent=error;
+      }
     };
     card.append(open);const credit=makeEditorialCredit(entry,cover);if(credit)card.append(credit);buttons.set(entry.id,{open,meter});return card;
   }
