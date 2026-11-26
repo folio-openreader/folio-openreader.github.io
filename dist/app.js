@@ -1065,7 +1065,7 @@ let localTimer=0,localWanted=null,localJob=null,localFailure=null,localDialogTar
 let localPageAway=false,localResumeQueued=false;
 let localDownload={loaded:0,total:0};
 const localNotStored=new Set();
-let lastLocalCacheProbe=null;
+let lastLocalCacheProbe=null,localRibbonProbe=null,localRibbonTimer=0;
 const localTarget=(book,ci,pi)=>{
   const p=book?.chapters[ci]?.paragraphs[pi];
   return p&&{book,ci,pi,p,source:sourceLanguage(p.text,readingSourceLanguage(book,ci)),target:state.prefs.dictionaryTarget};
@@ -1098,7 +1098,10 @@ function cancelLocalQueue({abortAutomatic=false}={}){
   clearTimeout(localTimer);localWanted=null;
   // Automatic work belongs to the visible book. A reader's explicit request
   // can still finish, while a stale automatic worker must release the slot.
-  if(abortAutomatic&&localJob&&!localJob.explicit)stopLocalJob();
+  if(abortAutomatic){
+    cancelSavedRibbonProbe();
+    if(localJob&&!localJob.explicit)stopLocalJob();
+  }
 }
 const localWorkPaused=()=>localPageAway||document.hidden;
 function stopLocalJob(){
@@ -1106,6 +1109,7 @@ function stopLocalJob(){
   localTranslator.stop();
 }
 function suspendLocalWork(leaving=false){
+  cancelSavedRibbonProbe();
   if(leaving||!localWanted?.explicit)cancelLocalQueue();
   // An already requested download may continue during a brief tab switch.
   // Background automatic work, and all work on pagehide, is released.
@@ -1126,7 +1130,7 @@ function resumeLocalWork(){
 }
 function paintLocalRibbon(loc,target){
   const open=$('#local-translation-open'),sync=$('#sync-translation'),track=$('#translation-track');
-  const show=!loc.p.translation&&canLocal(loc),value=show?peekLocal(loc):null;
+  const show=!loc.p.translation&&canLocal(loc),value=!loc.p.translation?peekLocal(loc):null;
   const enabled=show&&autoLocal(loc),failure=localFailureFor(loc);
   open.hidden=!show;open.textContent=enabled&&!failure?'Пауза':failure?'Повторить':value?'Продолжить':'Перевести';
   open.setAttribute('aria-label',enabled&&!failure?'Приостановить локальный перевод':value&&!failure?'Продолжить локальный перевод':'Локальный перевод абзаца');
@@ -1149,6 +1153,26 @@ function paintLocalRibbon(loc,target){
     $('#translation-ribbon').setAttribute('aria-label',value?'Строка машинного перевода':'Перевод отсутствует');
   }
   if(value)$('#ribbon-label').textContent='МАШИННЫЙ · '+loc.target.toUpperCase()+' · АБЗАЦ '+(loc.pi+1);
+  return value;
+}
+function cancelSavedRibbonProbe(){
+  clearTimeout(localRibbonTimer);localRibbonProbe=null;
+}
+function queueSavedRibbonProbe(loc){
+  if(sameLocal(localRibbonProbe,loc))return;
+  cancelSavedRibbonProbe();
+  const probe=localRibbonProbe=loc;
+  const stillHere=()=>localRibbonProbe===probe&&!ribbonManual&&!localWorkPaused()&&!$('#reader').hidden&&
+    sameLocal(currentLocalTarget(),probe)&&!sameLocal(localJob,probe)&&!sameLocal(localWanted,probe);
+  // Showing a persisted result is a read-only action. Debounce active-row
+  // changes, and never let a stale answer move the ribbon after navigation.
+  localRibbonTimer=setTimeout(async()=>{
+    if(!stillHere())return;
+    const saved=await savedLocalTranslation(probe,stillHere);
+    if(!saved||!stillHere())return;
+    localTranslator.prime(probe.p.text,saved,{source:probe.source,target:probe.target});
+    syncTranslation();
+  },160);
 }
 async function savedLocalTranslation(loc,stillHere){
   try{
@@ -1322,15 +1346,19 @@ function syncTranslation(){
   const loc=currentLocalTarget();
   if(!loc||isComic(loc.book))return;
   if(!loc.p.translation)$('#ribbon-label').textContent='НЕТ ГОТОВОГО ПЕРЕВОДА';
-  paintLocalRibbon(loc,target);
+  const cached=paintLocalRibbon(loc,target);
   if(target)ribbon.scrollLeft=target.offsetLeft-ribbon.offsetLeft-parseFloat(getComputedStyle($('#translation-track')).paddingLeft);
   programmaticRibbonLeft=ribbon.scrollLeft;
   $('#sync-translation').textContent='К абзацу ↻';
-  if(!loc.p.translation&&canLocal(loc)&&autoLocal(loc)&&!peekLocal(loc)&&
+  const automatic=!loc.p.translation&&canLocal(loc)&&autoLocal(loc);
+  if(automatic&&!cached&&
     (!localFailureFor(loc)||(canProbeLocalCache(loc)&&!sameLocal(lastLocalCacheProbe,loc))))queueLocal(loc);
   else if(localWanted&&!localWanted.explicit)cancelLocalQueue();
+  if(!automatic&&!cached&&!loc.p.translation&&!localWorkPaused()&&supportsTranslation(loc.source,loc.target)&&canProbeLocalCache(loc))
+    queueSavedRibbonProbe(loc);
+  else cancelSavedRibbonProbe();
 }
-function markExploring(){if(ribbonManual)return;ribbonManual=true;$('#sync-translation').textContent='Вернуться ↻';$('#ribbon-label').textContent='ПРОСМОТР ПЕРЕВОДА'}
+function markExploring(){if(ribbonManual)return;ribbonManual=true;cancelSavedRibbonProbe();$('#sync-translation').textContent='Вернуться ↻';$('#ribbon-label').textContent='ПРОСМОТР ПЕРЕВОДА'}
 function switchChapter(next,{focus=false}={}){if(!current?.chapters[next])return;if(isComic(current)){dismissWord();capturePosition()}chapter=next;paragraph=0;renderChapter({chapter,paragraph:0,fraction:0},{focus});saveState()}
 function updateBookmark(){const list=state.bookmarks[current.id]||[];const active=list.some(x=>x.chapter===chapter&&x.paragraph===paragraph);$('#reader-bookmark').setAttribute('aria-pressed',String(active));$('#reader-bookmark').setAttribute('aria-label',active?'Удалить закладку':'Сохранить закладку')}
 function openReaderContents(){

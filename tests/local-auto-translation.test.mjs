@@ -273,3 +273,26 @@ test('Pause does not abort a separate explicit translation already requested by 
   assert.equal(h.$('#local-translation-open').textContent,'Продолжить');
   h.select(1);await h.drain();assert.equal(h.calls.length,1);
 });
+
+test('a delayed read-only ribbon lookup cannot replace a newer paragraph or start inference',async()=>{
+  const h=session(new Map(),new Set(),[makeBook('book-one')],new Map());
+  let release;
+  const reads=[];
+  const prepare=h.c.prepareParagraphCache;
+  h.c.prepareParagraphCache=async(db,loc,model,options)=>{
+    assert.equal(options.createGeneration,false);return prepare(db,loc,model);
+  };
+  h.c.readParagraphCache=async(_db,entry)=>{
+    reads.push(entry.id);
+    if(entry.id==='book-one|0|0|ru')return new Promise(resolve=>{release=resolve;});
+    return null;
+  };
+  h.open();
+  const old=h.drain();
+  await turn();assert.equal(typeof release,'function');
+  h.select(1);await h.drain();
+  release('Late result for paragraph one');await old;
+  assert.deepEqual(reads,['book-one|0|0|ru','book-one|0|1|ru']);
+  assert.equal(h.$('#translation-track').querySelector('.translation-empty').textContent,'Нет готового перевода.');
+  assert.deepEqual(h.calls,[]);
+});
