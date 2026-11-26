@@ -1209,16 +1209,16 @@ function paintLocalDialog(loc){
   const value=!loc.p.translation?peekLocal(loc):null,checking=sameLocal(localDialogProbe,loc);
   const mountedOriginal=wrap.querySelector('.source-text'),lang=readingSourceLanguage(loc.book,loc.ci)||'';
   if(!mountedOriginal||mountedOriginal.textContent!==loc.p.text||mountedOriginal.lang!==lang){
-    const original=node('p',loc.p.text,'source-text');original.lang=lang;wrap.replaceChildren(original);
+    const original=node('p',loc.p.text,'source-text');original.lang=lang;original.dir='auto';wrap.replaceChildren(original);
   }else while(wrap.lastElementChild!==mountedOriginal)wrap.lastElementChild.remove();
   $('#local-translation-section').hidden=!!loc.p.translation||!!value||(!checking&&!canLocal(loc));
   if(loc.p.translation){
-    const p=node('p',loc.p.translation);p.lang=loc.book.translationLanguage||'';wrap.append(p);
+    const p=node('p',loc.p.translation);p.lang=loc.book.translationLanguage||'';p.dir='auto';wrap.append(p);
     if(loc.book.alignment==='positional-unverified')wrap.append(node('p','Сопоставление по порядку, не по смыслу.','muted'));
     return;
   }
   if(value){
-    const p=node('p',value,'machine-result');p.lang=loc.target;
+    const p=node('p',value,'machine-result');p.lang=loc.target;p.dir='auto';
     wrap.append(node('p','Машинный перевод · '+loc.target.toUpperCase(),'machine-source'),p);
     if(localNotStored.has(pairCode(loc.source,loc.target)))wrap.append(node('p','Модель не сохранилась целиком. После перезапуска может понадобиться интернет.','muted'));
     return;
@@ -1459,14 +1459,14 @@ function openWordContext(event){
   const context=$('#word-context'),toggle=$('#word-context-toggle'),dialog=$('#word-dialog');
   if(!context.hidden)return;
   const {text,translation,token,offset,sourceLanguage:sourceLanguageTag,translatedLanguage,alignment}=anchor;
-  const original=node('p',null,'word-original');
+  const original=node('p',null,'word-original');original.dir='auto';
   if(sourceLanguageTag)original.lang=sourceLanguageTag;
   if(text.slice(offset,offset+token.length)===token){
     original.append(document.createTextNode(text.slice(0,offset)),node('mark',token),document.createTextNode(text.slice(offset+token.length)));
   }else original.textContent=text;
   context.replaceChildren(node('h3','Абзац оригинала'),original);
   if(translation){
-    const translated=node('p',translation,'word-parallel');
+    const translated=node('p',translation,'word-parallel');translated.dir='auto';
     if(translatedLanguage)translated.lang=translatedLanguage;
     context.append(node('h3','Перевод абзаца'),translated);
     if(alignment==='positional-unverified')context.append(node('p','Сопоставление по порядку, не по смыслу.','muted'));
@@ -1477,7 +1477,7 @@ function openWordContext(event){
     const paint=local=>{
       preview.removeAttribute('aria-busy');
       if(local){
-        const translated=node('p',local,'word-parallel');translated.lang=loc.target;
+        const translated=node('p',local,'word-parallel');translated.lang=loc.target;translated.dir='auto';
         preview.replaceChildren(node('h3','Машинный перевод · '+loc.target.toUpperCase()),translated);
       }else if(loc&&canLocal(loc)){
         const button=node('button','Перевести абзац','quiet');button.type='button';button.onclick=()=>openLocalDialog(loc);
@@ -1531,8 +1531,8 @@ async function showWord(button,event){
       catch{removeWord(learning,wordAnchor.token,wordAnchor.trackLanguage);$('#word-save-status').textContent='Автосохранение не удалось. Слово не добавлено.';failedWordSave()}
     }
   }
-  setActiveParagraph(pi,true);clearTimeout(seenTimer);resetWordContext();$('#word-sheet-heading').textContent=button.textContent;
-  $('#word-sheet-heading').lang=source||'';wordSavedState();
+  setActiveParagraph(pi,true);clearTimeout(seenTimer);resetWordContext();
+  const heading=$('#word-sheet-heading');heading.textContent=button.textContent;heading.lang=source||'';heading.dir='auto';wordSavedState();
   $('#word-senses').hidden=true;$('#word-senses-toggle').setAttribute('aria-expanded','false');
   dictUI.hideHint();
   const language=sourceLanguage(word,source),target=state.prefs.dictionaryTarget;
