@@ -13,6 +13,7 @@
 .comic-control:disabled{opacity:.38}
 .comic-control[data-busy=true]{color:var(--muted);opacity:1}
 .comic-count{color:var(--muted);font:600 12px/1.3 system-ui,sans-serif;font-variant-numeric:tabular-nums;white-space:nowrap;text-align:center}
+.comic-count:focus-visible{outline:2px solid var(--focus,var(--accent));outline-offset:2px;border-radius:3px}
 .comic-frame{position:relative;width:100%;overflow:hidden;background:var(--bg)}
 .comic-art{display:block;width:100%;height:auto;max-width:none;margin:0;padding:0;image-orientation:from-image}
 .comic-image-failed{min-height:110px;aspect-ratio:auto!important;display:grid;place-items:center}

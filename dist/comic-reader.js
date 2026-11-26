@@ -103,7 +103,7 @@ export function createComicReader(host,{onNavigate,onRecognize,onCorrection,onWo
     return button;
   };
   const prev=b('prev','Предыдущая страница'),next=b('next','Следующая страница');
-  const count=el('span','comic-count');
+  const count=el('span','comic-count');count.tabIndex=-1;count.setAttribute('role','group');
   const nav=el('nav','comic-nav');nav.setAttribute('aria-label','Страницы комикса');nav.append(prev,count,next);
   const tools=el('div','comic-tools');
   const ocr=b('scan','Распознать слова на странице','Распознать');
@@ -224,7 +224,11 @@ export function createComicReader(host,{onNavigate,onRecognize,onCorrection,onWo
     page.total=total;readText=false;waiting=false;
     count.textContent=(page.index+1)+' / '+total;
     count.setAttribute('aria-label','Страница '+(page.index+1)+' из '+total);
-    prev.disabled=!onNavigate||page.index===0;next.disabled=!onNavigate||page.index===total-1;
+    const noPrev=!onNavigate||page.index===0,noNext=!onNavigate||page.index===total-1;
+    // A native disabled button drops focus. Keep it in the page controls at
+    // either boundary, without turning the next Enter into a reverse turn.
+    if((noPrev&&doc.activeElement===prev)||(noNext&&doc.activeElement===next))count.focus({preventScroll:true});
+    prev.disabled=noPrev;next.disabled=noNext;
     frame.style.aspectRatio=Number.isFinite(page.width)&&page.width>0&&Number.isFinite(page.height)&&page.height>0?page.width+' / '+page.height:'';
     fault.hidden=true;frame.classList.remove('comic-image-failed');frame.replaceChildren();
     const currentImg=img=el('img','comic-art');
