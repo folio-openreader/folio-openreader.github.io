@@ -859,7 +859,9 @@ async function recognizeCurrentComicPage(index,language,{replace=false}={}){
   comicView.setOCR({status:'loading'});
   try{
     const {recognizeComicPage}=await import('./comic-ocr.js');
-    const result=await recognizeComicPage(stored.blob,{language,signal});
+    const result=await recognizeComicPage(stored.blob,{language,signal,onProgress:update=>{
+      if(active())comicView.setOCRProgress(update);
+    }});
     if(!active())return;
     const found=result.paragraphs||[];
     if(!found.some(p=>typeof p?.text==='string'&&p.text.trim())){comicView.setOCR({status:'empty'});return}
@@ -867,6 +869,7 @@ async function recognizeCurrentComicPage(index,language,{replace=false}={}){
     const updatedChapter=comicOCRChapter(book.chapters[index],ocr);
     // A failed retry, or one the browser cannot persist, must not replace
     // the last usable transcription and its dictionary language.
+    comicView.setOCRProgress({stage:'save'});
     await updateComicPage(db,book.id,{...stored,ocr});
     book.chapters[index]=updatedChapter;stored.ocr=ocr;
     if(active()){

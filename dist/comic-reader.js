@@ -109,7 +109,9 @@ export function createComicReader(host,{onNavigate,onRecognize,onCorrection,onWo
   const ocr=b('scan','Распознать слова на странице','Распознать');
   const transcript=b('transcript','Показать распознанный текст','Текст');transcript.setAttribute('aria-controls',stamp+'-text');
   const correction=b('language','Язык распознавания страницы');correction.setAttribute('aria-haspopup','dialog');
-  tools.append(ocr,correction,transcript);bar.append(nav,tools);
+  const progress=el('progress','comic-ocr-progress');
+  progress.max=1;progress.hidden=true;progress.setAttribute('aria-label','Ход распознавания страницы');
+  tools.append(ocr,correction,transcript);bar.append(nav,tools,progress);
   const stateNote=el('p','comic-note');stateNote.setAttribute('role','status');
   const panel=el('div','comic-transcript');panel.id=stamp+'-text';panel.setAttribute('role','region');panel.setAttribute('aria-label','Распознанный текст');
   const panelKeys=el('span',null,'Tab переходит между абзацами. Стрелки влево и вправо выбирают слово, Enter открывает словарь.');
@@ -120,7 +122,7 @@ export function createComicReader(host,{onNavigate,onRecognize,onCorrection,onWo
   const status=el('span','comic-sr');status.setAttribute('role','status');
   root.append(bar,stateNote,panelKeys,panel,frame,status);host.replaceChildren(root);
   let img=null,url=null,page={},content={paragraphs:[],marks:[]},state='idle',dead=false,drawMarks=true,readText=false,panelBuilt=false;
-  let waiting=false,notice='';
+  let waiting=false,notice='',workStage='';
   function revoke(){
     if(img){img.onload=img.onerror=null;img.removeAttribute('src');img.remove();img=null;}
     if(url){URL.revokeObjectURL(url);url=null;}
@@ -202,6 +204,22 @@ export function createComicReader(host,{onNavigate,onRecognize,onCorrection,onWo
     }
     overlay.replaceChildren(fragment);
   }
+  function setOCRProgress({stage,page,total,progress:fraction}={}){
+    if(dead||state!=='loading')return;
+    let label,value;
+    if(stage==='render')label='Подготовка изображения';
+    else if(stage==='load')label='Загрузка локального OCR';
+    else if(stage==='save'){label='Сохранение результата';value=1;}
+    else if(stage==='recognize'&&Number.isInteger(page)&&Number.isInteger(total)&&page>0&&page<=total){
+      label='Фрагмент '+page+' из '+total;
+      const next=(page-1+Math.max(0,Math.min(1,Number(fraction)||0)))/total;
+      value=Math.max(progress.value,next);
+    }else return;
+    if(progress.getAttribute('aria-valuetext')!==label)progress.setAttribute('aria-valuetext',label);
+    if(value===undefined)progress.removeAttribute('value');
+    else if(!progress.hasAttribute('value')||progress.value!==value)progress.value=value;
+    if(workStage!==stage){workStage=stage;status.textContent=stage==='recognize'?'Распознаём слова':label;}
+  }
   function setOCR(data={}) {
     if(dead || (Number.isInteger(data.index)&&data.index!==page.index))return;
     state=data.status||'ready';
@@ -217,7 +235,8 @@ export function createComicReader(host,{onNavigate,onRecognize,onCorrection,onWo
     if(hadText&&state==='empty')notice='Новый текст не распознан. Предыдущий оставлен.';
     if(hadText&&state==='error')notice='Не удалось распознать заново. Предыдущий текст оставлен.';
     paintControls();
-    if(state==='loading')status.textContent='Распознавание началось';
+    workStage='';progress.hidden=state!=='loading';progress.removeAttribute('value');progress.removeAttribute('aria-valuetext');
+    if(state==='loading')setOCRProgress({stage:'render'});
     else if(state==='ready')status.textContent=content.marks.length?'Слова на странице доступны для выбора':content.paragraphs.some(p=>p.trim())?'Распознанный текст доступен':'';
     else status.textContent='';
   }
@@ -251,7 +270,7 @@ export function createComicReader(host,{onNavigate,onRecognize,onCorrection,onWo
   }
   async function recognize() {
     if(!onRecognize||waiting||!page.blob)return;
-    const requested=page;waiting=true;state='loading';paintControls();status.textContent='Распознавание началось';
+    const requested=page;waiting=true;setOCR({status:'loading'});
     try{
       const result=await onRecognize(page.index);
       if (dead || requested!==page || state!=='loading')return;
@@ -310,5 +329,5 @@ export function createComicReader(host,{onNavigate,onRecognize,onCorrection,onWo
     if(dead)return;dead=true;revoke();root.removeEventListener('click',click);root.removeEventListener('keydown',keys);root.removeEventListener('focusin',focusWord);
     root.remove();instances.delete(host);page={};content={paragraphs:[],marks:[]};
   }
-  const api={showPage,setOCR,destroy};instances.set(host,api);return api;
+  const api={showPage,setOCR,setOCRProgress,destroy};instances.set(host,api);return api;
 }
