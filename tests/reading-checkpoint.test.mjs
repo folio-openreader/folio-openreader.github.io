@@ -374,3 +374,16 @@ test('bookmark persistence combines independent edits and a stale checkpoint pre
   left.c.saveState({deletedBook:'test'});
   assert.equal(marks().test,undefined);
 });
+
+test('leaving the reader dismisses its stacked sheets without losing the current place',()=>{
+  const h=session();h.open(pos(6,.35));
+  h.c.dismissWord=()=>h.$('#word-dialog').close();
+  const sheets=['#word-dialog','#translation-dialog','#contents-dialog','#preferences'];
+  for(const id of sheets)h.$(id).showModal();
+  h.c.showHome('home');
+  assert.equal(h.$('#reader').hidden,true);
+  for(const id of sheets)assert.equal(h.$(id).open,false,id+' must not cover the shelf');
+  assert.equal(h.read().paragraph,6);
+  h.c.openBook('test');h.drain();
+  assert.equal(h.c.paragraph,6);
+});

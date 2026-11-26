@@ -579,7 +579,7 @@ const navMotion=installNavMotion($('.nav-dock'));
 function homeRoute(){const view=location.hash.slice(1);if(view.startsWith('profile/'))return 'profile';return HOME_ROUTES.includes(view)?view:'home'}
 function showHome(which='home',{motion=false,focus=false}={}){
   const leavingReader=!$('#reader').hidden,changed=homeView!==which,forward=HOME_ROUTES.indexOf(which)>HOME_ROUTES.indexOf(homeView);
-  if(leavingReader){cancelLocalQueue();readingHome.leaveReader();dismissWord();capturePosition(true);closeComicView();renderEpoch++;$('#passage').removeAttribute('aria-busy');suppressScroll=false;clearTimeout(saveTimer);clearTimeout(seenTimer)}
+  if(leavingReader){cancelLocalQueue();readingHome.leaveReader();closeReaderSheets();capturePosition(true);closeComicView();renderEpoch++;$('#passage').removeAttribute('aria-busy');suppressScroll=false;clearTimeout(saveTimer);clearTimeout(seenTimer)}
   if(!leavingReader&&!changed&&homeLeaving===false&&$('#home').dataset.ready==='true')return;
   cancelSpeech();cancelMotion($('#reader'));
   document.body.classList.remove('reading');setChromeColor();$('#reader').hidden=true;$('#home').hidden=false;$('#home').dataset.ready='true';
@@ -611,6 +611,14 @@ function showHome(which='home',{motion=false,focus=false}={}){
   }else if(focus&&changed){
     const title=$('#'+which+'-view h1'); if(title){title.tabIndex=-1;title.focus({preventScroll:true})}
   }
+}
+function closeReaderSheets(){
+  // These modal elements live outside #reader, so hiding the reader alone
+  // does not remove them from the top layer on a browser Back or hash change.
+  for(const id of ['translation-dialog','contents-dialog','preferences']){
+    const dialog=$('#'+id);if(dialog.open)dialog.close();
+  }
+  dismissWord();
 }
 function navigateHome(which,event){
   if(location.hash!=='#'+which)location.hash=which;
