@@ -1953,9 +1953,17 @@ async function arrangeBackup(file){
   backupDraft=null;const sequence=++backupSequence,status=$('#backup-preview');$('#restore-backup').disabled=true;
   if(!file){status.textContent='Выберите файл копии Folio.';return}
   if(file.size>BACKUP_LIMIT){status.textContent='Копия больше 50 МБ. Восстановление такого файла не поддерживается.';return}
-  try{const parsed=parseBackup(await file.text(),demo);if(sequence!==backupSequence)return;backupDraft=parsed;
+  try{
+    const parsed=parseBackup(await file.text(),demo);if(sequence!==backupSequence)return;
+    if(Object.hasOwn(parsed,'epubArt')){
+      const {restoreEpubBackup}=await import('./epub-art-backup.js');
+      if(sequence!==backupSequence)return;
+      Object.assign(parsed,restoreEpubBackup(parsed.epubArt,parsed.books));delete parsed.epubArt;
+    }
+    backupDraft=parsed;
     const ids=new Set(books.map(b=>b.id)),fresh=backupDraft.books.filter(b=>!ids.has(b.id));
-    status.textContent=`Книг: ${backupDraft.books.length}. Слов: ${backupDraft.words.length}. Новых книг: ${fresh.length}. ${!db&&fresh.length?'Хранилище книг недоступно.':''}`;
+    const artCount=fresh.reduce((n,book)=>n+(parsed.assetsByBook?.get(book.id)?.length||0),0);
+    status.textContent=`Книг: ${backupDraft.books.length}. Слов: ${backupDraft.words.length}. Новых книг: ${fresh.length}. ${artCount?'Иллюстраций в новых книгах: '+artCount+'. ':''}${!db&&fresh.length?'Хранилище книг недоступно.':''}`;
     $('#restore-backup').disabled=!db&&fresh.length>0;
   }catch(e){if(sequence===backupSequence)status.textContent=e.message}
 }
@@ -1965,7 +1973,7 @@ async function restoreBackup(){
   restoring=true;$('#restore-backup').disabled=true;$('#backup-file').disabled=true;
   const backup=backupDraft,ids=new Set(books.map(b=>b.id)),fresh=backup.books.filter(b=>!ids.has(b.id)).map(stampTextBook);
   try{
-    if(fresh.length)await dbAction('readwrite',store=>{clearTextBookTranslations(store,fresh.map(b=>b.id));for(const b of fresh)store.add(b);return store.count()});
+    if(fresh.length)await dbAction('readwrite',store=>{clearTextBookTranslations(store,fresh.map(b=>b.id));for(const b of fresh){putIllustrations(store,b.id,backup.assetsByBook?.get(b.id));store.add(b)}return store.count()});
     books.push(...fresh);
     const merged=mergeLearning(learning,loadLearning(backup.learning,backup.words));
     // The optional books transaction may already have committed; never imply a full rollback.
@@ -2863,15 +2871,52 @@ $('#pref-sound-test').onclick=e=>{
 };
 window.matchMedia('(prefers-reduced-motion: reduce)').addEventListener?.('change',applyFeedbackPrefs);
 $('#profile-size').oninput=e=>prefsChanged({size:+e.target.value});$('#profile-theme').onchange=e=>prefsChanged({theme:e.target.value});$('#profile-font').onchange=e=>prefsChanged({font:e.target.value});
-$('#export-backup').onclick=()=>{
+const backupArtToggle=$('#backup-art'),backupExport=$('#export-backup'),backupReady=$('#backup-ready'),backupExportStatus=$('#backup-export-status');
+let backupExportSequence=0,backupURL=null;
+function resetBackupExport(){
+  backupExportSequence++;backupExport.disabled=false;backupExportStatus.textContent='';
+  backupReady.hidden=true;backupReady.removeAttribute('href');
+  if(backupURL){URL.revokeObjectURL(backupURL);backupURL=null;}
+  const label=backupArtToggle.checked?'Подготовить копию с иллюстрациями':'Скачать резервную копию';
+  backupExport.setAttribute('aria-label',label);backupExport.title=label;
+}
+backupArtToggle.onchange=resetBackupExport;
+$('#profile-view').addEventListener('folio:profile-page',()=>{
+  if(location.hash!=='#profile/backups'){backupArtToggle.checked=false;resetBackupExport();}
+});
+backupExport.onclick=async()=>{
+  resetBackupExport();const sequence=backupExportSequence;
+  const active=()=>sequence===backupExportSequence&&location.hash==='#profile/backups';
+  const includeArt=backupArtToggle.checked;
   try{
-    const text=serializeBackup(books,state,legacyWords(),packLearning(learning));
+    const editions=books.slice();let art;
+    if(includeArt){
+      backupExport.disabled=true;backupExportStatus.textContent='Готовим локальную копию…';
+      const {collectEpubBackup}=await import('./epub-art-backup.js');
+      if(!active())return;
+      art=await collectEpubBackup(editions,async(id,index)=>(await dbAction('readonly',s=>readIllustration(s,id,index)))?.blob,{active});
+      if(!active())return;
+    }
+    const text=serializeBackup(editions,state,legacyWords(),packLearning(learning),art);
     const blob=new Blob([text],{type:'application/json;charset=utf-8'});
-    if(blob.size>BACKUP_LIMIT)return toast('Копия больше 50 МБ. Скачивание такой копии пока не поддерживается.');
-    downloadBlob(blob,'folio-backup-'+new Date().toISOString().slice(0,10)+'.json');
-  }catch(e){toast(e?.message||'Не удалось создать резервную копию.')}
+    if(blob.size>BACKUP_LIMIT)throw new Error(includeArt?'Копия больше 50 МБ. Скачайте копию без иллюстраций или сохраните исходные книги отдельно.':'Копия больше 50 МБ. Скачивание такой копии пока не поддерживается.');
+    const file='folio-backup-'+new Date().toISOString().slice(0,10)+'.json';
+    if(!includeArt){downloadBlob(blob,file);return;}
+    // The download itself still gets a real user tap, including on mobile.
+    backupURL=URL.createObjectURL(blob);backupReady.href=backupURL;backupReady.download=file;backupReady.hidden=false;
+    backupExportStatus.textContent=art.length?'Файл готов. Иллюстрации включены.':'Файл готов. Сохранённых иллюстраций EPUB нет.';
+  }catch(e){if(active()){
+    const message=e?.message||'Не удалось создать резервную копию.';
+    if(includeArt)backupExportStatus.textContent=message;else toast(message);
+  }}
+  finally{if(sequence===backupExportSequence)backupExport.disabled=false;}
 };
 $('#open-backup').onclick=()=>{$('#backup-file').value='';$('#backup-prefs').checked=false;arrangeBackup(null);$('#backup-dialog').showModal()};$('#backup-file').onchange=e=>arrangeBackup(e.target.files[0]);$('#restore-backup').onclick=restoreBackup;
+$('#backup-dialog').addEventListener('close',()=>{
+  if($('#backup-dialog').open)return;
+  backupDraft=null;backupSequence++;$('#backup-file').value='';
+});
+window.addEventListener('pagehide',()=>{if(backupURL||backupExport.disabled)resetBackupExport()});
 $('#dictionary-import').onclick=importDictionaryFile;
 window.addEventListener('pagehide',()=>{practiceAudio.stop();suspendReading();if(learningDirty)saveState()});
 document.addEventListener('visibilitychange',()=>{if(document.hidden){practiceAudio.stop();suspendReading();if(learningDirty)saveState()}else resumeReading()});

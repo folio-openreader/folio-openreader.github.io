@@ -1,4 +1,4 @@
-// IndexedDB sidecars keep library startup and textual backups free of image bytes.
+// IndexedDB sidecars keep library startup and the default text backup free of image bytes.
 // A chapter reserves each image's aspect ratio before reading its local Blob.
 const KEY='epub-illustration-v1';
 const keyOf=(id,index)=>[KEY,id,index];

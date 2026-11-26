@@ -137,10 +137,10 @@ function bookFromBackup(b) {
   if(kind){edition=editorialEdition(b.edition,kind);if(!edition||b.format!=='TXT'||b.language!=='en')invalid()}
   return {...(kind?{kind}:{}),...(edition?{edition}:{}),...(ocr?{ocr}:{}),...(translationOcr?{translationOcr}:{}),...(warnings.length?{warnings}:{}),id:b.id,title:safeString(b.title,1000)||'Без названия',author:safeString(b.author,1000),language:safeString(b.language,40),translationTitle:safeString(b.translationTitle,1000),translationLanguage:safeString(b.translationLanguage,40),format:b.format,alignment:anyTranslation?'positional-unverified':'none',chapters,createdAt:Number.isFinite(b.createdAt)?b.createdAt:0};
 }
-export function serializeBackup(books,state,words,learning) {
+export function serializeBackup(books,state,words,learning,epubArt) {
   const included=books.filter(b=>b.id!==DEMO_ID&&b.kind!=='comic');
   if(included.length>BACKUP_BOOK_LIMIT)throw new RangeError('Не удалось создать копию: больше '+BACKUP_BOOK_LIMIT+' текстовых книг.');
-  return JSON.stringify({format:'folio-backup',version:1,createdAt:new Date().toISOString(),books:included.map(({localTranslationGeneration,...book})=>({...book,chapters:book.chapters.map(({illustrations,...chapter})=>chapter)})),state:{positions:state.positions,bookmarks:state.bookmarks,lastBook:state.lastBook,prefs:sanitizePrefs(state.prefs)},words:sanitizeSaved(words),...(learning?{learning}:{})});
+  return JSON.stringify({format:'folio-backup',version:1,createdAt:new Date().toISOString(),books:included.map(({localTranslationGeneration,...book})=>({...book,chapters:book.chapters.map(({illustrations,...chapter})=>chapter)})),state:{positions:state.positions,bookmarks:state.bookmarks,lastBook:state.lastBook,prefs:sanitizePrefs(state.prefs)},words:sanitizeSaved(words),...(learning?{learning}:{}),...(epubArt?.length?{epubArt}:{})});
 }
 export function parseBackup(text,demo) {
   let raw;try{raw=JSON.parse(text)}catch{throw new Error('Не удалось прочитать JSON. Выберите копию Folio.')};
@@ -155,5 +155,5 @@ export function parseBackup(text,demo) {
     const mark=raw.state.bookmarks?.[b.id];
     if(Array.isArray(mark))bookmarks[b.id]=mark.slice(0,1000).map(x=>safePosition(x,b)).filter(Boolean);
   }
-  return {books,positions,bookmarks,words:sanitizeSaved(raw.words),learning:raw.learning||null,prefs:sanitizePrefs(raw.state.prefs),lastBook:ids.has(raw.state.lastBook)?raw.state.lastBook:DEMO_ID};
+  return {books,positions,bookmarks,...(Object.hasOwn(raw,'epubArt')?{epubArt:raw.epubArt}:{}),words:sanitizeSaved(raw.words),learning:raw.learning||null,prefs:sanitizePrefs(raw.state.prefs),lastBook:ids.has(raw.state.lastBook)?raw.state.lastBook:DEMO_ID};
 }

@@ -341,7 +341,16 @@ html{background-color:var(--boot-bg)}
     <h1 id="backup-heading" tabindex="-1"><span class="profile-page-title">Резервная копия</span></h1>
     <details class="help-disclosure "><summary aria-label="Что входит в резервную копию"><span aria-hidden="true">?</span></summary><div class="help-copy"><p>Книги, прогресс, закладки, встречи со словами и настройки. Установленные словари не входят. Автоматической синхронизации нет.</p></div></details>
   </header>
-  <div class="settings-card backup-card profile-stack-body"><p>Копия содержит текст книг. Иллюстрации EPUB и страницы комиксов остаются на этом устройстве.</p><div class="backup-actions"><button id="export-backup" class="icon-button icon-action" aria-label="Скачать резервную копию" title="Скачать резервную копию"><i data-icon="download"></i></button><button id="open-backup" class="quiet">Восстановить из файла</button></div></div>
+  <div class="settings-card backup-card profile-stack-body">
+    <p>Копия сохраняется в файл на этом устройстве. Страницы комиксов в неё не входят.</p>
+    <label class="check-field"><input type="checkbox" id="backup-art"><span>Включить иллюстрации EPUB</span></label>
+    <div class="backup-actions">
+      <button id="export-backup" class="icon-button icon-action" aria-label="Скачать резервную копию" title="Скачать резервную копию"><i data-icon="download"></i></button>
+      <button id="open-backup" class="quiet">Восстановить из файла</button>
+      <a id="backup-ready" class="quiet" hidden>Скачать подготовленную копию</a>
+    </div>
+    <p id="backup-export-status" class="muted" role="status"></p>
+  </div>
 </section>
 </div></section>
 </div>
