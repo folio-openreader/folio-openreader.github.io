@@ -75,22 +75,25 @@ export function installStarterShelf(root,{loadCatalog,openBook,getProgress=()=>n
     retry=btn('Повторить загрузку','quiet starter-more');
   for(const b of [more,reset,retry])b.hidden=true;
   actions.append(more,reset,retry);root.replaceChildren(header,filters,explanation,notice,list,actions);
-  let entries=null,loading=null,pending='',limit=PAGE,openError='',buttons=new Map();
+  let entries=null,loading=null,pending='',openRequest=0,limit=PAGE,openError='',buttons=new Map();
   const alive=()=>root.isConnected;
   function focusBook(id){const b=buttons.get(id)?.button;if(!b?.isConnected)return false;b.focus({preventScroll:true});return true}
   function updatePending(){
-    for(const [id,{button}] of buttons){
+    for(const [id,{button,available}] of buttons){
       const active=id===pending;button.toggleAttribute('data-book-loading',active);
-      if(pending)button.setAttribute('aria-disabled','true');else button.removeAttribute('aria-disabled');
+      if(pending&&(active||!available))button.setAttribute('aria-disabled','true');else button.removeAttribute('aria-disabled');
       if(active)button.setAttribute('aria-busy','true');else button.removeAttribute('aria-busy');
     }
   }
   async function pick(entry,event){
-    if(pending)return;
+    // A pending download blocks other uncached titles, not books on the device.
+    const available=score(entry)!==null;
+    if(pending&&(pending===entry.id||!available))return;
+    const request=++openRequest;
     pending=entry.id;openError='';notice.textContent='Открываем «'+entry.title+'»…';updatePending();
     try{await openBook(entry.book,event)}
-    catch{openError='Не удалось открыть «'+entry.title+'». Попробуйте ещё раз.'}
-    finally{pending='';if(alive()){updatePending();updateStatus()}}
+    catch{if(request===openRequest)openError='Не удалось открыть «'+entry.title+'». Попробуйте ещё раз.';}
+    finally{if(request===openRequest){pending='';if(alive()){updatePending();updateStatus()}}}
   }
   function score(entry){
     try{const raw=getProgress(entry.book);if(Number.isFinite(raw)&&raw>=0)return Math.min(100,Math.round(raw))}catch{}
@@ -121,7 +124,7 @@ export function installStarterShelf(root,{loadCatalog,openBook,getProgress=()=>n
     if(percent!==null)footer.append(node('span','Прочитано '+percent+'%','starter-reading-progress'));
     footer.append(cta);content.append(footer);button.append(cover,content);item.append(button);
     button.addEventListener('click',e=>void pick(entry,e));
-    buttons.set(entry.id,{button});return item;
+    buttons.set(entry.id,{button,available:percent!==null});return item;
   }
   function selected(){return filterStarters(entries||[],{query:q.value,genre:genre.value,level:level.value,language:language.value})}
   function updateStatus(match=selected()){
