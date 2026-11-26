@@ -1861,7 +1861,13 @@ function appendOcrReview(box,parsed,role){
 function renderImportPreview(a,b,event,{originalLanguage}={}){
   previewBook=b?pairBooks(a,b):singleBook(a);
   const box=$('#import-preview'),unit=['PDF','PNG','JPEG','WEBP'].includes(a.format)?'Страниц':'Глав';
-  box.replaceChildren(node('h3',previewBook.title),node('p',`${previewBook.author||'Автор не указан'} · ${unit}: ${previewBook.chapters.length} · Абзацев: ${totalParagraphs(previewBook)}`,'muted'));
+  const excerpts={language:[],translationLanguage:[]};
+  const previewText=(tag,text,field,cls)=>{
+    const el=node(tag,text,cls);el.dir='auto';
+    el.lang=previewBook[field]||'und';excerpts[field].push(el);
+    return el;
+  };
+  box.replaceChildren(previewText('h3',previewBook.title,'language'),node('p',`${previewBook.author||'Автор не указан'} · ${unit}: ${previewBook.chapters.length} · Абзацев: ${totalParagraphs(previewBook)}`,'muted'));
   for(const [field,label,choice,parsed] of [['language','Язык оригинала',state.prefs.readingLanguage,a],['translationLanguage','Язык парного файла',state.prefs.dictionaryTarget,b]]){
     if(!parsed)continue;
     const tag=parsed.language;
@@ -1870,7 +1876,10 @@ function renderImportPreview(a,b,event,{originalLanguage}={}){
     const inferred=resolveLanguage(tag,choice,parsed.chapters[0]?.paragraphs[0]||'');
     const selected=field==='language'&&originalLanguage!==undefined?originalLanguage:inferred;
     fillLanguages(select,Object.hasOwn(languages,selected)?selected:'',{unknown:true});
-    const book=previewBook;const commit=()=>{book[field]=select.value||tag||'und'};
+    const book=previewBook;const commit=()=>{
+      book[field]=select.value||tag||'und';
+      for(const excerpt of excerpts[field])excerpt.lang=book[field];
+    };
     select.onchange=commit;commit();wrapper.append(select);box.append(wrapper);
   }
   const warnings=[...new Set([...(a.warnings||[]),...(b?.warnings||[])])];
@@ -1894,8 +1903,11 @@ function renderImportPreview(a,b,event,{originalLanguage}={}){
   // Do not allocate a copy of a whole book to show three examples.
   if(b||!a.ocr?.pages?.length){let shown=0;outer:for(const [ci,c] of previewBook.chapters.entries())for(const [pi,p] of c.paragraphs.entries()){
     const div=node('div',null,'preview-pair'),where=['PDF','PNG','JPEG','WEBP'].includes(a.format)?c.title:'Глава '+(ci+1);
-    div.append(node('small',where+', абзац '+(pi+1)),node('p',p.text.slice(0,600)));
-    if(b)div.append(node('p',p.translation?p.translation.slice(0,600):'Нет сопоставленного перевода','translation-preview'));box.append(div);if(++shown>=3)break outer;
+    // A paired import can mix directions without changing the Russian labels.
+    div.append(node('small',where+', абзац '+(pi+1)),previewText('p',p.text.slice(0,600),'language'));
+    if(b)div.append(p.translation?previewText('p',p.translation.slice(0,600),'translationLanguage','translation-preview'):
+      node('p','Нет сопоставленного перевода','translation-preview'));
+    box.append(div);if(++shown>=3)break outer;
   }}
   box.hidden=false;$('#import-confirm').hidden=false;$('#import-confirm .check-field').hidden=!b;$('#save-import').disabled=!!b;
   importStatus('Проверьте предпросмотр.','ready');setBookTiles('ready');revealMotion(box,'panel',{enabled:!!event?.detail});
