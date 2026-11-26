@@ -552,7 +552,7 @@ const navMotion=installNavMotion($('.nav-dock'));
 function homeRoute(){const view=location.hash.slice(1);if(view.startsWith('profile/'))return 'profile';return HOME_ROUTES.includes(view)?view:'home'}
 function showHome(which='home',{motion=false,focus=false}={}){
   const leavingReader=!$('#reader').hidden,changed=homeView!==which,forward=HOME_ROUTES.indexOf(which)>HOME_ROUTES.indexOf(homeView);
-  if(leavingReader){cancelLocalQueue();readingHome.leaveReader();dismissWord();capturePosition(true);closeComicView();renderEpoch++;suppressScroll=false;clearTimeout(saveTimer);clearTimeout(seenTimer)}
+  if(leavingReader){cancelLocalQueue();readingHome.leaveReader();dismissWord();capturePosition(true);closeComicView();renderEpoch++;$('#passage').removeAttribute('aria-busy');suppressScroll=false;clearTimeout(saveTimer);clearTimeout(seenTimer)}
   if(!leavingReader&&!changed&&homeLeaving===false&&$('#home').dataset.ready==='true')return;
   cancelSpeech();cancelMotion($('#reader'));
   document.body.classList.remove('reading');setChromeColor();$('#reader').hidden=true;$('#home').hidden=false;$('#home').dataset.ready='true';
@@ -802,11 +802,66 @@ function wordNodes(text){
   });
   return fragment;
 }
-function renderChapter(position={chapter,paragraph:0,fraction:0},{bookmark=false,focus=false}={}){listenButton.hidden=isComic(current);if(isComic(current)){void renderComicPage(position,{bookmark});return}const epoch=++renderEpoch;suppressScroll=true;cancelSpeech();const c=current.chapters[chapter];paragraph=Math.max(0,Math.min(c.paragraphs.length-1,position.paragraph||0));state.positions[current.id]={...position,chapter,paragraph,fraction:position.fraction||0};$('#chapter-title').textContent=`${chapter+1} / ${current.chapters.length} · ${c.title}`;$('#chapter-meta').textContent=`ГЛАВА ${chapter+1} · ${current.language||'ОРИГИНАЛ'}`;$('#chapter-heading').textContent=c.title;paragraphObserver?.disconnect();paragraphObserver=new IntersectionObserver(entries=>{for(const entry of entries){if(entry.isIntersecting){const el=entry.target;if(!el.dataset.hydrated){el.replaceChildren(wordNodes(el.textContent));el.dataset.hydrated='true'}paragraphObserver.unobserve(el)}}},{root:$('#reading-scroll'),rootMargin:'600px'});const passage=document.createDocumentFragment();c.paragraphs.forEach((p,i)=>{const el=node('p',null,'reading-paragraph');el.dataset.paragraph=i;el.id=`paragraph-${i}`;el.lang=current.language||'';el.dir='auto';el.textContent=p.text;passage.append(el);paragraphObserver.observe(el)});$('#passage').replaceChildren(passage);$('#previous-chapter').disabled=chapter===0;$('#next-chapter').disabled=chapter===current.chapters.length-1;$('.reader-help').open=false;$('#reading-note').textContent=current.alignment==='demo'?'Демо: три фрагмента с готовым переводом.':current.alignment==='none'?(isStarterId(current.id)?'У издания нет готового парного текста. Словарь доступен по нажатию на слово.':'Файл перевода не добавлен.'):'Сопоставление по порядку, не по смыслу. Несовпавшие главы не переведены.';const pageNo=Number(/^Страница (\d+)$/.exec(c.title)?.[1]);if(current.ocr?.pages.includes(pageNo))$('#reading-note').textContent+=current.ocr.uncertain.includes(pageNo)?' На этой странице OCR не уверено в результате. Сверьте текст с оригиналом.':' Эта страница содержит распознанный текст.';requestAnimationFrame(()=>{if(epoch!==renderEpoch)return;restorePosition(position);setActiveParagraph(paragraph,true);if(bookmark)outcomeCue($('#paragraph-'+paragraph),'bookmark',1000);if(epoch===renderEpoch){suppressScroll=false;scheduleSeen();queueColdAnchorCorrection(position,epoch);
-  // Move focus only for a keyboard/AT chapter command, after the new anchor
-  // has been restored. Never pull focus out of another sheet or a hidden reader.
-  if(focus&&!document.hidden&&!$('#reader').hidden&&!document.querySelector('dialog[open]'))$('#chapter-heading').focus({preventScroll:true});
-}})}
+function renderChapter(position={chapter,paragraph:0,fraction:0},{bookmark=false,focus=false}={}){
+  const host=$('#passage'),sc=$('#reading-scroll'),book=current,chapterIndex=chapter;
+  listenButton.hidden=isComic(book);
+  if(isComic(book)){host.removeAttribute('aria-busy');void renderComicPage(position,{bookmark});return}
+  const epoch=++renderEpoch,c=book.chapters[chapterIndex],language=book.language||'';
+  const alive=()=>epoch===renderEpoch&&!$('#reader').hidden;
+  suppressScroll=true;cancelSpeech();
+  paragraph=Math.max(0,Math.min(c.paragraphs.length-1,position.paragraph||0));
+  state.positions[book.id]={...position,chapter:chapterIndex,paragraph,fraction:position.fraction||0};
+  $('#chapter-title').textContent=`${chapterIndex+1} / ${book.chapters.length} · ${c.title}`;
+  $('#chapter-meta').textContent=`ГЛАВА ${chapterIndex+1} · ${language||'ОРИГИНАЛ'}`;
+  $('#chapter-heading').textContent=c.title;
+  $('#previous-chapter').disabled=chapterIndex===0;
+  $('#next-chapter').disabled=chapterIndex===book.chapters.length-1;
+  $('.reader-help').open=false;
+  $('#reading-note').textContent=book.alignment==='demo'?'Демо: три фрагмента с готовым переводом.':book.alignment==='none'
+    ?(isStarterId(book.id)?'У издания нет готового парного текста. Словарь доступен по нажатию на слово.':'Файл перевода не добавлен.')
+    :'Сопоставление по порядку, не по смыслу. Несовпавшие главы не переведены.';
+  const pageNo=Number(/^Страница (\d+)$/.exec(c.title)?.[1]);
+  if(book.ocr?.pages.includes(pageNo))$('#reading-note').textContent+=book.ocr.uncertain.includes(pageNo)
+    ?' На этой странице OCR не уверено в результате. Сверьте текст с оригиналом.':' Эта страница содержит распознанный текст.';
+  paragraphObserver?.disconnect();
+  const observer=paragraphObserver=new IntersectionObserver(entries=>{
+    if(!alive())return;
+    for(const entry of entries)if(entry.isIntersecting){
+      const el=entry.target;
+      if(!el.dataset.hydrated){el.replaceChildren(wordNodes(el.textContent));el.dataset.hydrated='true'}
+      observer.unobserve(el);
+    }
+  },{root:sc,rootMargin:'600px'});
+  const passage=document.createDocumentFragment(),large=c.paragraphs.length>640;
+  let next=0;
+  if(large){
+    const status=node('p','Открываем главу…','muted');status.setAttribute('role','status');
+    host.setAttribute('aria-busy','true');host.replaceChildren(status);
+  }
+  function appendRows(){
+    if(!alive()){observer.disconnect();return;}
+    const end=large?Math.min(c.paragraphs.length,next+256):c.paragraphs.length;
+    while(next<end){
+      const i=next++,el=node('p',null,'reading-paragraph');
+      el.dataset.paragraph=i;el.id=`paragraph-${i}`;el.lang=language;el.dir='auto';el.textContent=c.paragraphs[i].text;
+      passage.append(el);observer.observe(el);
+    }
+    // During a large chapter, let Back or a chapter change cancel the
+    // detached build. Commit once so partial geometry never saves a position.
+    if(next<c.paragraphs.length){setTimeout(appendRows,0);return}
+    host.replaceChildren(passage);host.removeAttribute('aria-busy');
+    requestAnimationFrame(()=>{
+      if(!alive())return;
+      restorePosition(position);setActiveParagraph(paragraph,true);
+      if(bookmark)outcomeCue($('#paragraph-'+paragraph),'bookmark',1000);
+      if(!alive())return;
+      suppressScroll=false;scheduleSeen();queueColdAnchorCorrection(position,epoch);
+      // Keyboard/AT chapter changes move focus only after the new anchor.
+      if(focus&&!document.hidden&&!document.querySelector('dialog[open]'))$('#chapter-heading').focus({preventScroll:true});
+    });
+  }
+  appendRows();
+}
 function restorePosition(p){
   if(isComic(current))return;
   const el=$('#paragraph-'+paragraph),sc=$('#reading-scroll');if(!el)return;
@@ -1423,7 +1478,7 @@ function prefsChanged(change){
   const position=current&&!$('#reader').hidden?state.positions[current.id]:null;
   const oldFont=state.prefs.font;
   Object.assign(state.prefs,change);applyPrefs();saveState();
-  if(!position)return;
+  if(!position||$('#passage').hasAttribute?.('aria-busy'))return; // The full chapter will restore using the new style.
   const layout=++prefsLayoutEpoch,epoch=renderEpoch,sc=$('#reading-scroll');
   const stillHere=()=>layout===prefsLayoutEpoch&&epoch===renderEpoch&&!$('#reader').hidden;
   const font=state.prefs.font;
