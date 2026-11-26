@@ -40,7 +40,7 @@ function fixture(t){
   const i=app.indexOf('  onState(status,lang){'),j=app.indexOf('\n});\nlistenButton.onclick=',i);
   assert.ok(i>=0&&j>i);
   const hooks=runInNewContext('({'+app.slice(i,j)+'})',{
-    readingHome,pendingReadingScroll:null,markReadingScrollAnchor:no,listenButton:{setAttribute:no,firstElementChild:{}},
+    readingHome,current:null,pendingReadingScroll:null,markReadingScrollAnchor:no,listenButton:{setAttribute:no,firstElementChild:{}},
     iconMarkup:()=>'',toast:no,wordSpeechMessage:()=>'',
   });
   readingHome.enterReader();

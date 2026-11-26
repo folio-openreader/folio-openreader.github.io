@@ -78,6 +78,8 @@ export function safePosition(p,book) {
   if(book.kind!=='comic'&&book.chapters.length===1&&book.chapters[0].paragraphs.length===1&&
      Number.isFinite(p.soloScrollProgress)&&p.soloScrollProgress>=0&&p.soloScrollProgress<=1)
     position.soloScrollProgress=p.soloScrollProgress;
+  if(book.kind!=='comic'&&p.textEnd===true&&p.chapter===book.chapters.length-1&&
+     (book.chapters.length>1||book.chapters[0].paragraphs.length>1))position.textEnd=true;
   if(book.kind!=='comic'&&p.chapterTop===true&&p.paragraph===0&&fraction===0)position.chapterTop=true;
   else if(Number.isFinite(p.viewportDelta)&&Math.abs(p.viewportDelta)<=512&&p.viewportDelta!==0)position.viewportDelta=p.viewportDelta;
   return position;

@@ -409,3 +409,12 @@ test('chapter-top markers are restricted to an actual text chapter start',()=>{
   assert.deepEqual(safePosition({...top,paragraph:1},h.book),pos(1,0,1));
   assert.deepEqual(safePosition(top,{...h.book,kind:'comic'}),pos(0,0,1));
 });
+
+test('terminal checkpoint is portable only for the final chapter of multi-paragraph text',()=>{
+  const h=session(),last={...pos(19,.4,1),textEnd:true};
+  assert.deepEqual(safePosition(last,h.book),last);
+  assert.deepEqual(safePosition({...last,chapter:0},h.book),pos(19,.4));
+  assert.deepEqual(safePosition(last,{...h.book,kind:'comic'}),pos(19,.4,1));
+  const note={chapters:[{paragraphs:[{text:'single'}]}]};
+  assert.deepEqual(safePosition({...pos(0,.4),textEnd:true},note),pos(0,.4));
+});
