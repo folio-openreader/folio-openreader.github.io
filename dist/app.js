@@ -2286,12 +2286,21 @@ window.addEventListener('pagehide',()=>{syncEpoch++;syncPanel?.dispose();syncPan
 window.addEventListener('pageshow',e=>{if(e.persisted&&(wordDisk?.enrolled||storedValue(SYNC_WORDS)!==null)){location.reload();return}if(e.persisted){resumeReading();if(location.hash==='#profile/sync')void showSyncPanel()}});
 function readHash(){
   if(!location.hash.startsWith('#read/')){starterIntent++;editorialIntent++;showHome(homeRoute());return}
-  let id;try{id=decodeURIComponent(location.hash.slice(6))}catch{id=DEMO_ID}
+  let id='';try{id=decodeURIComponent(location.hash.slice(6))}catch{/* Invalid links use the same shelf fallback. */}
+  if(id==='demo')id=DEMO_ID; // Preserve old example links without accepting arbitrary IDs.
   if(current?.id===id&&!$('#reader').hidden)return;
-  if(editorialKind(id)&&!books.some(b=>b.id===id)){
+  const saved=books.some(b=>b.id===id),editorial=editorialKind(id),starter=isStarterId(id);
+  if(!saved&&!editorial&&!starter){
+    starterIntent++;editorialIntent++;
+    const route=returnRoute();
+    history.replaceState(null,'','#'+route);showHome(route,{focus:true});
+    toast('Этой книги нет на этом устройстве. Откройте её с полки или импортируйте файл снова.');
+    return;
+  }
+  if(editorial&&!saved){
     showHome(returnRoute());const url=location.hash;
     void openEditorialBook(id).catch(()=>{if(location.hash===url)toast('Не удалось загрузить текст. Откройте его из каталога.')});
-  }else if(isStarterId(id)&&!books.some(b=>b.id===id)){
+  }else if(starter&&!saved){
     showHome(returnRoute());
     const url=location.hash;
     void openStarterBook(id).catch(()=>{if(location.hash===url)toast('Не удалось загрузить книгу. Открой её из каталога.');});
