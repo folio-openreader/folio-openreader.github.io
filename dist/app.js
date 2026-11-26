@@ -1205,12 +1205,12 @@ let localDialogPaint=0;
 function paintLocalDialog(loc){
   if(!sameLocal(localDialogTarget,loc)||!$('#translation-dialog').open)return;
   const paint=++localDialogPaint;
-  const wrap=$('#full-translation'),status=$('#local-translation-status'),bar=$('#local-translation-progress'),button=$('#local-translation-start');
+  const wrap=$('#translation-result'),status=$('#local-translation-status'),bar=$('#local-translation-progress'),button=$('#local-translation-start');
   const value=!loc.p.translation?peekLocal(loc):null,checking=sameLocal(localDialogProbe,loc);
-  const mountedOriginal=wrap.querySelector('.source-text'),lang=readingSourceLanguage(loc.book,loc.ci)||'';
-  if(!mountedOriginal||mountedOriginal.textContent!==loc.p.text||mountedOriginal.lang!==lang){
-    const original=node('p',loc.p.text,'source-text');original.lang=lang;original.dir='auto';wrap.replaceChildren(original);
-  }else while(wrap.lastElementChild!==mountedOriginal)wrap.lastElementChild.remove();
+  const original=$('#translation-original'),lang=readingSourceLanguage(loc.book,loc.ci)||'';
+  if(original.textContent!==loc.p.text)original.textContent=loc.p.text;
+  if(original.lang!==lang)original.lang=lang;
+  wrap.replaceChildren();
   $('#local-translation-section').hidden=!!loc.p.translation||!!value||(!checking&&!canLocal(loc));
   if(loc.p.translation){
     const p=node('p',loc.p.translation);p.lang=loc.book.translationLanguage||'';p.dir='auto';wrap.append(p);

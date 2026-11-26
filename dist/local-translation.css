@@ -2,9 +2,12 @@
 #local-translation-open{min-height:34px;padding-inline:9px;white-space:nowrap;border-radius:8px}
 #local-translation-open:hover{background:var(--soft)}
 #local-translation-progress{display:block;width:100%;margin:8px 0 12px;accent-color:var(--accent)}
-#local-translation-section{border-top:1px solid var(--line);padding-top:9px;margin-top:13px}
+#local-translation-section{margin-block:0 13px}
 #local-translation-status{margin:0 0 8px}
 #local-translation-status:empty{display:none}
+#full-translation .paragraph-original{margin-block-start:14px;padding-block-start:10px;border-block-start:1px solid var(--line)}
+#full-translation .paragraph-original h3{margin:0 0 5px;font-size:.81rem;color:var(--muted)}
+#full-translation .paragraph-original .source-text{margin:0}
 #full-translation .machine-source{font:inherit;font-size:.78rem;color:var(--muted);letter-spacing:.04em}
 #full-translation .machine-result{overflow-wrap:anywhere}
 @media(max-width:360px){.ribbon-meta{padding-inline:10px}.ribbon-controls{gap:3px}}
