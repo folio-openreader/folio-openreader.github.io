@@ -2466,6 +2466,7 @@ try{db=await openDB();const stored=await dbAction('readonly',s=>s.getAll(booksOn
 catch{db=null;toast('Хранилище книг недоступно. Демо работает, но новые книги не сохранятся.')}
 installVoiceControls({language:box=>box.closest('#preferences')&&current?
   speechLanguage(readingSourceLanguage(current,chapter),state.prefs.readingLanguage):state.prefs.readingLanguage,
+  bookSample:box=>box.closest('#preferences')&&current&&!isComic(current)?current.chapters[chapter]?.paragraphs[paragraph]?.text:'',
   beforeSample:cancelSpeech});
 readHash();if(location.hash==='#profile/sync')void showSyncPanel();
 window.dispatchEvent(new Event('folio:ready'));

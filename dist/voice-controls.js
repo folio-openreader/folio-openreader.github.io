@@ -3,7 +3,19 @@ import {createWordSpeech,localVoice,speechRates,voicePreference,wordSpeechMessag
 const samples={en:'Just one more page.',ru:'Прочитаем ещё одну страницу.',de:'Nur noch eine Seite.',es:'Una página más.',fr:'Encore une page.',kk:'Тағы бір бет оқиық.',hi:'एक और पृष्ठ पढ़ें।',ja:'もう一ページ読みましょう。',ko:'한 페이지 더 읽어 봐요.'};
 const names=typeof Intl.DisplayNames==='function'?new Intl.DisplayNames(['ru'],{type:'language'}):null;
 function label(tag){try{return names?.of(tag)||tag}catch{return tag}}
-export function installVoiceControls({language,beforeSample}){
+// A short local excerpt lets readers audition more languages without inventing
+// a mismatched sample or handing their book text to a remote system voice.
+export function bookVoiceSample(text){
+  const start=String(text||'').slice(0,150).trimStart().replace(/\s+/gu,' ');
+  const clip=start.slice(0,72).replace(/[\uD800-\uDBFF]$/u,'');
+  const sentence=clip.match(/^.{15,70}?[.!?。！？](?=\s|$)/u)?.[0];
+  let sample=(sentence||clip).trimEnd();
+  if(!sentence&&clip===sample&&start.length>72&&!/\s/u.test(start[72])){
+    const space=sample.lastIndexOf(' ');if(space>=24)sample=sample.slice(0,space);
+  }
+  return /\p{L}/u.test(sample)?sample:'';
+}
+export function installVoiceControls({language,bookSample,beforeSample}){
   const panels=[],host=window;
   let activeStatus=null,installed=false,busy=false,aborter=null,percent=0,packNote='';
   const refresh=()=>panels.forEach(f=>f());
@@ -43,7 +55,7 @@ export function installVoiceControls({language,beforeSample}){
       }catch(e){packNote=e?.name==='AbortError'?'Загрузка отменена.':e?.name==='QuotaExceededError'?'Недостаточно места. Освободите память и повторите.':'Не удалось сохранить пакет. Голоса устройства по-прежнему доступны.'}
       finally{busy=false;aborter=null;refresh()}
     };
-    let context=null;
+    let context=null,sample='';
     function sync(){
       const selectedLanguage=language(box)||'en';
       let list=[];try{list=host.speechSynthesis?.getVoices()||[]}catch{}
@@ -59,13 +71,17 @@ export function installVoiceControls({language,beforeSample}){
       voice.value=preferred?pref.voice:matches.some(v=>(v.voiceURI||v.name)===pref.voice)?pref.voice:'';
       voice.disabled=!(hasPack||matches.length);rate.value=String(pref.rate);
       if(activeStatus!==status)status.textContent=!matches.length&&!preferred?'Браузер не показал установленный голос для этого языка.':'';
-      btn.disabled=!samples[desired.split('-')[0]]||(!preferred&&!host.speechSynthesis);
+      const base=desired.split('-')[0],fixed=Object.hasOwn(samples,base)?samples[base]:'';
+      const excerpt=!fixed&&desired===selectedLanguage&&matches.length?bookVoiceSample(bookSample?.(box)):'';
+      sample=fixed||excerpt;
+      btn.textContent=excerpt?'Послушать отрывок':'Послушать пример';
+      btn.disabled=!sample||(!preferred&&!host.speechSynthesis);
     }
     panels.push(sync);
     lang.onchange=()=>{stop();sync()};
     voice.onchange=()=>{stop();beforeSample();voicePreference(host,lang.value,{voice:voice.value});panels.forEach(f=>f())};
     rate.onchange=()=>{stop();beforeSample();voicePreference(host,lang.value,{rate:Number(rate.value)});panels.forEach(f=>f())};
-    btn.onclick=event=>{stop();beforeSample();activeStatus=status;preview.speak({event,language:lang.value,text:samples[lang.value.split('-')[0]]})};
+    btn.onclick=event=>{stop();beforeSample();activeStatus=status;preview.speak({event,language:lang.value,text:sample})};
     const dialog=box.closest('dialog');
     if(dialog){new MutationObserver(()=>{if(dialog.open)sync();else stop()}).observe(dialog,{attributes:true,attributeFilter:['open']})}
     sync();
