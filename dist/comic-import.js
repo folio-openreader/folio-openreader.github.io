@@ -1,7 +1,8 @@
 // Page-preserving local import. Only raster data enters a page Blob; ZIP markup,
 // URLs, thumbnails in hidden folders, and ComicInfo.xml are never interpreted.
 import { zip } from './importers.js';
-import { imageDimensions, abortError, check, MAX_IMAGE_BYTES, SOURCE_PIXELS } from './ocr-engine.js';
+import { imageDimensions, decodePageImage, check, MAX_IMAGE_BYTES, SOURCE_PIXELS } from './ocr-engine.js';
+export {decodePageImage as decodeComicImage};
 
 const MiB = 1024 * 1024;
 export const COMIC_LIMITS = Object.freeze({
@@ -31,42 +32,8 @@ export function comicImageHeader(bytes, name) {
   return {...decoded,type:'image/'+expected};
 }
 
-// Native image decoding has no abort API. Release the caller immediately and
-// still consume late errors/results so an abandoned ImageBitmap does not leak.
-function waitForDecode(start,signal,closeLate){
-  const decode=Promise.resolve().then(()=>{check(signal);return start()});
-  if(!signal)return decode;
-  return new Promise((resolve,reject)=>{
-    const abort=()=>reject(abortError());
-    signal.addEventListener('abort',abort,{once:true});
-    decode.then(value=>{
-      signal.removeEventListener('abort',abort);
-      if(signal.aborted){closeLate?.(value);return;}
-      resolve(value);
-    },error=>{
-      signal.removeEventListener('abort',abort);reject(error);
-    });
-  });
-}
-
-export async function decodeComicImage(blob,signal,unsupported){
-  check(signal);
-  if(typeof createImageBitmap==='function'){
-    const image=await waitForDecode(()=>createImageBitmap(blob,{imageOrientation:'from-image'}),signal,image=>image.close());
-    return {image,width:image.width,height:image.height,close:()=>image.close()};
-  }
-  // For engines without ImageBitmap, decode only our just-validated raster Blob.
-  if(typeof Image!=='function')throw fail(unsupported);
-  const image=new Image(),url=URL.createObjectURL(blob);
-  const close=()=>{image.removeAttribute('src');URL.revokeObjectURL(url)};
-  try{
-    await waitForDecode(()=>{image.src=url;return image.decode()},signal);
-    return {image,width:image.naturalWidth,height:image.naturalHeight,close};
-  } catch(error){close();throw error;}
-}
-
 async function decodeSize(blob,signal){
-  const decoded=await decodeComicImage(blob,signal,'Для импорта комикса нужен современный браузер.');
+  const decoded=await decodePageImage(blob,signal,'Для импорта комикса нужен современный браузер.');
   try{check(signal);return [decoded.width,decoded.height];}
   finally{decoded.close();}
 }

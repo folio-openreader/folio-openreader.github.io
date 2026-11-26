@@ -2,13 +2,15 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {parseComicFiles} from '../dist/comic-import.js';
 import {recognizeComicPage} from '../dist/comic-ocr.js';
+import {parseImage} from '../dist/pdf-import.js';
 
 const file=()=>new File([Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9Zz4cAAAAASUVORK5CYII=','base64')],
   '1.png',{type:'image/png'});
 const modes={
   import:(f,signal)=>parseComicFiles([f],{signal}),
-  OCR:(f,signal)=>recognizeComicPage(f,{signal})
+  OCR:(f,signal)=>recognizeComicPage(f,{signal}),
+  'book scan':async(f,signal)=>parseImage(await f.arrayBuffer(),f.name,{signal})
 };
 const deferred=()=>{let resolve,reject;const promise=new Promise((ok,bad)=>{resolve=ok;reject=bad});return {promise,resolve,reject}};
 function setGlobal(t,name,value){

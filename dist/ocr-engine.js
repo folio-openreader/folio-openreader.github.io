@@ -18,6 +18,40 @@ export function languages(input) {
 }
 export function abortError(){ return new DOMException('Импорт отменён.','AbortError'); }
 export function check(signal){if(signal?.aborted) throw abortError();}
+// Native image decoding has no abort API. Release the caller immediately and
+// still consume late errors/results so an abandoned ImageBitmap does not leak.
+function waitForDecode(start,signal,closeLate){
+  const decode=Promise.resolve().then(()=>{check(signal);return start()});
+  if(!signal)return decode;
+  return new Promise((resolve,reject)=>{
+    const abort=()=>reject(abortError());
+    signal.addEventListener('abort',abort,{once:true});
+    decode.then(value=>{
+      signal.removeEventListener('abort',abort);
+      if(signal.aborted){closeLate?.(value);return;}
+      resolve(value);
+    },error=>{
+      signal.removeEventListener('abort',abort);reject(error);
+    });
+  });
+}
+
+export async function decodePageImage(blob,signal,unsupported){
+  check(signal);
+  if(typeof createImageBitmap==='function'){
+    const image=await waitForDecode(()=>createImageBitmap(blob,{imageOrientation:'from-image'}),signal,image=>image.close());
+    return {image,width:image.width,height:image.height,close:()=>image.close()};
+  }
+  // For engines without ImageBitmap, decode only our just-validated raster Blob.
+  if(typeof Image!=='function')throw error(unsupported);
+  const image=new Image(),url=URL.createObjectURL(blob);
+  const close=()=>{image.removeAttribute('src');URL.revokeObjectURL(url)};
+  try{
+    await waitForDecode(()=>{image.src=url;return image.decode()},signal);
+    return {image,width:image.naturalWidth,height:image.naturalHeight,close};
+  } catch(error){close();throw error;}
+}
+
 export function viewportScale(w,h,scale=3){
   if (!Number.isFinite(w*h) || w<=0 || h<=0) throw error('Недопустимый размер страницы.');
   return Math.min(scale,LONG_SIDE/Math.max(w,h),Math.sqrt(PIXELS/(w*h)));

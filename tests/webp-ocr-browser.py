@@ -27,11 +27,13 @@ def fixture(animated=False):
     return content.getvalue()
 
 
-def run(dist, chromium):
+def run(dist, chromium, without_bitmap=False):
     with serve(dist) as origin, sync_playwright() as pw:
         browser = pw.chromium.launch(executable_path=chromium, headless=True, args=["--disable-dev-shm-usage"])
         context = browser.new_context(viewport={"width": 390, "height": 844}, is_mobile=True,
                                       has_touch=True, service_workers="block")
+        if without_bitmap:
+            context.add_init_script("Object.defineProperty(window,'createImageBitmap',{value:undefined});")
         launches = []
         def route(r):
             url = r.request.url
@@ -57,13 +59,17 @@ def run(dist, chromium):
                 expect(p.locator("#import-preview")).to_be_hidden()
                 assert not launches, launches
             else:
-                expect(p.locator("#import-preview .ocr-review")).to_contain_text("Follow the river.", timeout=25000)
+                p.wait_for_function("""() => ['ready','error'].includes(document.querySelector('#import-status').dataset.state)""",
+                                    timeout=25000)
+                expect(p.locator("#import-status")).to_have_attribute("data-state","ready")
+                expect(p.locator("#import-preview .ocr-review")).to_contain_text("Follow the river.")
                 p.locator("#save-import").click()
                 expect(p.locator("#book-title")).to_have_text("River scan")
                 expect(p.locator("#paragraph-0")).to_have_text("Follow the river.")
                 assert len(launches) == 1, launches
         assert not errors, errors
-        print("Real WebP scan OCR succeeded; animated WebP rejected before the OCR worker.")
+        print("Real WebP scan OCR succeeded " + ("without createImageBitmap" if without_bitmap else "with native bitmap") +
+              "; animated WebP rejected before the OCR worker.")
         browser.close()
 
 
@@ -71,5 +77,6 @@ if __name__ == "__main__":
     parser = ArgumentParser(description=__doc__)
     parser.add_argument("dist", type=Path)
     parser.add_argument("--chromium")
+    parser.add_argument("--without-bitmap", action="store_true")
     a = parser.parse_args()
-    run(a.dist.resolve(), a.chromium)
+    run(a.dist.resolve(), a.chromium, a.without_bitmap)

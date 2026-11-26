@@ -487,17 +487,18 @@ export async function parseImage(buffer,name='',options={}){
   if(buffer.byteLength>engine.MAX_IMAGE_BYTES) throw issue('Изображение больше 16 МБ. Выберите файл меньшего размера.');
   const bytes=buffer instanceof Uint8Array?buffer:new Uint8Array(buffer), {format}=engine.imageDimensions(bytes);
   const selected=engine.languages(options.languages??options.preferredLanguages); const run=pdfBudget(options.signal,120000,'OCR изображения заняло слишком много времени. Уменьшите изображение.');
-  let bitmap,canvas,ocr;
+  let source,canvas,ocr;
   const read=async()=>{
     engine.check(run.signal);options.onProgress?.({stage:'render',page:1,total:1,progress:0});
-    if(typeof createImageBitmap!=='function')throw issue('Для импорта изображений нужен современный браузер.');
-    const b=await createImageBitmap(new Blob([bytes],{type:'image/'+format.toLowerCase()}));
-    if(run.signal.aborted){b.close();throw aborted();}bitmap=b;
-    if(b.width*b.height>engine.SOURCE_PIXELS||Math.max(b.width,b.height)>16000)
+    const decoded=await engine.decodePageImage(new Blob([bytes],{type:'image/'+format.toLowerCase()}),
+      run.signal,'Для импорта изображений нужен современный браузер.');
+    if(run.signal.aborted){decoded.close();throw aborted();}source=decoded;
+    const {image,width,height}=source;
+    if(width*height>engine.SOURCE_PIXELS||Math.max(width,height)>16000)
       throw issue('Слишком большое изображение. Уменьшите его до 32 мегапикселей и 16 000 пикселей по стороне.');
-    const s=engine.viewportScale(b.width,b.height,1);
-    canvas=engine.canvasAt(b.width*s,b.height*s);const ctx=canvas.getContext('2d');
-    ctx.fillStyle='#fff';ctx.fillRect(0,0,canvas.width,canvas.height);ctx.drawImage(b,0,0,canvas.width,canvas.height);b.close();bitmap=null;
+    const s=engine.viewportScale(width,height,1);
+    canvas=engine.canvasAt(width*s,height*s);const ctx=canvas.getContext('2d');
+    ctx.fillStyle='#fff';ctx.fillRect(0,0,canvas.width,canvas.height);ctx.drawImage(image,0,0,canvas.width,canvas.height);source.close();source=null;
     if(!await engine.hasPageMarks(canvas,run.signal))throw engine.noOCRText();
     ocr=engine.ocrSession(selected,run.signal,options.onProgress);
     const r=await ocr.read(canvas,1,1);engine.check(run.signal);
@@ -510,5 +511,5 @@ export async function parseImage(buffer,name='',options={}){
   };
   try{return await Promise.race([run.stopped,read()]);}
   catch(e){if(run.reason)throw run.reason;if(e instanceof ImportIssue || e instanceof engine.OCRIssue || e?.name==='AbortError')throw e;throw issue('Не удалось декодировать изображение. Проверьте формат PNG, JPEG или WebP.');}
-  finally{run.close();ocr?.close();bitmap?.close();if(canvas)canvas.width=canvas.height=0;}
+  finally{run.close();ocr?.close();source?.close();if(canvas)canvas.width=canvas.height=0;}
 }
