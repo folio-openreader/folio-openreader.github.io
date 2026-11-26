@@ -71,6 +71,11 @@ def run(dist, chromium, mixed):
             expect(preview).to_contain_text("Распознавание прервалось на странице 1")
             expect(preview).to_contain_text("Native text before the failed recognition.")
             expect(preview).to_contain_text("Native text after the failed recognition.")
+            # A degraded parse is useful for this preview, but must not
+            # satisfy the next request without attempting recognition again.
+            page.locator("#preview-import").click()
+            expect(preview).to_be_visible()
+            expect(preview).to_contain_text("Распознавание прервалось на странице 1")
             page.locator("#save-import").click()
             expect(page.locator("#chapter-title")).to_have_text("1 / 2 · Страница 1")
             expect(page.locator("#paragraph-0")).to_have_text("Native text before the failed recognition.")
@@ -81,7 +86,7 @@ def run(dist, chromium, mixed):
             expect(page.locator("#retry-ocr")).to_be_visible()
             expect(page.locator("#import-preview")).to_be_hidden()
             expect(page.locator("#save-import")).to_be_hidden()
-        assert len(requests) == 1, requests
+        assert len(requests) == (2 if mixed else 1), requests
         assert not errors, errors
         print(("mixed PDF preserved both readable pages" if mixed else "scan-only PDF remains an explicit OCR error"))
         browser.close()

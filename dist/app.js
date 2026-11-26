@@ -1599,7 +1599,7 @@ const ocrLanguageChoices=[['eng','Английский'],['rus','Русский'
 const isPdf=file=>/\.pdf$/i.test(file?.name||'');
 const isImage=file=>/\.(?:png|jpe?g|webp)$/i.test(file?.name||'');
 const getFile=role=>$('#'+role+'-file').files[0];
-const ocrRecovery=new Set();
+const ocrRecovery=new Set(), parsedImport=new Map();
 const preferredOcr=role=>[({en:'eng',ru:'rus',kk:'kaz'})[knownLanguage(role==='original'?state.prefs.readingLanguage:state.prefs.dictionaryTarget)]||(role==='original'?'eng':'rus')];
 for(const role of importRoles){
   const select=$('#ocr-'+role),automatic=node('option','Автоматически');automatic.value='';select.append(automatic);
@@ -1613,9 +1613,11 @@ function syncOcrControls(){
   $('#ocr-pdf-limit').hidden=!importRoles.some(role=>isPdf(getFile(role))&&ocrRecovery.has(role));
   for(const role of importRoles)$('#ocr-'+role+'-field').hidden=!hasSettings(role);
 }
-function resetOcrSettings(){
-  ocrRecovery.clear();$('#ocr-panel').open=false;
-  for(const role of importRoles)$('#ocr-'+role).value='';
+function resetOcrSettings(role){
+  if(!role)$('#ocr-panel').open=false;
+  for(const item of role?[role]:importRoles){
+    ocrRecovery.delete(item);parsedImport.delete(item);$('#ocr-'+item).value='';
+  }
 }
 function finishImportJob(){
   importJob=null;$('#preview-import').disabled=false;$('#cancel-import').hidden=true;
@@ -1709,16 +1711,26 @@ async function previewImport(event){
   $('#preview-import').disabled=true;$('#cancel-import').hidden=false;$('#import-preview').setAttribute('aria-busy','true');
   importStatus('Читаем книгу…','loading');setBookTiles('reading');
   let role='original';
-  const read=file=>{
-    const choice=$('#ocr-'+role).value;
-    return parseBook(file,{ocr:ocrRecovery.has(role)?'thorough':'auto',languages:choice?choice.split('+'):undefined,
-      preferredLanguages:preferredOcr(role),signal:controller.signal,onProgress:update=>{
-      if(sequence===importSequence&&!controller.signal.aborted)showImportProgress(role,update);
-    }});
+  const read=async(file,item)=>{
+    const choice=$('#ocr-'+item).value,ocr=ocrRecovery.has(item)?'thorough':'auto',preferredLanguages=preferredOcr(item);
+    const key=[choice,ocr,...preferredLanguages].join(':');
+    const cached=parsedImport.get(item);
+    if(cached?.file===file&&cached.key===key)return cached.parsed;
+    parsedImport.delete(item);
+    let complete=true;
+    const stillHere=()=>sequence===importSequence&&!controller.signal.aborted;
+    const parsed=await parseBook(file,{ocr,languages:choice?choice.split('+'):undefined,preferredLanguages,
+      signal:controller.signal,onOcrUnavailable:()=>{complete=false},onProgress:update=>{
+        if(stillHere())showImportProgress(item,update);
+      }});
+    // At most one result per selected slot while the dialog is open. A failed
+    // or cancelled scan must never prevent the user from retrying the file.
+    if(complete&&stillHere())parsedImport.set(item,{file,key,parsed});
+    return parsed;
   };
   try{
-    const a=await read(original);if(sequence!==importSequence)return;
-    role='translation';const b=translation?await read(translation):null;if(sequence===importSequence)renderImportPreview(a,b,event);
+    const a=await read(original,role);if(sequence!==importSequence)return;
+    role='translation';const b=translation?await read(translation,role):null;if(sequence===importSequence)renderImportPreview(a,b,event);
   }catch(e){
     if(sequence!==importSequence)return;
     previewBook=null;setBookTiles('selected');dropMotions.get($('#'+role+'-file'))?.state('rejected');
@@ -1727,11 +1739,11 @@ async function previewImport(event){
   }finally{if(sequence===importSequence)finishImportJob()}
 }
 $('#cancel-import').onclick=cancelImport;
-for(const role of importRoles)$('#ocr-'+role).onchange=()=>{invalidateImport();setBookTiles('selected')};
+for(const role of importRoles)$('#ocr-'+role).onchange=()=>{parsedImport.delete(role);invalidateImport();setBookTiles('selected')};
 function setupOcr(role){
   if(!importRoles.includes(role)||importJob)return;
   if(isPdf(getFile(role)))ocrRecovery.add(role);
-  invalidateImport();setBookTiles('selected');$('#ocr-panel').open=true;
+  parsedImport.delete(role);invalidateImport();setBookTiles('selected');$('#ocr-panel').open=true;
   importStatus('При необходимости выберите язык и повторите предпросмотр.');
   $('#ocr-'+role).focus();
 }
@@ -1777,11 +1789,11 @@ ribbon.addEventListener('keydown',e=>{
 function installFileTiles(){
   const hasFiles=e=>Array.from(e.dataTransfer?.types||[]).includes('Files');
   for(const label of $$('.drop-field')){
-    const input=label.querySelector('input'),fx=installDropMotion(label);dropMotions.set(input,fx);
+    const input=label.querySelector('input'),role=label.dataset.fileField,fx=installDropMotion(label);dropMotions.set(input,fx);
     input.onchange=e=>{
       const issue=bookFileError(input.files[0]);
-      if(issue){input.value='';fileTile(input,{animate:false});resetOcrSettings();invalidateImport();fx.state('rejected');importStatus(issue,'error');return}
-      fileTile(input,{animate:!!(e.isTrusted&&lastPointerInput)});resetOcrSettings();invalidateImport();
+      if(issue){input.value='';fileTile(input,{animate:false});resetOcrSettings(role);invalidateImport();fx.state('rejected');importStatus(issue,'error');return}
+      fileTile(input,{animate:!!(e.isTrusted&&lastPointerInput)});resetOcrSettings(role);invalidateImport();
     };
     label.addEventListener('pointerdown',()=>fx.press(),{passive:true});
     label.addEventListener('dragover',e=>{if(!hasFiles(e))return;e.preventDefault();e.dataTransfer.dropEffect='copy';fx.drag(e)});
@@ -1790,7 +1802,7 @@ function installFileTiles(){
       if(!hasFiles(e))return;e.preventDefault();const files=e.dataTransfer.files,file=files[0];
       const issue=files.length>1?'Добавьте по одному файлу.':bookFileError(file);
       if(issue||!file){invalidateImport();setBookTiles('selected');fx.leave();fx.state('rejected');if(issue)importStatus(issue,'error');return}
-      try{const data=new DataTransfer();data.items.add(file);input.files=data.files;fileTile(input,{dropped:true});resetOcrSettings();invalidateImport()}
+      try{const data=new DataTransfer();data.items.add(file);input.files=data.files;fileTile(input,{dropped:true});resetOcrSettings(role);invalidateImport()}
       catch{invalidateImport();setBookTiles('selected');fx.leave();fx.state('rejected');importStatus('Нажмите «Выбрать», чтобы добавить файл.','error')}
     })
   }
