@@ -1,5 +1,5 @@
 import {languages} from './language-pairs.js';
-import {isStarterId,starterSourceURL} from './starter-core.js';
+import {isStarterId,starterPublicationYear,starterSourceURL} from './starter-core.js';
 import {isResearchId} from './research-core.js';
 import {sanitizeNewsPhoto} from './news-photo.js';
 import {isNewsId} from './news-core.js';
@@ -128,7 +128,7 @@ function bookFromBackup(b) {
   let edition;
   if(isStarterId(b.id)&&object(b.edition)){
     const sourceUrl=starterSourceURL(b.edition.sourceUrl);
-    if(sourceUrl)edition={source:safeString(b.edition.source,100),sourceUrl,translator:safeString(b.edition.translator,140),publicationYear:Number.isInteger(b.edition.publicationYear)?b.edition.publicationYear:null};
+    if(sourceUrl)edition={source:safeString(b.edition.source,100),sourceUrl,translator:safeString(b.edition.translator,140),publicationYear:starterPublicationYear(b.edition.publicationYear)};
   }
   if(kind){edition=editorialEdition(b.edition,kind);if(!edition||b.format!=='TXT'||b.language!=='en')invalid()}
   return {...(kind?{kind}:{}),...(edition?{edition}:{}),...(ocr?{ocr}:{}),...(translationOcr?{translationOcr}:{}),...(warnings.length?{warnings}:{}),id:b.id,title:safeString(b.title,1000)||'Без названия',author:safeString(b.author,1000),language:safeString(b.language,40),translationTitle:safeString(b.translationTitle,1000),translationLanguage:safeString(b.translationLanguage,40),format:b.format,alignment:anyTranslation?'positional-unverified':'none',chapters,createdAt:Number.isFinite(b.createdAt)?b.createdAt:0};

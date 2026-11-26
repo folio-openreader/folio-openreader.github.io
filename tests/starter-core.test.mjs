@@ -39,3 +39,17 @@ test('starter backup roundtrip preserves reading state and citation',()=>{
  assert.equal(backup.positions[id].fraction,.4);
  assert.equal(backup.lastBook,id);
 });
+
+test('catalog and local backup preserve validated historical publication dates and ranges',()=>{
+ const withYear=value=>({...entry,edition:{...entry.edition,publicationYear:value}});
+ const label=value=>parseStarterCatalog({version:1,books:[withYear(value)]})[0].edition.publicationYear;
+ assert.equal(label('1903'),1903,'the manifest stores ordinary years as strings');
+ assert.equal(label(1903),1903);
+ assert.equal(label('1868–1869'),'1868–1869');
+ for(const invalid of [null,true,'1869–1868','circa 1880','1903.0','2200','1399','1890–2200'])
+  assert.equal(label(invalid),null);
+ const record=parseStarterCatalog({version:1,books:[withYear('1868–1869')]})[0];
+ const saved=parseStarterBook(book,record);
+ assert.equal(parseBackup(serializeBackup([saved],{positions:{},bookmarks:{},lastBook:id,prefs:{}},[]),demo)
+  .books[0].edition.publicationYear,'1868–1869');
+});

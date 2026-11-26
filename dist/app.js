@@ -27,7 +27,7 @@ import {createWordSpeech,speechLanguage,wordSpeechMessage} from './word-speech.j
 import {BYOK_PROVIDERS,createByokSession} from './byok-core.js';
 import {installByokSettings} from './byok-settings.js';
 import {mountAiWordHint,requestAiWordHint} from './byok-word.js';
-import {createStarterSource,isStarterId,starterSourceURL} from './starter-core.js';
+import {createStarterSource,isStarterId,starterPublicationYear,starterSourceURL} from './starter-core.js';
 import {installStarterShelf} from './starter-shelf.js';
 import {createResearchSource,isResearchId} from './research-core.js';
 import {loadNewsFeed,loadNewsBook,isNewsId,readSavedNewsFeed} from './news-core.js';
@@ -221,6 +221,8 @@ function renderStarterEdition(book){
   }
   const url=starterSourceURL(ed?.sourceUrl);info.hidden=!isStarterId(book.id)||!url;
   if(info.hidden)return;
+  const year=starterPublicationYear(ed.publicationYear);
+  if(year)info.append(node('p','Год издания: '+year));
   if(ed.translator)info.append(node('p','Перевод: '+ed.translator));
   const link=node('a','Издание: '+(ed.source||'источник'));link.href=url;link.target='_blank';link.rel='noopener noreferrer';link.referrerPolicy='no-referrer';
   info.append(link);

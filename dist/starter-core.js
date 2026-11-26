@@ -19,6 +19,16 @@ export function starterSourceURL(value){
   }catch{return ''}
 }
 
+// Historical print sources can record a year or their original serial range.
+export function starterPublicationYear(raw){
+  const valid=y=>Number.isInteger(y)&&y>=1400&&y<=1955;
+  if(typeof raw==='number')return valid(raw)?raw:null;
+  const m=typeof raw==='string'?/^([0-9]{4})(?:[–-]([0-9]{4}))?$/.exec(raw.trim()):null;
+  if(!m||!valid(Number(m[1])))return null;
+  if(!m[2])return Number(m[1]);
+  return valid(Number(m[2]))&&Number(m[2])>=Number(m[1])?m[1]+'–'+m[2]:null;
+}
+
 export function parseStarterCatalog(raw){
   if(raw?.version!==1||!Array.isArray(raw.books)||raw.books.length<1||raw.books.length>48)invalid();
   const known=new Set();
@@ -29,7 +39,7 @@ export function parseStarterCatalog(raw){
     const ed=x.edition, source=short(ed?.source,100)?ed.source:'', sourceUrl=starterSourceURL(ed?.sourceUrl);
     if(!source||!sourceUrl)invalid();
     const edition=Object.freeze({source,sourceUrl,translator:short(ed.translator,140)?ed.translator:'',
-      publicationYear:Number.isInteger(ed.publicationYear)&&ed.publicationYear>=1400&&ed.publicationYear<=1955?ed.publicationYear:null});
+      publicationYear:starterPublicationYear(ed.publicationYear)});
     known.add(x.id);
     return Object.freeze({id:x.id,title:x.title,author:x.author,language:x.language,level:x.level,genres:Object.freeze([...x.genres]),
       asset:x.asset,byteLen:x.byteLen,sha256:x.sha256,edition,

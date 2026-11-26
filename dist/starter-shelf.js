@@ -1,3 +1,4 @@
+import {starterPublicationYear} from './starter-core.js';
 // Folio's catalogue is display metadata only. The app opens one local-origin
 // book at a time. Filtering, opening and browsing this shelf never prefetch text.
 const PAGE=8,LEVELS=['A1','A2','B1','B2','C1','C2'];
@@ -39,14 +40,22 @@ export function starterEntries(rows){
     const rawLevel=row.level??row.difficulty??row.levels;
     const level=levels(typeof rawLevel==='object'&&!Array.isArray(rawLevel)?rawLevel?.label:rawLevel);
     const language=text(row.language||row.lang,35).replaceAll('_','-'),lang=language.toLowerCase().split('-')[0];
-    const search=searchKey([title,author,text(row.titleRu,190),text(row.authorRu,120),...genres,level.label,langName(lang)].join(' '));
-    ids.add(row.id);out.push({id:row.id,book:row,title,author,genres,level,language,lang,search,marker:marker(row.id)});
+    const year=starterPublicationYear(row.edition?.publicationYear);
+    const search=searchKey([title,author,text(row.titleRu,190),text(row.authorRu,120),year,...genres,level.label,langName(lang)].join(' '));
+    ids.add(row.id);out.push({id:row.id,book:row,title,author,year,genres,level,language,lang,search,marker:marker(row.id)});
   }
   return out;
 }
 export function filterStarters(entries,{query='',genre='',level='',language=''}={}){
   const tokens=searchKey(typeof query==='string'?query.slice(0,160):'').split(' ').filter(Boolean);
-  return entries.filter(b=>(!genre||b.genres.includes(genre))&&(!level||b.level.tags.includes(level))&&(!language||b.lang===language)&&tokens.every(t=>b.search.includes(t)));
+  const matchesToken=(book,token)=>{
+    if(book.search.includes(token))return true;
+    if(typeof book.year!=='string'||!(/^[0-9]{4}$/.test(token)))return false;
+    // Searching a year within a validated serial span should find the book too.
+    const year=Number(token),first=Number(book.year.slice(0,4)),last=Number(book.year.slice(-4));
+    return first<=year&&year<=last;
+  };
+  return entries.filter(b=>(!genre||b.genres.includes(genre))&&(!level||b.level.tags.includes(level))&&(!language||b.lang===language)&&tokens.every(t=>matchesToken(b,t)));
 }
 
 export function installStarterShelf(root,{loadCatalog,openBook,getProgress=()=>null}={}){
@@ -62,7 +71,7 @@ export function installStarterShelf(root,{loadCatalog,openBook,getProgress=()=>n
   total.hidden=true;headText.append(title,copy);header.append(headText,total);
   const filters=el('div','starter-filters');filters.hidden=true;
   const field=(caption,element,cls='')=>{const l=node('label','',cls);l.append(node('span',caption,'sr-only'),element);return l};
-  const q=el('input','starter-search');q.type='search';q.placeholder='Название или автор';q.autocomplete='off';q.spellcheck=false;q.maxLength=160;q.enterKeyHint='search';
+  const q=el('input','starter-search');q.type='search';q.placeholder='Название, автор или год';q.autocomplete='off';q.spellcheck=false;q.maxLength=160;q.enterKeyHint='search';
   const genre=el('select','starter-select'),level=el('select','starter-select'),language=el('select','starter-select');
   const languageField=field('Язык стартовых книг',language,'starter-language-field');
   const option=(value,copy)=>{const o=node('option',copy);o.value=value;return o};
@@ -111,6 +120,7 @@ export function installStarterShelf(root,{loadCatalog,openBook,getProgress=()=>n
     content.append(heading);
     if(entry.author){const by=node('bdi',entry.author,'starter-book-author');if(entry.language)by.lang=entry.language;content.append(by)}
     if(entry.level.label){const tag=node('span',entry.level.label,'starter-level');tag.title='Примерная сложность';row.append(tag)}
+    if(entry.year)row.append(node('span',String(entry.year),'starter-genre starter-publication-year'));
     if(entry.genres.length)row.append(node('span',entry.genres[0],'starter-genre'));
     if(row.children.length)content.append(row);
     const percent=score(entry),normal=percent!==null?'Продолжить':'Скачать и читать',
@@ -120,7 +130,7 @@ export function installStarterShelf(root,{loadCatalog,openBook,getProgress=()=>n
     path.setAttribute('d',actionPath[percent===null?'download':'reading']);
     glyph.append(path);cta.append(glyph);cta.setAttribute('aria-hidden','true');
     button.title=normal;
-    button.setAttribute('aria-label',normal+': '+entry.title+(entry.author?', '+entry.author:'')+(entry.level.label?', сложность '+entry.level.label:'')+(entry.lang?', '+langName(entry.lang):''));
+    button.setAttribute('aria-label',normal+': '+entry.title+(entry.author?', '+entry.author:'')+(entry.year?', '+entry.year:'')+(entry.level.label?', сложность '+entry.level.label:'')+(entry.lang?', '+langName(entry.lang):''));
     if(percent!==null)footer.append(node('span','Прочитано '+percent+'%','starter-reading-progress'));
     footer.append(cta);content.append(footer);button.append(cover,content);item.append(button);
     button.addEventListener('click',e=>void pick(entry,e));
