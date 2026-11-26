@@ -67,6 +67,8 @@ export function safePosition(p,book) {
   if(p.chapter<0||p.paragraph<0||!book?.chapters[p.chapter]?.paragraphs[p.paragraph])return null;
   const fraction=typeof p.fraction==='number'&&Number.isFinite(p.fraction)?bounded(p.fraction,0,.99):0;
   const position={chapter:p.chapter,paragraph:p.paragraph,fraction};
+  if(book.kind==='comic'&&Number.isFinite(p.comicImageOffset)&&p.comicImageOffset>=0&&p.comicImageOffset<=1)
+    position.comicImageOffset=p.comicImageOffset;
   if(Number.isFinite(p.viewportDelta)&&Math.abs(p.viewportDelta)<=512&&p.viewportDelta!==0)position.viewportDelta=p.viewportDelta;
   return position;
 }

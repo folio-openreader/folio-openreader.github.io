@@ -15,6 +15,15 @@ test('comic metadata is light, can save the page position, and knows OCR languag
   assert.equal(b.ocrLanguage,'jpn_vert');
   assert.deepEqual(b.comicPages[0],{name:'Page 2.png',width:680,height:940});
   assert.deepEqual(safePosition({chapter:1,paragraph:0,fraction:.5},b),{chapter:1,paragraph:0,fraction:.5});
+  const position={chapter:1,paragraph:0,fraction:.99};
+  for(const comicImageOffset of [0,.45,1]){
+    const anchor={...position,comicImageOffset};
+    assert.deepEqual(safePosition(anchor,b),anchor);
+    assert.deepEqual(safePosition(anchor,{chapters:b.chapters}),position);
+  }
+  for(const value of [null,'0',NaN,Infinity,-.1,1.001]){
+    assert.deepEqual(safePosition({...position,comicImageOffset:value},b),position);
+  }
   assert.equal(safePosition({chapter:2,paragraph:0},b),null);
 });
 test('legacy JSON backup never writes empty or invalid image-based book entries',()=>{

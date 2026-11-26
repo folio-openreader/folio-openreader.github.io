@@ -618,6 +618,22 @@ function closeComicView(){
   comicView?.destroy();comicView=null;
   $('#reader').classList.remove('comic-mode');$('.translation-wrap').hidden=false;$('#translation-full').hidden=false;
 }
+function comicPageGeometry(sc){
+  const frame=sc.querySelector('.comic-frame:not(.comic-image-failed)'),bar=sc.querySelector('.comic-bar');
+  if(!frame||!bar||!activeComicPage)return null;
+  const {top,height}=frame.getBoundingClientRect();
+  if(height<=0)return null;
+  return {offset:sc.getBoundingClientRect().top+bar.offsetHeight-top,height,maxScroll:Math.max(0,sc.scrollHeight-sc.clientHeight)};
+}
+function restoreComicPosition(sc,position){
+  const g=comicPageGeometry(sc);
+  if(!g)return;
+  const anchor=position.comicImageOffset;
+  if(anchor===1){sc.scrollTop=g.maxScroll;return}
+  if(anchor===0){sc.scrollTop=0;return}
+  // Older bookmarks lack an artwork anchor. Keep their existing interpretation.
+  sc.scrollTop=anchor==null?g.maxScroll*(position.fraction||0):sc.scrollTop-g.offset+anchor*g.height;
+}
 function updateComicProgress(){
   const percentage=progress(current);
   $('#reading-progress').textContent=`${chapter+1} / ${current.comicPages.length}`;
@@ -629,7 +645,7 @@ async function renderComicPage(position,{bookmark=false}={}){
   closeComicCorrection();comicOCR?.abort();comicOCR=null;activeComicPage=null;
   cancelSpeech();paragraphObserver?.disconnect();suppressScroll=true;
   paragraph=Math.min(position.paragraph||0,book.chapters[index].paragraphs.length-1);
-  state.positions[book.id]={chapter,paragraph,fraction:position.fraction||0};
+  state.positions[book.id]={...position,chapter,paragraph,fraction:position.fraction||0};
   $('#reader').classList.add('comic-mode');$('.translation-wrap').hidden=true;$('#translation-full').hidden=true;
   $('#chapter-title').textContent=`Страница ${index+1} из ${book.comicPages.length}`;
   updateComicProgress();
@@ -649,7 +665,7 @@ async function renderComicPage(position,{bookmark=false}={}){
     comicView.showPage({...meta,index,total:book.comicPages.length,blob:stored.blob,...data,language:readingSourceLanguage(book,index)});
     requestAnimationFrame(()=>{
       if(!visible())return;
-      sc.scrollTop=Math.max(0,sc.scrollHeight-sc.clientHeight)*(position.fraction||0);suppressScroll=false;
+      restoreComicPosition(sc,position);suppressScroll=false;
       if(bookmark)outcomeCue($('#chapter-open'),'bookmark',1000);
     });
   }catch{
@@ -798,10 +814,18 @@ function queueColdAnchorCorrection(position,epoch){
 function capturePosition(quiet=false){
   if(!current||$('#reader').hidden)return;
   // Before a layout/seek finishes, renderChapter already holds the intended target.
-  if(suppressScroll){if(quiet&&!isComic(current))return saveState();return}
+  if(suppressScroll){if(quiet)return saveState();return}
   const sc=$('#reading-scroll');
   if(isComic(current)){
-    state.positions[current.id]={chapter,paragraph,fraction:Math.max(0,Math.min(.99,sc.scrollTop/Math.max(1,sc.scrollHeight-sc.clientHeight)))};return saveState();
+    const g=comicPageGeometry(sc);
+    if(!g)return saveState(); // A page that failed to load has no position to replace the saved one.
+    const atEnd=g.maxScroll>0&&g.maxScroll-sc.scrollTop<1;
+    // Use the visible location within the artwork, not the scroll percentage of
+    // the whole view; the OCR transcript above the image opens and collapses.
+    const comicImageOffset=atEnd?1:Math.max(0,Math.min(.999999,g.offset/g.height));
+    state.positions[current.id]={chapter,paragraph,comicImageOffset,
+      fraction:Math.max(0,Math.min(.99,sc.scrollTop/Math.max(1,g.maxScroll)))};
+    return saveState();
   }
   pendingReadingScroll?.flush(quiet);
   // A resize may have changed geometry before its frame and before the page hides.
@@ -831,7 +855,7 @@ function capturePosition(quiet=false){
 function setActiveParagraph(i,sync=false){
  pendingReadingScroll=null;deferredReadingTranslationEpoch=-1; // Explicit selections supersede older manual scrolls.
  if(!followingBook&&i!==paragraph)bookSpeech.stop();
- if(isComic(current)){paragraph=i;state.positions[current.id]={chapter,paragraph,fraction:state.positions[current.id]?.fraction||0};updateComicProgress();return}
+ if(isComic(current)){paragraph=i;const p=state.positions[current.id];state.positions[current.id]={...p,chapter,paragraph,fraction:p?.fraction||0};updateComicProgress();return}
  markReadingScrollAnchor();
  const previous=paragraph;$('#paragraph-'+paragraph)?.classList.remove('active');paragraph=i;$(`#paragraph-${i}`)?.classList.add('active');if(previous!==i)state.positions[current.id]={chapter,paragraph,fraction:state.positions[current.id]?.fraction||0};const percentage=progress(current);$('#reading-progress').textContent=`${percentage}% · абзац ${i+1} / ${current.chapters[chapter].paragraphs.length}`;$('#progress-fill').style.transform=`scaleX(${percentage/100})`;updateBookmark();
  if(readerSuspended){if(sync)deferredReadingTranslationEpoch=renderEpoch;return}

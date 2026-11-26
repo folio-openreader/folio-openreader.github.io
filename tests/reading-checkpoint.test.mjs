@@ -29,7 +29,7 @@ function session(disk=new Map(),step=100,rowHeight=step){
       n.getBoundingClientRect=()=>({top:40+Number(n.dataset.paragraph)*step-sc.scrollTop});return n},
     localStorage:{getItem:k=>disk.get(k),setItem(k,v){if(failWrites&&k==='folio-v2'){failWrites--;throw Error('storage blocked')}disk.set(k,String(v));writes.push([k,String(v)])}},
     state:JSON.parse(disk.get('folio-v2')||'{"positions":{}}'),safePosition,isComic,books:[book],current:null,chapter:0,paragraph:0,
-    renderEpoch:0,suppressScroll:false,frame:0,seenTimer:0,saveTimer:0,paragraphObserver:null,
+    renderEpoch:0,suppressScroll:false,frame:0,seenTimer:0,saveTimer:0,paragraphObserver:null,activeComicPage:null,
     followingBook:false,bookSpeech:{stop(){this.playing=false},playing:false,pause(){this.playing=false}},wordSpeech:{reset:noop,warm:noop},practiceAudio:{stop:noop},
     homeView:'home',readerReturn:'home',readerTrigger:'',homeLeaving:false,routeScroll:{},learningDirty:false,
     location:{hash:'#read/test'},returnRoute:()=>'home',listenButton:node(),storageWarning:'',DEMO_ID:'demo',IntersectionObserver:class{observe(){}disconnect(){}},
@@ -52,6 +52,7 @@ function session(disk=new Map(),step=100,rowHeight=step){
     line("window.addEventListener('pagehide',cancelSpeech);"),lifecycle,line("window.addEventListener('pageshow',e=>{if(e.persisted&&(wordDisk")];
   runInNewContext([part('function saveState(','function escapeHTML('),part('function showHome(','let comicView='),
     part('function scheduleSeen(','function wordNodes('),part('function renderChapter(','let ribbonBook='),
+    part('function comicPageGeometry(','function updateComicProgress('),
     part('let prefsLayoutEpoch=','function renderProfileStats('),part('function switchChapter(','function updateBookmark('),line('function renderContents('),
     part("$('#reading-scroll').addEventListener('scroll'", ";$('#sync-translation')"),
     part("$('#reader-back').onclick=e=>", ";$('#previous-chapter')"),
@@ -142,13 +143,19 @@ test('audio ownership survives a hide that pauses speech before capture',()=>{
     h.drain();assert.deepEqual(h.read(),follows?pos(12,0):pos(2,.99));assert.equal(h.c.paragraph,follows?12:2);
   }
 });
-test('comic page saves keep their page fraction without text-anchor work',()=>{
+test('comic page saves keep the artwork anchor without text-anchor work',()=>{
   const h=session();h.open(pos(2,0));h.scroll(1000);
   // Comic renderer boundary. A text callback is still queued from the previous render.
   h.c.current={...h.book,kind:'comic',comicPages:[{},{}]};h.c.renderEpoch++;h.c.chapter=1;h.c.paragraph=0;
+  h.c.activeComicPage={index:1};h.sc.querySelector=selector=>selector==='.comic-bar'
+    ? {offsetHeight:40} : {getBoundingClientRect:()=>({top:80-h.sc.scrollTop,height:1960})};
   h.$('#passage').children=new Proxy([],{get(){throw Error('text geometry is unavailable in comic mode')}});
-  h.scroll(850);h.hide('pagehide');assert.deepEqual(h.read(),pos(0,.5,1));h.drain();h.tick180();
-  assert.deepEqual(h.read(),pos(0,.5,1));
+  h.scroll(850);h.hide('pagehide');
+  const anchor={...pos(0,.5,1),comicImageOffset:850/1960};
+  assert.deepEqual(h.read(),anchor);h.drain();h.tick180();
+  assert.deepEqual(h.read(),anchor);
+  h.show();h.c.activeComicPage=null;h.sc.scrollTop=0;h.hide('pagehide');
+  assert.deepEqual(h.read(),anchor,'failed or unavailable layout may not overwrite the anchor');
 });
 
 
