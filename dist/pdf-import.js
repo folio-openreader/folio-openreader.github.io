@@ -224,9 +224,9 @@ function hasFilledOutlines({fnArray,argsArray},OPS){
   }
   return false;
 }
-// Only known renderer availability failures are advisory. Abort, deadlines,
-// invalid state/programming bugs and all required scan errors still propagate.
-function outlineRenderUnavailable(e){
+// Only known renderer availability failures may be advisory. Abort,
+// deadlines, invalid state and required scan errors still propagate.
+function ocrRenderUnavailable(e){
   return e?.code==='OCR_CANVAS_UNAVAILABLE' ||
     (e instanceof DOMException && ['NotSupportedError','OperationError','QuotaExceededError'].includes(e.name));
 }
@@ -289,7 +289,7 @@ export async function parsePdf(buffer, name = '', options={}) {
       const chapters=[], skipped=[], totals={items:0,chars:0,paragraphs:0}, meta=status([]);
       const images=enabled?imageOps(pdf.OPS):null;
       let language='', attempted=0, unavailable=null, interruptedAt=0;
-      const capped=[], outlineCapped=[], outlineFailed=[], outlineResults=[];
+      const capped=[], renderFailed=[], outlineCapped=[], outlineFailed=[], outlineResults=[];
       let outlineChecked=0, outlineUnavailable=false;
       const report=(n,r)=>{
         meta.samples.push(sample(n,r));meta.pages.push(n);meta.confidence.push({page:n,value:r.confidence});
@@ -366,8 +366,12 @@ export async function parsePdf(buffer, name = '', options={}) {
               let ctx,rendered=false;
               const handleRenderFailure=e=>{
                 check();
-                if(!outlines||!outlineRenderUnavailable(e))throw e;
-                outlineFailed.push(n);outlineUnavailable=true;
+                if(!ocrRenderUnavailable(e))throw e;
+                if(outlines){outlineFailed.push(n);outlineUnavailable=true;return}
+                if(!automatic||!keep)throw e;
+                // Optional images must not make an otherwise readable page
+                // disappear. Preserve its normal column order and keep going.
+                renderFailed.push(n);paragraphs=collector.columns();
               };
               try{
                 canvas=engine.canvasAt(view.width,view.height);ctx=canvas.getContext('2d');
@@ -381,9 +385,13 @@ export async function parsePdf(buffer, name = '', options={}) {
                 }catch(e){handleRenderFailure(e);}
               }
               if(rendered){
-                check();if(keep)maskRuns(ctx,view,layout);
+                check();
                 const regionHint=keep?{}:null;
-                const marked=keep&&!thorough?engine.hasInk(canvas,regionHint,{includeFaint:true}):await engine.hasPageMarks(canvas,signal);
+                let marked=false;
+                try{
+                  if(keep)maskRuns(ctx,view,layout);
+                  marked=keep&&!thorough?engine.hasInk(canvas,regionHint,{includeFaint:true}):await engine.hasPageMarks(canvas,signal);
+                }catch(e){handleRenderFailure(e)}
                 if(marked){
                   if(!outlines){
                     if(attempted>=engine.OCR_PAGES)throw issue('Более 150 страниц требуют OCR. Разделите PDF на несколько частей.');
@@ -461,10 +469,11 @@ export async function parsePdf(buffer, name = '', options={}) {
       if(interruptedAt)warnings.push('Распознавание прервалось на странице '+interruptedAt+'. Доступный текст сохранён. Изображения на этой и следующих страницах не распознаны.');
       else if(unavailable)warnings.push('Не удалось загрузить локальное распознавание. Доступный текст сохранён в предпросмотре. Для сканов подключитесь к интернету, перезагрузите Folio и повторите предпросмотр.');
       if(capped.length)warnings.push('Достигнут предел в 150 страниц с распознаванием. Если нужен весь текст сканов, разделите PDF на части и повторите.');
+      if(renderFailed.length)warnings.push('Не удалось обработать изображения для OCR на страницах: '+numbers(renderFailed)+' Исходный текст PDF сохранён. Можно повторить предпросмотр.');
       if(outlineFailed.length)warnings.push('Дополнительное распознавание контуров временно недоступно. Обычный текст сохранён. Страницы: '+numbers(outlineFailed));
       if(outlineCapped.length)warnings.push('Достигнут отдельный предел дополнительного распознавания контуров. Обычный текст сохранён. Страницы: '+numbers(outlineCapped.sort((a,b)=>a-b)));
       if(skipped.length)warnings.push('Пропущены страницы без читаемого текста ('+skipped.length+'): '+numbers(skipped));
-      if(unavailable||outlineFailed.length)options.onOcrUnavailable?.();
+      if(unavailable||renderFailed.length||outlineFailed.length)options.onOcrUnavailable?.();
       return {format:'PDF',pageCount:doc.numPages,title:trimMeta(info?.Title)||trimMeta(name.replace(/\.pdf$/i,''))||'Без названия',author:trimMeta(info?.Author),language,chapters,warnings,...(attempted||outlineChecked||options.ocr===true?{ocr:meta}:{})};
     };
     const result=await Promise.race([run.stopped,read()]);finished=true;return result;
