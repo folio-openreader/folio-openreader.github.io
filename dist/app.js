@@ -928,7 +928,7 @@ function onReadingScroll(){
   }};
   requestAnimationFrame(()=>pending.flush());
 }
-let ribbonBook=null,currentSegment=null;
+let ribbonBook=null,ribbonChapter=-1,ribbonHasPairs=false,currentSegment=null;
 const localTranslator=createLocalTranslator(),localAuto=createAutoTranslationPreferences(()=>localStorage);
 let localTimer=0,localWanted=null,localJob=null,localFailure=null,localDialogTarget=null,paintingLocalSegment=null;
 let localPageAway=false,localResumeQueued=false;
@@ -1132,24 +1132,25 @@ document.addEventListener('visibilitychange',()=>{if(document.hidden)suspendLoca
 
 function renderRibbon(){
   ribbonManual=false;
-  // Chapters/translation text are immutable. Keep just the mounted book, never a multi-book DOM cache.
-  if(ribbonBook===current)return;
-  ribbonBook=current;currentSegment=null;
+  if(ribbonBook===current&&ribbonChapter===chapter)return;
+  // Paired translation content is immutable. A chapter is the same boundary
+  // as the reading pane; never create thousands of DOM nodes for other pages.
+  if(ribbonBook!==current)ribbonHasPairs=current.chapters.some(c=>c.paragraphs.some(p=>p.translation));
+  ribbonBook=current;ribbonChapter=chapter;currentSegment=null;paintingLocalSegment=null;
   const track=$('#translation-track'),fragment=document.createDocumentFragment();
-  const available=current.chapters.some(c=>c.paragraphs.some(p=>p.translation));
-  if(available){
-    current.chapters.forEach((c,ci)=>c.paragraphs.forEach((p,pi)=>{
-      const span=node('span',null,'translation-segment');span.id=`translation-${ci}-${pi}`;span.dataset.chapter=ci;span.dataset.paragraph=pi;span.lang=current.translationLanguage||'';
-      if(pi===0)span.append(node('span',`${ci+1} ·`,'separator'));
+  if(ribbonHasPairs){
+    current.chapters[chapter].paragraphs.forEach((p,pi)=>{
+      const span=node('span',null,'translation-segment');span.id=`translation-${chapter}-${pi}`;span.dataset.chapter=chapter;span.dataset.paragraph=pi;span.lang=current.translationLanguage||'';
+      if(pi===0)span.append(node('span',`${chapter+1} ·`,'separator'));
       span.append(node('span',p.translation||'[У этого абзаца нет перевода]','translation-copy'));fragment.append(span)
-    }));
+    });
   }else fragment.append(node('span','Нет готового перевода.','translation-empty'));
-  track.replaceChildren(fragment);track.toggleAttribute('data-readable',available);
-  $('#sync-translation').disabled=!available;
-  $('#translation-ribbon').setAttribute('aria-label',available?'Строка перевода, горизонтальная прокрутка':'Перевод отсутствует')
+  track.replaceChildren(fragment);track.toggleAttribute('data-readable',ribbonHasPairs);
+  $('#sync-translation').disabled=!ribbonHasPairs;
+  $('#translation-ribbon').setAttribute('aria-label',ribbonHasPairs?'Строка перевода главы, горизонтальная прокрутка':'Перевод отсутствует')
 }
 function syncTranslation(){
-  ribbonManual=false;touchRibbon=null;
+  ribbonManual=false;touchRibbon=null;renderRibbon();
   const target=document.getElementById(`translation-${chapter}-${paragraph}`),ribbon=$('#translation-ribbon');
   if(target!==currentSegment){currentSegment?.classList.remove('current');target?.classList.add('current');currentSegment=target}
   if(target){
