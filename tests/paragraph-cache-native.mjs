@@ -37,6 +37,8 @@ export async function testNativeParagraphCache(){
   try{
     const legacy=make(),staleLegacy=make();
     await transact(a,'readwrite',store=>store.add(legacy));
+    equal(await prepareParagraphCache(a,locationOf(legacy),model,{createGeneration:false}),null,'cache-only view does not stamp a legacy book');
+    equal((await transact(a,'readonly',store=>store.get(id))).localTranslationGeneration,undefined,'legacy storage unchanged by viewing');
     const first=await prepareParagraphCache(a,locationOf(legacy),model);
     equal(!!first,true,'legacy identity claimed');
     equal(await prepareParagraphCache(b,locationOf(staleLegacy),model),null,'stale untagged tab does not claim new identity');

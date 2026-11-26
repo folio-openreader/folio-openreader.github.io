@@ -957,7 +957,7 @@ function onReadingScroll(){
 }
 let ribbonBook=null,ribbonChapter=-1,ribbonHasPairs=false,currentSegment=null;
 const localTranslator=createLocalTranslator(),localAuto=createAutoTranslationPreferences(()=>localStorage);
-let localTimer=0,localWanted=null,localJob=null,localFailure=null,localDialogTarget=null,paintingLocalSegment=null;
+let localTimer=0,localWanted=null,localJob=null,localFailure=null,localDialogTarget=null,localDialogProbe=null,paintingLocalSegment=null;
 let localPageAway=false,localResumeQueued=false;
 let localDownload={loaded:0,total:0};
 const localNotStored=new Set();
@@ -977,7 +977,7 @@ function setAutoLocal(loc,enabled){
 }
 const canLocal=loc=>!!loc&&localTranslator.capabilities()&&supportsTranslation(loc.source,loc.target);
 const canProbeLocalCache=loc=>!!db&&loc.book.id!==DEMO_ID&&!isComic(loc.book);
-const peekLocal=loc=>loc&&canLocal(loc)?localTranslator.peek(loc.p.text,{source:loc.source,target:loc.target}):null;
+const peekLocal=loc=>loc&&supportsTranslation(loc.source,loc.target)?localTranslator.peek(loc.p.text,{source:loc.source,target:loc.target}):null;
 const localErrorMessages={
   length:'Этот абзац слишком длинный для локального перевода.',
   'not-installed':'Модель не найдена на устройстве. Скачайте её ещё раз.',
@@ -1038,10 +1038,30 @@ function paintLocalRibbon(loc,target){
   }
   if(value)$('#ribbon-label').textContent='МАШИННЫЙ · '+loc.target.toUpperCase()+' · АБЗАЦ '+(loc.pi+1);
 }
+async function loadSavedDialogTranslation(probe){
+  const {source,target}=probe;
+  let saved;
+  try{
+    const entry=await prepareParagraphCache(db,probe,translationRevision(source,target),{createGeneration:false});
+    if(localDialogProbe!==probe)return;
+    saved=await readParagraphCache(db,entry);
+  }catch{/* A storage error is equivalent to an unavailable cached result. */}
+  if(localDialogProbe!==probe)return;
+  localDialogProbe=null;
+  if(!$('#translation-dialog').open||!sameLocal(localDialogTarget,probe)||!books.includes(probe.book))return;
+  if(saved)localTranslator.prime(probe.p.text,saved,{source,target});
+  paintLocalDialog(probe);
+  if(saved&&sameLocal(probe,currentLocalTarget())&&!localWorkPaused()&&!ribbonManual)syncTranslation();
+}
 function openLocalDialog(loc){
   if(!loc)return;
-  localDialogTarget=loc;
-  const dialog=$('#translation-dialog');if(!dialog.open)dialog.showModal();
+  localDialogTarget=loc;localDialogProbe=null;
+  const dialog=$('#translation-dialog');
+  if(!loc.p.translation&&!peekLocal(loc)&&supportsTranslation(loc.source,loc.target)&&canProbeLocalCache(loc)&&!sameLocal(localJob,loc)&&!sameLocal(localWanted,loc)){
+    // Viewing a past result is not consent to resume inference or download a model.
+    localDialogProbe={...loc};void loadSavedDialogTranslation(localDialogProbe);
+  }
+  if(!dialog.open)dialog.showModal();
   paintLocalDialog(loc);
 }
 let localDialogPaint=0;
@@ -1049,12 +1069,12 @@ function paintLocalDialog(loc){
   if(!sameLocal(localDialogTarget,loc)||!$('#translation-dialog').open)return;
   const paint=++localDialogPaint;
   const wrap=$('#full-translation'),status=$('#local-translation-status'),bar=$('#local-translation-progress'),button=$('#local-translation-start');
-  const value=!loc.p.translation&&canLocal(loc)?peekLocal(loc):null;
+  const value=!loc.p.translation?peekLocal(loc):null,checking=sameLocal(localDialogProbe,loc);
   const mountedOriginal=wrap.querySelector('.source-text'),lang=readingSourceLanguage(loc.book,loc.ci)||'';
   if(!mountedOriginal||mountedOriginal.textContent!==loc.p.text||mountedOriginal.lang!==lang){
     const original=node('p',loc.p.text,'source-text');original.lang=lang;wrap.replaceChildren(original);
   }else while(wrap.lastElementChild!==mountedOriginal)wrap.lastElementChild.remove();
-  $('#local-translation-section').hidden=!!loc.p.translation||!!value||!canLocal(loc);
+  $('#local-translation-section').hidden=!!loc.p.translation||!!value||(!checking&&!canLocal(loc));
   if(loc.p.translation){
     const p=node('p',loc.p.translation);p.lang=loc.book.translationLanguage||'';wrap.append(p);
     if(loc.book.alignment==='positional-unverified')wrap.append(node('p','Сопоставление по порядку, не по смыслу.','muted'));
@@ -1066,6 +1086,7 @@ function paintLocalDialog(loc){
     if(localNotStored.has(pairCode(loc.source,loc.target)))wrap.append(node('p','Модель не сохранилась целиком. После перезапуска может понадобиться интернет.','muted'));
     return;
   }
+  if(checking){status.textContent='Ищем сохранённый перевод…';button.textContent='Подождите…';button.disabled=true;bar.hidden=true;return}
   if(!canLocal(loc)){wrap.append(node('p',localTranslator.capabilities()?(loc.source===loc.target?'Оригинал уже на выбранном языке.':loc.source==='und'?'Язык оригинала не определён.':'Нет локальной модели для '+pairCode(loc.source,loc.target)+'.'):'Локальный перевод недоступен в этом браузере.','muted'));return}
   const busy=sameLocal(localJob,loc)||sameLocal(localWanted,loc);
   button.disabled=busy;bar.hidden=!busy||!localDownload.total||localDownload.loaded>=localDownload.total;
@@ -1151,7 +1172,7 @@ $('#local-translation-start').onclick=()=>{
   if(sameLocalPair(localFailure,loc))localFailure=null;
   queueLocal(loc,{explicit:true});paintLocalDialog(loc);
 };
-$('#translation-dialog').addEventListener('close',()=>{localDialogTarget=null});
+$('#translation-dialog').addEventListener('close',()=>{if(!$('#translation-dialog').open){localDialogTarget=null;localDialogProbe=null}});
 window.addEventListener('storage',e=>localAuto.refresh(e.key));
 window.addEventListener('pagehide',()=>{localPageAway=true;suspendLocalWork(true)});
 window.addEventListener('pageshow',()=>{localPageAway=false;resumeLocalWork()});

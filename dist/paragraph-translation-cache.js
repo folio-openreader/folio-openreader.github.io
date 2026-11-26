@@ -49,11 +49,12 @@ function transaction(db,mode,action){
 }
 
 /** The returned ID is bound to a stored generation and exact source, not just an ID. */
-export async function prepareParagraphCache(db,loc,model){
+export async function prepareParagraphCache(db,loc,model,{createGeneration=true}={}){
   const {book,ci,pi,p}=loc;
   if(!db||!titleId(book?.id)||!index(ci)||!index(pi)||!revision(model)||!valueText(p?.text)||p.translation)return null;
   const entry={id:book.id,ci,pi,model,text:p.text};
   if(validGeneration(book[GENERATION]))return Object.freeze({...entry,generation:book[GENERATION]});
+  if(!createGeneration)return null;
   // An old installed book gets an identity once, on its first cache use.
   // If another tab has already replaced/stamped it, do not adopt that identity
   // merely because the ID is the same. Reload to read the new record normally.
