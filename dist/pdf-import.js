@@ -383,7 +383,7 @@ export async function parsePdf(buffer, name = '', options={}) {
               if(rendered){
                 check();if(keep)maskRuns(ctx,view,layout);
                 const regionHint=keep?{}:null;
-                const marked=keep&&!thorough?engine.hasInk(canvas,regionHint):await engine.hasPageMarks(canvas,signal);
+                const marked=keep&&!thorough?engine.hasInk(canvas,regionHint,{includeFaint:true}):await engine.hasPageMarks(canvas,signal);
                 if(marked){
                   if(!outlines){
                     if(attempted>=engine.OCR_PAGES)throw issue('Более 150 страниц требуют OCR. Разделите PDF на несколько частей.');

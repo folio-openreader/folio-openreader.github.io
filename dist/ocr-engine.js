@@ -63,15 +63,26 @@ export function canvasAt(width,height) {
   return canvas;
 }
 // Thumbnail check from the syllabus parser; bound *both* axes for unusual page shapes.
-export function hasInk(canvas, regionHint=null) {
+export function hasInk(canvas,regionHint=null,{includeFaint=false}={}) {
   const s=Math.min(1,240/Math.max(canvas.width,canvas.height));
   const thumb=canvasAt(canvas.width*s,canvas.height*s);
   try{
     const c=thumb.getContext('2d'); c.drawImage(canvas,0,0,thumb.width,thumb.height);
     const d=c.getImageData(0,0,thumb.width,thumb.height).data;
-    let dark=0, x0=thumb.width, x1=-1, y0=-1;
+    const width=thumb.width,height=thumb.height,row=width*4;
+    const lightAt=(i,darker)=>d[i+3]>32&&Math.min(d[i],d[i+1],d[i+2])>=darker+18;
+    let dark=0, x0=width, x1=-1, y0=-1;
     for (let i=0;i<d.length;i+=4) {
-      if (Math.min(d[i],d[i+1],d[i+2])>=190 || d[i+3]<=32) continue;
+      if(d[i+3]<=32)continue;
+      const tone=Math.min(d[i],d[i+1],d[i+2]);
+      if(tone>=190){
+        if(!includeFaint||tone>227)continue;
+        // A faint stroke can be lighter than the old cutoff. Look for a
+        // light background on both sides rather than treating a grey fill as ink.
+        const x=(i/4)%width,y=Math.floor(i/row);
+        if(!(x>=2&&x+2<width&&lightAt(i-8,tone)&&lightAt(i+8,tone))&&
+          !(y>=2&&y+2<height&&lightAt(i-2*row,tone)&&lightAt(i+2*row,tone)))continue;
+      }
       dark++;
       if(!regionHint){if(dark>=3)return true;continue;}
       const x=(i/4)%thumb.width, y=Math.floor(i/4/thumb.width);
