@@ -56,6 +56,17 @@ def run(dist, chromium):
         p.locator("#folio-boot").wait_for(state="detached")
         expect(dialog).to_be_hidden()
         assert p.evaluate("window.paragraphModelCalls") == []
+        # The word's context is its own entry point. Search it before opening
+        # the translation sheet or the model's fresh memory will mask the bug.
+        word_sheet = p.locator("#word-dialog")
+        p.locator("#paragraph-0 .word").first.tap()
+        word_sheet.locator("#word-context-toggle").tap()
+        context = word_sheet.locator("#word-context")
+        expect(context.locator(".word-parallel")).to_contain_text("The river enters the sea.")
+        expect(context.get_by_role("button",name="Перевести абзац")).to_have_count(0)
+        assert p.evaluate("window.paragraphModelCalls") == []
+        word_sheet.locator("[data-sheet-handle]").tap()
+        expect(word_sheet).to_be_hidden()
         p.locator("#translation-full").click()
         expect(dialog.locator(".machine-result")).to_contain_text("The river enters the sea.")
         expect(p.locator("#local-translation-section")).to_be_hidden()
@@ -66,6 +77,10 @@ def run(dist, chromium):
         # View a different, not-yet-translated paragraph. It still needs an
         # explicit translation action and may not reuse the first text's cache.
         p.locator("#paragraph-1 .word").first.click()
+        word_sheet.locator("#word-context-toggle").tap()
+        expect(context.get_by_role("button",name="Перевести абзац")).to_be_visible()
+        expect(context.locator(".word-parallel")).to_have_count(0)
+        assert p.evaluate("window.paragraphModelCalls") == []
         p.locator("#word-dialog [data-sheet-handle]").click()
         expect(p.locator("#word-dialog")).to_be_hidden()
         p.locator("#translation-full").click()

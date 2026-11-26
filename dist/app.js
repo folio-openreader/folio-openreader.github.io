@@ -1127,14 +1127,15 @@ function paintLocalRibbon(loc,target){
   }
   if(value)$('#ribbon-label').textContent='МАШИННЫЙ · '+loc.target.toUpperCase()+' · АБЗАЦ '+(loc.pi+1);
 }
+async function savedLocalTranslation(loc,stillHere){
+  try{
+    const entry=await prepareParagraphCache(db,loc,translationRevision(loc.source,loc.target),{createGeneration:false});
+    return entry&&stillHere()?await readParagraphCache(db,entry):null;
+  }catch{return null} // A storage error is equivalent to an unavailable cached result.
+}
 async function loadSavedDialogTranslation(probe){
   const {source,target}=probe;
-  let saved;
-  try{
-    const entry=await prepareParagraphCache(db,probe,translationRevision(source,target),{createGeneration:false});
-    if(localDialogProbe!==probe)return;
-    saved=await readParagraphCache(db,entry);
-  }catch{/* A storage error is equivalent to an unavailable cached result. */}
+  const saved=await savedLocalTranslation(probe,()=>localDialogProbe===probe);
   if(localDialogProbe!==probe)return;
   localDialogProbe=null;
   if(!$('#translation-dialog').open||!sameLocal(localDialogTarget,probe)||!books.includes(probe.book))return;
@@ -1398,12 +1399,27 @@ function openWordContext(event){
     if(alignment==='positional-unverified')context.append(node('p','Сопоставление по порядку, не по смыслу.','muted'));
     else context.append(node('p','Перевод всего абзаца.','muted'));
   }else{
-    const loc=localTarget(current,anchor.location.chapter,anchor.location.paragraph);
+    const loc=localTarget(current,anchor.location.chapter,anchor.location.paragraph),preview=node('div');
+    context.append(preview);
+    const paint=local=>{
+      preview.removeAttribute('aria-busy');
+      if(local){
+        const translated=node('p',local,'word-parallel');translated.lang=loc.target;
+        preview.replaceChildren(node('h3','Машинный перевод · '+loc.target.toUpperCase()),translated);
+      }else if(loc&&canLocal(loc)){
+        const button=node('button','Перевести абзац','quiet');button.type='button';button.onclick=()=>openLocalDialog(loc);
+        preview.replaceChildren(button);
+      }else preview.replaceChildren(node('p','Для этого абзаца нет готового перевода.','muted'));
+    };
     const local=loc&&peekLocal(loc);
-    if(local&&canLocal(loc)){const translated=node('p',local,'word-parallel');translated.lang=loc.target;context.append(node('h3','Машинный перевод · '+loc.target.toUpperCase()),translated)}
-    else if(loc&&canLocal(loc)){
-      const button=node('button','Перевести абзац','quiet');button.type='button';button.onclick=()=>openLocalDialog(loc);context.append(button);
-    }else context.append(node('p','Для этого абзаца нет готового перевода.','muted'));
+    if(local)paint(local);
+    else if(loc&&supportsTranslation(loc.source,loc.target)&&canProbeLocalCache(loc)){
+      const stillHere=()=>wordAnchor===anchor&&dialog.open&&!context.hidden&&preview.isConnected&&
+        !dialog.hasAttribute('data-sheet-exiting');
+      preview.setAttribute('aria-busy','true');preview.append(node('p','Ищем сохранённый перевод…','muted'));
+      // Looking at context reads only local data, even with auto-translate off.
+      void savedLocalTranslation(loc,stillHere).then(saved=>{if(stillHere())paint(saved||peekLocal(loc))});
+    }else paint(null);
   }
   const source=$('.word-lookup').dataset.source;
   if(source)context.append(node('p','Словарь: '+source,'muted'));
