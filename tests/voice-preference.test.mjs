@@ -1,6 +1,7 @@
 import test from 'node:test';import assert from 'node:assert/strict';
 import {localVoice,voicePreference,createWordSpeech} from '../dist/word-speech.js';
 import {createBookSpeech} from '../dist/book-speech.js';
+import {availableNarrator,setVoicePackAvailability,uri} from '../dist/neural-voices.js';
 const a={name:'A',voiceURI:'a',lang:'en-US',localService:true,default:true},b={...a,name:'B',voiceURI:'b',default:false},net={...a,localService:false,voiceURI:'network'};
 test('saved language and rate validated, scoped by script and survive restart',()=>{
  const s=new Map(),localStorage={getItem:k=>s.get(k),setItem:(k,v)=>s.set(k,v)},h={localStorage};
@@ -14,4 +15,16 @@ test('sample/word and book both honor the chosen available local voice and speed
  voicePreference(h,'en',{voice:'b',rate:.9});createWordSpeech({host:h}).speak({text:'test',language:'en',event});
  createBookSpeech({host:h}).toggle({source:{chapters:[{paragraphs:[{text:'test book'}]}]},chapter:0,paragraph:0,event,language:'en-US'});
  assert.equal(out.length,2);assert.ok(out.every(u=>u.voice===b&&u.rate===.9));
+});
+
+test('unavailable neural pack falls back on a trusted tap without clearing the saved voice',()=>{
+ const voices=[net,a],out=[],host={navigator:{},document:{hidden:false},speechSynthesis:{getVoices:()=>voices,speak:u=>out.push(u)},setTimeout(){},clearTimeout(){},SpeechSynthesisUtterance:class{constructor(t){this.text=t}}};
+ const event={isTrusted:true},source={chapters:[{paragraphs:[{text:'the book'}]}]},desired=uri('Jasper');
+ voicePreference(host,'en',{voice:desired,rate:1.25});setVoicePackAvailability(host,false);
+ createWordSpeech({host}).speak({text:'the word',language:'en',event});
+ createBookSpeech({host}).toggle({source,chapter:0,paragraph:0,event,language:'en-US'});
+ assert.deepEqual(out.map(({voice,rate})=>[voice.voiceURI,rate]),[['a',1.25],['a',1.25]]);
+ assert.equal(voicePreference(host,'en').voice,desired);
+ setVoicePackAvailability(host,true);
+ assert.equal(availableNarrator(host,'en',voicePreference(host,'en').voice),'Jasper');
 });

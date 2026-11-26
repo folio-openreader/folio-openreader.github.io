@@ -1,4 +1,4 @@
-import {narrator,playNeural,stopNeural} from './neural-voices.js';
+import {availableNarrator,playNeural,stopNeural} from './neural-voices.js';
 // Local-only word pronunciation. Native API calls never use a generic default:
 // the Web Speech specification permits remote default voices.
 function locale(tag){
@@ -74,7 +74,7 @@ export function createWordSpeech({host=window,publish=()=>{}}={}){
     if(!lang){emit('unknown');return false}
     if(typeof text!=='string'||!text.trim()||text.length>256)return false;
     cancel();
-    const selected=voicePreference(host,lang),name=narrator(lang,selected.voice);
+    const selected=voicePreference(host,lang),name=availableNarrator(host,lang,selected.voice);
     if(name){
       const token={neural:true};active=token;emit('starting');
       const fail=s=>{if(active===token){cancel();emit(s)}};

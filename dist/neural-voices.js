@@ -8,6 +8,11 @@ export function isEnglish(language){
   try{const l=new Intl.Locale(String(language||'').replaceAll('_','-'));return l.language==='en'&&l.maximize().script==='Latn'}catch{return false}
 }
 export const narrator=(language,id)=>isEnglish(language)&&narrators.find(n=>uri(n)===id)||'';
+// Storage probes are advisory. An unavailable local pack must not overwrite
+// the chosen voice or require an async wait before native speech on a tap.
+const packAvailability=new WeakMap();
+export function setVoicePackAvailability(host,available){packAvailability.set(host,available)}
+export const availableNarrator=(host,language,id)=>packAvailability.get(host)===false?'':narrator(language,id);
 // Tiny no-import module: (func (result v128) i32.const 0 i8x16.splat).
 const simdProbe=Uint8Array.of(0,97,115,109,1,0,0,0,1,5,1,96,0,1,123,3,2,1,0,10,8,1,6,0,65,0,253,15,11);
 const features=new WeakMap();

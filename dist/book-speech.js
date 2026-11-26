@@ -1,4 +1,4 @@
-import {narrator,pauseNeural,playNeural,stopNeural} from './neural-voices.js';
+import {availableNarrator,pauseNeural,playNeural,stopNeural} from './neural-voices.js';
 // Book text never leaves the device. Share the word reader's locale and Apple
 // fallback policy; never let another browser choose an unspecified default voice.
 import {localVoice,voicePreference,appleSpeechPlatform,nativeEnglish} from './word-speech.js';
@@ -120,7 +120,7 @@ export function createBookSpeech({host=window,onPosition=()=>{},onState=()=>{}}=
     if(event?.isTrusted!==true||host.document?.hidden||!source)return false;
     if(playing()){pause();return true}
     if(source!==book||chapter!==c||paragraph!==p){stop();book=source;c=chapter;p=paragraph;offset=0}
-    lang=language;neural=narrator(lang,voicePreference(host,lang).voice);
+    lang=language;neural=availableNarrator(host,lang,voicePreference(host,lang).voice);
     if(neural){emit('starting');return advance()}
     if(!synth||typeof synth.speak!=='function'||typeof Utterance!=='function')return fail('unsupported');
     if(!lang)return fail('unknown');
