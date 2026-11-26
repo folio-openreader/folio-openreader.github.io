@@ -9,7 +9,7 @@
 #full-translation .paragraph-original h3{margin:0 0 5px;font-size:.81rem;color:var(--muted)}
 #full-translation .paragraph-original .source-text{margin:0}
 #full-translation .machine-source{font:inherit;font-size:.78rem;color:var(--muted);letter-spacing:.04em}
-#full-translation .machine-result{overflow-wrap:anywhere}
+#full-translation p{overflow-wrap:anywhere}
 @media(max-width:360px){.ribbon-meta{padding-inline:10px}.ribbon-controls{gap:3px}}
 #translation-track .machine-line{color:var(--accent);font:inherit;font-style:normal;white-space:nowrap}
 #profile-translation-storage{border-top:1px solid var(--line);margin-top:1rem;padding-top:.85rem}
