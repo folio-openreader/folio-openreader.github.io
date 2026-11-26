@@ -6,7 +6,7 @@ import {isComic,comicBook,booksOnly,putComic,readComicPage,dropComic,comicOCRCha
 import {COMIC_OCR_OPTIONS,comicPageModel,comicModelTag} from './comic-languages.js';
 import {demoChapters, dictionary} from './data.js';
 import {parseBook, pairBooks, singleBook} from './importers.js';
-import {createIllustrationLayer, dropIllustrations, putIllustrations, readIllustration} from './epub-illustrations.js';
+import {createIllustrationLayer, createIllustrationViewer, dropIllustrations, putIllustrations, readIllustration} from './epub-illustrations.js';
 import {DEMO_ID, ACCENTS, DEFAULT_PREFS, THEMES, BACKUP_LIMIT, contrast, accentPalette, sanitizeOcr, sanitizePrefs, sanitizeSaved, safePosition, searchKey, serializeBackup, parseBackup} from './release-core.js';
 import {bootMobileViewport} from './mobile-viewport.js';
 import {READING_FONTS, populateReadingFontPicker, readingFontStack} from './reading-fonts.js';
@@ -188,8 +188,8 @@ function refreshSelectedStage(){if(wordAnchor?.button?.isConnected)attachStage(w
 const legacyBookmark=Number(storedValue('folio-bookmark'));if(storedValue('folio-bookmark')!==null&&!state.bookmarks[DEMO_ID]&&Number.isInteger(legacyBookmark)&&legacyBookmark>=0&&legacyBookmark<3)state.bookmarks[DEMO_ID]=[{chapter:legacyBookmark,paragraph:0,fraction:0}];
 let storageWarning='',backupDraft=null,backupSequence=0,restoring=false;
 let lexicon=null,lexiconPending=null,lexiconFailures=0,lexiconRetryAt=0,selectedWordSequence=0,importingDictionary=false;
-let paragraphObserver=null,illustrationLayer=null,illustratedRows=null,importSequence=0;
-function clearIllustrations(){illustrationLayer?.destroy();illustrationLayer=null;illustratedRows=null}
+let paragraphObserver=null,illustrationLayer=null,illustrationViewer=null,illustratedRows=null,importSequence=0;
+function clearIllustrations(){illustrationViewer?.leave();illustrationLayer?.destroy();illustrationLayer=null;illustratedRows=null}
 let books=[demo],current=null,chapter=0,paragraph=0,selectedWord='',wordAnchor=null,previewBook=null,db=null,toastTimer,saveTimer,suppressScroll=false,ribbonManual=false,drag=null;
 const starterSource=createStarterSource();
 let starterIntent=0;
@@ -995,7 +995,12 @@ function renderChapter(position={chapter,paragraph:0,fraction:0},{bookmark=false
   },{root:sc,rootMargin:'600px'});
   const passage=document.createDocumentFragment(),large=c.paragraphs.length>640;
   const layer=c.illustrations?.length
-    ?(illustrationLayer=createIllustrationLayer(sc,index=>dbAction('readonly',store=>readIllustration(store,book.id,index)))):null;
+    ?(illustrationLayer=createIllustrationLayer(sc,index=>dbAction('readonly',store=>readIllustration(store,book.id,index)),info=>{
+      if(!alive())return;
+      bookSpeech.pause();capturePosition(true);
+      illustrationViewer??=createIllustrationViewer($('#illustration-full'));
+      illustrationViewer.open(info);
+    })):null;
   const drawings=new Map();
   if(layer)for(const illustration of c.illustrations){
     if(!drawings.has(illustration.before))drawings.set(illustration.before,[]);
