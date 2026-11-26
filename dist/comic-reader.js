@@ -112,11 +112,13 @@ export function createComicReader(host,{onNavigate,onRecognize,onCorrection,onWo
   tools.append(ocr,correction,transcript);bar.append(nav,tools);
   const stateNote=el('p','comic-note');stateNote.setAttribute('role','status');
   const panel=el('div','comic-transcript');panel.id=stamp+'-text';panel.setAttribute('role','region');panel.setAttribute('aria-label','Распознанный текст');
+  const panelKeys=el('span',null,'Tab переходит между абзацами. Стрелки влево и вправо выбирают слово, Enter открывает словарь.');
+  panelKeys.id=stamp+'-text-keys';panelKeys.hidden=true;panel.setAttribute('aria-describedby',panelKeys.id);
   const frame=el('div','comic-frame'),overlay=el('div','comic-overlay');
   overlay.setAttribute('role','group');overlay.setAttribute('aria-label','Слова на изображении. Для выбора используйте стрелки влево и вправо.');
   const fault=el('p','comic-image-error','Не удалось открыть изображение страницы.');fault.setAttribute('role','status');
   const status=el('span','comic-sr');status.setAttribute('role','status');
-  root.append(bar,stateNote,panel,frame,status);host.replaceChildren(root);
+  root.append(bar,stateNote,panelKeys,panel,frame,status);host.replaceChildren(root);
   let img=null,url=null,page={},content={paragraphs:[],marks:[]},state='idle',dead=false,drawMarks=true,readText=false,panelBuilt=false;
   let waiting=false,notice='';
   function revoke(){
@@ -136,13 +138,14 @@ export function createComicReader(host,{onNavigate,onRecognize,onCorrection,onWo
     const fragment=doc.createDocumentFragment();
     content.paragraphs.forEach((text,i)=>{
       if(!text.trim())return;
-      const row=el('p');row.dataset.paragraph=String(i);
+      const row=el('p');row.dataset.paragraph=String(i);row.dir='auto';
       if(page.language)row.lang=page.language;
-      let offset=0;
+      let offset=0,first=true;
       for(const token of transcriptWords(text,page.language,content.marks,i)){
         if(token.offset<offset)continue;
         if(token.offset>offset)row.append(doc.createTextNode(text.slice(offset,token.offset)));
-        row.append(wordButton(token.word,i,token.offset,'comic-token'));
+        const button=wordButton(token.word,i,token.offset,'comic-token');
+        button.tabIndex=first?0:-1;row.append(button);first=false;
         offset=token.offset+token.word.length;
       }
       if(offset<text.length)row.append(doc.createTextNode(text.slice(offset)));
@@ -267,27 +270,40 @@ export function createComicReader(host,{onNavigate,onRecognize,onCorrection,onWo
     if(target===transcript){readText=!readText;paintControls();return;}
     if(target.dataset.word!==undefined && onWord){
       e.stopPropagation();
-      if(e.detail>0&&target.classList.contains('comic-token')&&doc.getSelection?.()?.isCollapsed===false)return;
+      if(target.classList.contains('comic-token')){
+        if(e.detail>0&&doc.getSelection?.()?.isCollapsed===false)return;
+        setTokenTabStop(target.parentElement,target);
+      }
       const paragraphIndex=Number(target.dataset.paragraph);
       onWord({button:target,word:target.textContent,offset:Number(target.dataset.offset),text:content.paragraphs[paragraphIndex],paragraphIndex,event:e});
     }
   }
-  function focusMark(e){
-    const target=e.target;if(!target.classList?.contains('comic-hotspot'))return;
-    const old=overlay.querySelector('.comic-hotspot[tabindex="0"]');if(old&&old!==target)old.tabIndex=-1;target.tabIndex=0;
+  function setTokenTabStop(group,target){
+    const old=group.querySelector('button[data-word][tabindex="0"]');
+    if(old&&old!==target)old.tabIndex=-1;
+    target.tabIndex=0;
+  }
+  function focusWord(e){
+    const target=e.target;
+    if(target.classList?.contains('comic-hotspot'))setTokenTabStop(overlay,target);
+    else if(target.classList?.contains('comic-token'))setTokenTabStop(target.parentElement,target);
   }
   function keys(e) {
     const target=e.target;
-    if(!target.classList?.contains('comic-hotspot') || e.ctrlKey||e.metaKey||e.altKey||e.shiftKey)return;
-    const current=Number(target.dataset.mark),last=overlay.children.length-1;
-    const moves={ArrowLeft:Math.max(0,current-1),ArrowRight:Math.min(last,current+1),Home:0,End:last};
-    if(!Object.hasOwn(moves,e.key))return;
+    if(e.defaultPrevented||e.ctrlKey||e.metaKey||e.altKey||e.shiftKey||!['ArrowLeft','ArrowRight','Home','End'].includes(e.key))return;
+    const box=target.classList?.contains('comic-hotspot'),text=target.classList?.contains('comic-token');
+    if(!box&&!text)return;
+    const group=box?overlay:target.parentElement;
+    const rtl=text&&doc.defaultView.getComputedStyle(group).direction==='rtl';
+    const forward=(e.key==='ArrowRight')!==rtl;
+    const next=e.key==='Home'?group.firstElementChild:e.key==='End'?group.lastElementChild:
+      forward?target.nextElementSibling:target.previousElementSibling;
     e.preventDefault();e.stopPropagation();
-    const nextMark=overlay.children[moves[e.key]];if(nextMark){nextMark.focus();}
+    next?.focus();
   }
-  root.addEventListener('click',click);root.addEventListener('keydown',keys);root.addEventListener('focusin',focusMark);
+  root.addEventListener('click',click);root.addEventListener('keydown',keys);root.addEventListener('focusin',focusWord);
   function destroy(){
-    if(dead)return;dead=true;revoke();root.removeEventListener('click',click);root.removeEventListener('keydown',keys);root.removeEventListener('focusin',focusMark);
+    if(dead)return;dead=true;revoke();root.removeEventListener('click',click);root.removeEventListener('keydown',keys);root.removeEventListener('focusin',focusWord);
     root.remove();instances.delete(host);page={};content={paragraphs:[],marks:[]};
   }
   const api={showPage,setOCR,destroy};instances.set(host,api);return api;
