@@ -490,8 +490,10 @@ export async function parseImage(buffer,name='',options={}){
   const read=async()=>{
     engine.check(run.signal);options.onProgress?.({stage:'render',page:1,total:1,progress:0});
     if(typeof createImageBitmap!=='function')throw issue('Для импорта изображений нужен современный браузер.');
-    const b=await createImageBitmap(new Blob([bytes],{type:format==='PNG'?'image/png':'image/jpeg'}));
+    const b=await createImageBitmap(new Blob([bytes],{type:'image/'+format.toLowerCase()}));
     if(run.signal.aborted){b.close();throw aborted();}bitmap=b;
+    if(b.width*b.height>engine.SOURCE_PIXELS||Math.max(b.width,b.height)>16000)
+      throw issue('Слишком большое изображение. Уменьшите его до 32 мегапикселей и 16 000 пикселей по стороне.');
     const s=engine.viewportScale(b.width,b.height,1);
     canvas=engine.canvasAt(b.width*s,b.height*s);const ctx=canvas.getContext('2d');
     ctx.fillStyle='#fff';ctx.fillRect(0,0,canvas.width,canvas.height);ctx.drawImage(b,0,0,canvas.width,canvas.height);b.close();bitmap=null;
@@ -503,9 +505,9 @@ export async function parseImage(buffer,name='',options={}){
     meta.samples=[sample(1,r)];meta.pages=[1];meta.confidence=[{page:1,value:r.confidence}];if(r.confidence==null||r.confidence<70)meta.uncertain=[1];
     if(paragraphs.length>LIMIT.paragraphs || paragraphs.reduce((k,p)=>k+p.length,0)>LIMIT.chars) throw tooBig();
     const warnings=[];explainOcr(meta,warnings);
-    return {format,title:trimMeta(name.replace(/\.(png|jpe?g)$/i,''))||'Изображение',author:'',language:'',chapters:[{title:'Страница 1',paragraphs}],warnings,ocr:meta};
+    return {format,title:trimMeta(name.replace(/\.(png|jpe?g|webp)$/i,''))||'Изображение',author:'',language:'',chapters:[{title:'Страница 1',paragraphs}],warnings,ocr:meta};
   };
   try{return await Promise.race([run.stopped,read()]);}
-  catch(e){if(run.reason)throw run.reason;if(e instanceof ImportIssue || e instanceof engine.OCRIssue || e?.name==='AbortError')throw e;throw issue('Не удалось декодировать изображение. Проверьте формат PNG или JPEG.');}
+  catch(e){if(run.reason)throw run.reason;if(e instanceof ImportIssue || e instanceof engine.OCRIssue || e?.name==='AbortError')throw e;throw issue('Не удалось декодировать изображение. Проверьте формат PNG, JPEG или WebP.');}
   finally{run.close();ocr?.close();bitmap?.close();if(canvas)canvas.width=canvas.height=0;}
 }

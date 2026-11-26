@@ -1542,7 +1542,7 @@ let importJob=null;
 const importRoles=['original','translation'];
 const ocrLanguageChoices=[['eng','Английский'],['rus','Русский'],['kaz','Казахский'],['eng+rus','EN + RU'],['rus+kaz','RU + KK'],['eng+kaz','EN + KK'],['eng+rus+kaz','EN + RU + KK']];
 const isPdf=file=>/\.pdf$/i.test(file?.name||'');
-const isImage=file=>/\.(?:png|jpe?g)$/i.test(file?.name||'');
+const isImage=file=>/\.(?:png|jpe?g|webp)$/i.test(file?.name||'');
 const getFile=role=>$('#'+role+'-file').files[0];
 const ocrRecovery=new Set();
 const preferredOcr=role=>[({en:'eng',ru:'rus',kk:'kaz'})[knownLanguage(role==='original'?state.prefs.readingLanguage:state.prefs.dictionaryTarget)]||(role==='original'?'eng':'rus')];
@@ -1608,7 +1608,7 @@ function appendOcrReview(box,parsed,role){
 }
 function renderImportPreview(a,b,event){
   previewBook=b?pairBooks(a,b):singleBook(a);
-  const box=$('#import-preview'),unit=['PDF','PNG','JPEG'].includes(a.format)?'Страниц':'Глав';
+  const box=$('#import-preview'),unit=['PDF','PNG','JPEG','WEBP'].includes(a.format)?'Страниц':'Глав';
   box.replaceChildren(node('h3',previewBook.title),node('p',`${previewBook.author||'Автор не указан'} · ${unit}: ${previewBook.chapters.length} · Абзацев: ${totalParagraphs(previewBook)}`,'muted'));
   for(const [field,label,choice,parsed] of [['language','Язык оригинала',state.prefs.readingLanguage,a],['translationLanguage','Язык парного файла',state.prefs.dictionaryTarget,b]]){
     if(!parsed)continue;
@@ -1632,7 +1632,7 @@ function renderImportPreview(a,b,event){
   else warnings.unshift('Готовый перевод не добавлен.');
   warnings.forEach(w=>box.append(node('p',w,'warning')));
   for(const [role,parsed] of [['original',a],['translation',b]]){
-    if(!parsed||!['PDF','PNG','JPEG'].includes(parsed.format))continue;
+    if(!parsed||!['PDF','PNG','JPEG','WEBP'].includes(parsed.format))continue;
     const suffix=b?' ('+(role==='original'?'оригинал':'перевод')+')':'';
     const change=node('button',(parsed.format==='PDF'?'Дополнительное распознавание':'Изменить язык распознавания')+suffix+'…','quiet');
     change.type='button';change.onclick=()=>setupOcr(role);box.append(change);
@@ -1640,7 +1640,7 @@ function renderImportPreview(a,b,event){
   appendOcrReview(box,a,'original');appendOcrReview(box,b,'translation');
   // Do not allocate a copy of a whole book to show three examples.
   if(b||!a.ocr?.pages?.length){let shown=0;outer:for(const [ci,c] of previewBook.chapters.entries())for(const [pi,p] of c.paragraphs.entries()){
-    const div=node('div',null,'preview-pair'),where=['PDF','PNG','JPEG'].includes(a.format)?c.title:'Глава '+(ci+1);
+    const div=node('div',null,'preview-pair'),where=['PDF','PNG','JPEG','WEBP'].includes(a.format)?c.title:'Глава '+(ci+1);
     div.append(node('small',where+', абзац '+(pi+1)),node('p',p.text.slice(0,600)));
     if(b)div.append(node('p',p.translation?p.translation.slice(0,600):'Нет сопоставленного перевода','translation-preview'));box.append(div);if(++shown>=3)break outer;
   }}

@@ -22,43 +22,10 @@ const tooMany = () => fail('В одной книге может быть не б
 const tooHeavy = () => fail('Суммарный размер страниц превышает 120 МБ. Разделите книгу на части.');
 const tooLarge = () => fail('Уменьшите изображение до 32 мегапикселей и 16 000 пикселей по стороне.');
 const tooComplex = () => fail('Общее разрешение страниц слишком большое. Разделите книгу на части.');
-const brokenWebp = () => fail('Не удалось прочитать страницу WebP. Проверьте файл.');
-const animation = () => fail('Анимированные страницы не поддерживаются. Сохраните статичное изображение.');
-const u24 = (bytes,i) => bytes[i]+bytes[i+1]*256+bytes[i+2]*65536;
-
-// Preflight dimensions before native decoding. An extended WebP's canvas must
-// agree with its actual VP8/VP8L frame; an animation could hide many more frames.
-function webp(bytes) {
-  const d = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-  if (bytes.length<20 || d.getUint32(0)!==0x52494646 || d.getUint32(8)!==0x57454250 || d.getUint32(4,true)!==bytes.length-8) throw brokenWebp();
-  let canvas, frame;
-  for (let p=12; p<bytes.length;) {
-    if (p+8>bytes.length) throw brokenWebp();
-    const tag=d.getUint32(p), n=d.getUint32(p+4,true), i=p+8;
-    p=i+n+(n%2);
-    if(p>bytes.length) throw brokenWebp();
-    if(tag===0x414e494d || tag===0x414e4d46) throw animation(); // ANIM, ANMF
-    if(tag===0x56503858) { // VP8X
-      if(canvas || i!==20 || n!==10) throw brokenWebp();
-      if(bytes[i]&2) throw animation();
-      canvas=[1+u24(bytes,i+4),1+u24(bytes,i+7)];
-    } else if(tag===0x5650384c) { // VP8L
-      if(frame || n<5 || bytes[i]!==0x2f || bytes[i+4]>>5) throw brokenWebp();
-      const v=d.getUint32(i+1,true);
-      frame=[1+(v & 0x3fff),1+((v>>>14)&0x3fff)];
-    } else if(tag===0x56503820) { // VP8 (lossy keyframe)
-      if(frame || n<10 || (bytes[i]&1) || bytes[i+3]!==0x9d || bytes[i+4]!==1 || bytes[i+5]!==0x2a) throw brokenWebp();
-      frame=[d.getUint16(i+6,true)&0x3fff,d.getUint16(i+8,true)&0x3fff];
-    }
-  }
-  if(!frame || !frame[0] || !frame[1] || (canvas&&(canvas[0]!==frame[0] || canvas[1]!==frame[1]))) throw brokenWebp();
-  return {w:frame[0],h:frame[1],format:'WEBP'};
-}
-
 export function comicImageHeader(bytes, name) {
   if (!(bytes instanceof Uint8Array) || bytes.length>L.imageBytes) throw fail('Одна страница превышает 16 МБ или имеет неверный формат.');
   const expected = ext.exec(name)?.[1].toLowerCase().replace('jpg','jpeg');
-  const decoded = expected==='webp'?webp(bytes):imageDimensions(bytes);
+  const decoded = imageDimensions(bytes);
   if(decoded.format.toLowerCase()!==expected) throw fail('Расширение страницы не соответствует типу изображения.');
   if(decoded.w>L.side || decoded.h>L.side || decoded.w*decoded.h>L.imagePixels) throw tooLarge();
   return {...decoded,type:'image/'+expected};

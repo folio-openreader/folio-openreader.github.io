@@ -330,12 +330,12 @@ async function parseTxt(file,signal) {
 }
 
 export async function parseBook(file, options = {}) {
-  if (!file?.name) throw new Error('Выберите EPUB, PDF, TXT, PNG или JPEG.');
+  if (!file?.name) throw new Error('Выберите EPUB, PDF, TXT, PNG, JPEG или WebP.');
   checkImport(options.signal);
   if (/\.epub$/i.test(file.name)) return parseEpub(file,options.signal);
   if (/\.txt$/i.test(file.name)) return parseTxt(file,options.signal);
-  if (/\.(pdf|png|jpe?g)$/i.test(file.name)) {
-    const image=/\.(png|jpe?g)$/i.test(file.name);
+  if (/\.(pdf|png|jpe?g|webp)$/i.test(file.name)) {
+    const image=/\.(png|jpe?g|webp)$/i.test(file.name);
     if(file.size>(image?16:24)*MiB)throw new Error(image?'Снимок: максимум 16 МБ.':'PDF: максимум 24 МБ.');
     const {parsePdf,parseImage}=await import('./pdf-import.js');
     checkImport(options.signal);
@@ -348,7 +348,7 @@ export async function parseBook(file, options = {}) {
     if(!parsed.language)parsed.language=guessLanguage(parsed.chapters.slice(0,6).map(c=>c.paragraphs.slice(0,4).map(p=>p.slice(0,300)).join(' ')).join(' '));
     return parsed;
   }
-  throw new Error('Выберите EPUB, PDF, TXT, PNG или JPEG. Другие форматы не поддерживаются.');
+  throw new Error('Выберите EPUB, PDF, TXT, PNG, JPEG или WebP. Другие форматы не поддерживаются.');
 }
 
 export function singleBook(parsed) {

@@ -16,9 +16,9 @@ function integrate(s,dt){
 }
 export function bookFileError(file){
   if(!file)return '';
-  const suffix=file.name.match(/\.(epub|pdf|txt|png|jpe?g)$/i)?.[1]?.toLowerCase();
-  if(!suffix)return 'Выберите EPUB, PDF, TXT, PNG или JPEG.';
-  const limit=suffix==='txt'?3:['png','jpg','jpeg'].includes(suffix)?16:24;
+  const suffix=file.name.match(/\.(epub|pdf|txt|png|jpe?g|webp)$/i)?.[1]?.toLowerCase();
+  if(!suffix)return 'Выберите EPUB, PDF, TXT, PNG, JPEG или WebP.';
+  const limit=suffix==='txt'?3:['png','jpg','jpeg','webp'].includes(suffix)?16:24;
   if(file.size>limit*1024*1024)return `${suffix.toUpperCase()}: максимум ${limit} МБ.`;
   if(!file.size)return 'Файл пуст.';
   return '';

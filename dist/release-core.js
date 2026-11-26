@@ -101,7 +101,7 @@ function editorialEdition(raw,kind){
 function bookFromBackup(b) {
   const invalid=()=>{throw new Error('В копии есть книга с повреждённым форматом.')};
   const kind=isResearchId(b?.id)?'research':isNewsId(b?.id)?'news':null;
-  if(!object(b)||(!BOOK_ID.test(b.id||'')&&!isStarterId(b.id)&&!kind)||!Array.isArray(b.chapters)||!b.chapters.length||b.chapters.length>1024||!['TXT','EPUB','PDF','PNG','JPEG'].includes(b.format))invalid();
+  if(!object(b)||(!BOOK_ID.test(b.id||'')&&!isStarterId(b.id)&&!kind)||!Array.isArray(b.chapters)||!b.chapters.length||b.chapters.length>1024||!['TXT','EPUB','PDF','PNG','JPEG','WEBP'].includes(b.format))invalid();
   let count=0,chars=0,anyTranslation=false;
   const chapters=b.chapters.map(c=>{
     if(!object(c)||!Array.isArray(c.paragraphs)||!c.paragraphs.length)invalid();
