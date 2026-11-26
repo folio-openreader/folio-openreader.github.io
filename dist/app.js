@@ -1584,7 +1584,9 @@ async function showWord(button,event){
   actionFeedback(event,'word');
   wordFlight.cancel();$('#word-save-status').textContent='';
   const wordOrigin=button.getBoundingClientRect();
-  cancelSpeech();wordSpeech.warm();
+  // A lookup pauses the current paragraph without forgetting the narration
+  // cursor. Selecting another paragraph still resets it in setActiveParagraph.
+  wordSpeech.reset();bookSpeech.pause();wordSpeech.warm();
   const word=selectedWord=button.dataset.word,sequence=++selectedWordSequence,dialog=$('#word-dialog'),lookup=$('.word-lookup');
   const source=readingSourceLanguage(current,chapter),trackLanguage=trackingLanguage(button.textContent);
   wordAnchor={button,text:p.text,translation:p.translation,token:button.textContent,offset:Number(button.dataset.offset),trackLanguage,sourceLanguage:source,translatedLanguage:current.translationLanguage,alignment:current.alignment};
@@ -2164,7 +2166,7 @@ window.addEventListener('pagehide',cancelSpeech);
 $('#word-context-toggle').onclick=toggleWordContext;
 $('#word-dialog').addEventListener('close',()=>{
   if($('#word-dialog').open)return;
-  const trigger=wordAnchor?.button;selectedWordSequence++;wordAnchor=null;dictUI.hideHint();resetWordContext();wordFlight.cancel();cancelSpeech();
+  const trigger=wordAnchor?.button;selectedWordSequence++;wordAnchor=null;dictUI.hideHint();resetWordContext();wordFlight.cancel();wordSpeech.reset();
   // A native dialog usually restores focus synchronously, before the close
   // event. Do not pull it back if Tab or an arrow already moved it elsewhere.
   const focused=document.activeElement;
