@@ -27,3 +27,45 @@ test('a region replaces only intersecting word ranges, retaining outside and unl
   ]);
   assert.equal(previous.paragraphs[0].text,'first misspelled third');
 });
+
+const asPage=rows=>({status:'ready',paragraphs:rows.map(([text])=>({text})),words:rows.map(([text,x,y,w=.08,h=.04],paragraphIndex)=>
+  ({text,x,y,w,h,paragraphIndex,offset:0}))});
+const tallLeft={x:.10,y:.10,w:.28,h:.50};
+const interleaved=()=>asPage([['topLeft',.15,.20],['topRight',.70,.20],['lowerLeft',.15,.45],['lowerRight',.70,.45]]);
+test('a tall region keeps interleaved unaffected dialogue and exact word hotspots in their original reading order',()=>{
+  const previous=interleaved(),next=asPage([['lowerFixed',.15,.452],['topFixed',.15,.202]]);
+  const merged=mergeComicRegion(previous,next,tallLeft);
+  assert.equal(merged.status,'ready');
+  assert.deepEqual(merged.paragraphs.map(p=>p.text),['topFixed','topRight','lowerFixed','lowerRight']);
+  assert.deepEqual(merged.words,[{...next.words[1],paragraphIndex:0},previous.words[1],{...next.words[0],paragraphIndex:2},previous.words[3]]);
+  assert.equal(merged.paragraphs[1],previous.paragraphs[1]);
+  assert.equal(merged.paragraphs[3],previous.paragraphs[3]);
+});
+
+test('one slot can split into several nearby results without moving a later untouched bubble',()=>{
+  const prior=interleaved(),next=asPage([
+    ['lowerFixed',.15,.452],['top',.15,.20,.038,.04],['fixed',.191,.20,.039,.04]
+  ]);
+  assert.deepEqual(
+    mergeComicRegion(prior,next,tallLeft).paragraphs.map(p=>p.text),
+    ['top','fixed','topRight','lowerFixed','lowerRight']
+  );
+});
+
+test('ambiguous and unmatched interleaved slots retain every prior paragraph and hotspot',()=>{
+  const previous=interleaved();
+  for(const next of [
+    {paragraphs:[{text:'top and lower'}],words:[
+      {text:'top',offset:0,paragraphIndex:0,x:.15,y:.20,w:.08,h:.04},
+      {text:'lower',offset:8,paragraphIndex:0,x:.15,y:.45,w:.08,h:.04}
+    ]},
+    asPage([['oneUpdated',.15,.20]]),
+    asPage([['oneUpdated',.15,.20],['notMatched',.30,.34]]),
+    {paragraphs:[{text:'unlocated replacement'}],words:[]},
+  ]){
+    const merged=mergeComicRegion(previous,next,tallLeft);
+    assert.equal(merged.status,'ambiguous');
+    assert.equal(merged.paragraphs,previous.paragraphs);
+    assert.equal(merged.words,previous.words);
+  }
+});

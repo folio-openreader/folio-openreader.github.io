@@ -21,11 +21,44 @@ const inside=(word,rect)=>{
   const x=word.x+word.w/2,y=word.y+word.h/2;
   return x>=rect.x&&x<=rect.x+rect.w&&y>=rect.y&&y<=rect.y+rect.h;
 };
+// A slot is a contiguous run of replaced text in the *old* reading order.
+function bounds(words){
+  let left=Infinity,top=Infinity,right=-Infinity,bottom=-Infinity;
+  for(const {x,y,w,h} of words){
+    if(![x,y,w,h].every(Number.isFinite)||w<=0||h<=0)continue;
+    left=Math.min(left,x);top=Math.min(top,y);right=Math.max(right,x+w);bottom=Math.max(bottom,y+h);
+  }
+  return right>left&&bottom>top?{left,top,right,bottom,area:(right-left)*(bottom-top)}:null;
+}
+function sharesFootprint(a,b){
+  const w=Math.min(a.right,b.right)-Math.max(a.left,b.left),h=Math.min(a.bottom,b.bottom)-Math.max(a.top,b.top);
+  return w>0&&h>0&&w*h>=.2*Math.min(a.area,b.area);
+}
+function slotReplacements(slots,added){
+  if(slots.length===1){slots[0].replacements=added;return true;}
+  const footprints=slots.map(slot=>bounds(slot.removed));
+  if(footprints.some(box=>!box))return false;
+  for(const group of added){
+    const box=bounds(group.words);
+    if(!box)return false;
+    let match=-1;
+    for(let i=0;i<footprints.length;i++){
+      if(!sharesFootprint(box,footprints[i]))continue;
+      if(match!==-1)return false;
+      match=i;
+    }
+    if(match===-1)return false;
+    slots[match].replacements.push(group);
+  }
+  // A recognizer can merge two lines or skip one. Never delete another old
+  // slot without a clear replacement; the user can choose smaller crops.
+  return slots.every(slot=>slot.replacements.length);
+}
 // Keep unlocated text and untouched text verbatim. If old words overlap the
 // replacement, split at their exact UTF-16 ranges rather than dropping other words.
 export function mergeComicRegion(previous,next,rect){
   if(!previous?.paragraphs?.length)return next;
-  const indexed=new Map(),groups=[];
+  const indexed=new Map(),groups=[],slots=[];
   for(const w of previous.words||[]){
     const p=previous.paragraphs[w.paragraphIndex];
     if(typeof p?.text!=='string'||typeof w.text!=='string'||!w.text||!Number.isInteger(w.offset)||
@@ -33,12 +66,12 @@ export function mergeComicRegion(previous,next,rect){
     if(!indexed.has(w.paragraphIndex))indexed.set(w.paragraphIndex,[]);
     indexed.get(w.paragraphIndex).push(w);
   }
-  let replaceAt=-1;
   for(const [i,p] of previous.paragraphs.entries()){
     const words=indexed.get(i)||[],removed=words.filter(w=>inside(w,rect)).sort((a,b)=>a.offset-b.offset);
     if(!removed.length){groups.push({p,words});continue;}
     let cursor=0;
     const part=end=>{
+      if(end<=cursor)return;
       const raw=p.text.slice(cursor,end),text=raw.trim();
       if(!text||!meaningful.test(text))return;
       const start=cursor+raw.indexOf(text),stop=start+text.length;
@@ -47,19 +80,25 @@ export function mergeComicRegion(previous,next,rect){
     };
     for(const word of removed){
       part(word.offset);
-      if(replaceAt<0)replaceAt=groups.length;
+      let slot=groups.at(-1);
+      if(!slot?.removed){slot={removed:[],replacements:[]};groups.push(slot);slots.push(slot);}
+      slot.removed.push(word);
       cursor=Math.max(cursor,word.offset+word.text.length);
     }
     part(p.text.length);
   }
-  if(replaceAt<0){
-    replaceAt=groups.findIndex(g=>g.words.length&&g.words.every(w=>w.y>=rect.y+rect.h));
-    if(replaceAt<0)replaceAt=groups.length;
-  }
   const added=next.paragraphs.map(p=>({p,words:[]}));
   for(const word of next.words||[])added[word.paragraphIndex]?.words.push(word);
-  groups.splice(replaceAt,0,...added);
-  return {status:'ready',paragraphs:groups.map(g=>g.p),words:groups.flatMap((g,i)=>g.words.map(w=>({...w,paragraphIndex:i})))};
+  if(!slots.length){
+    // Text newly recognized in previously unlocated space keeps the old
+    // insertion behavior. No existing group is moved relative to another.
+    const below=groups.findIndex(g=>g.words.length&&g.words.every(w=>w.y>=rect.y+rect.h));
+    groups.splice(below<0?groups.length:below,0,...added);
+  }else if(!slotReplacements(slots,added)){
+    return {...previous,status:'ambiguous'};
+  }
+  const ordered=groups.flatMap(group=>group.replacements||[group]);
+  return {status:'ready',paragraphs:ordered.map(g=>g.p),words:ordered.flatMap((g,i)=>g.words.map(w=>({...w,paragraphIndex:i})))};
 }
 
 export function createComicRegionPicker(dialog){

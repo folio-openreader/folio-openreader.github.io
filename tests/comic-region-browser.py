@@ -137,6 +137,52 @@ def run(dist,chromium,font):
         p.locator(".comic-text-toggle").tap()
         expect(p.locator(".comic-transcript p")).to_have_text([TOP,BOTTOM])
         assert not p.evaluate("window.ocrCrops")
+        # Emulate prior sparse OCR splitting a lower line around an unlocated
+        # caption. A real block recognition can now propose one merged line
+        # spanning two old slots; this must not write or move either old slot.
+        chapter=["작은 정원","좋은","Unlocated caption","아침"]
+        stored_ocr=r"""async texts=>{
+          const {readComicPage,updateComicPage}=await import('./comic-storage.js');
+          const id=JSON.parse(localStorage.getItem('folio-v2')).lastBook;
+          const db=await new Promise((resolve,reject)=>{
+            const req=indexedDB.open('folio-library');req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error);
+          });
+          try{
+            const row=await readComicPage(db,id,0);
+            if(!texts)return row.ocr;
+            const words=row.ocr.words.map(w=>w.paragraphIndex===0?w:{
+              ...w,paragraphIndex:w.text==='좋은'?1:3,offset:0
+            });
+            const ocr={...row.ocr,paragraphs:texts.map(text=>({text})),text:texts.join('\n\n'),words};
+            await updateComicPage(db,id,{...row,ocr});
+            return ocr;
+          }finally{db.close();}
+        }"""
+        old_ocr=p.evaluate(stored_ocr,chapter)
+        p.set_viewport_size({"width":320,"height":740})
+        p.reload()
+        p.locator("#folio-boot").wait_for(state="detached")
+        expect(correction).to_be_visible()
+        p.locator(".comic-text-toggle").tap()
+        expect(p.locator(".comic-transcript p")).to_have_text(chapter)
+        p.locator(".comic-text-toggle").tap()
+        p.locator("#reading-scroll").evaluate("el=>el.scrollTop=610")
+        p.wait_for_function("document.querySelector('#reading-scroll').scrollTop===610")
+        prior_ambiguous_anchor=p.evaluate(ANCHOR)
+        p.evaluate("window.lastMark=document.querySelector('.comic-hotspot[data-word=아침]')")
+        open_region()
+        touch(.30,.94)
+        touch(.70,.965)
+        expect(go).to_be_enabled()
+        go.tap()
+        expect(p.locator("#toast")).to_contain_text("Порядок реплик неясен. Старый текст оставлен.")
+        expect(p.locator(".comic-ocr-progress")).to_be_hidden()
+        assert p.evaluate("window.ocrCrops.length") == 1
+        assert p.evaluate("document.querySelector('.comic-hotspot[data-word=아침]')===window.lastMark")
+        assert p.evaluate(stored_ocr,None)==old_ocr
+        assert abs(p.evaluate(ANCHOR)-prior_ambiguous_anchor)<.005
+        p.locator(".comic-text-toggle").tap()
+        expect(p.locator(".comic-transcript p")).to_have_text(chapter)
         assert not external,external
         assert not errors,errors
         b.close()

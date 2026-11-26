@@ -897,6 +897,11 @@ async function recognizeCurrentComicPage(index,language,{replace=false,region}={
       const {mergeComicRegion}=await import('./comic-region.js');
       if(!active())return;
       merged=mergeComicRegion(stored.ocr,result,region);
+      if(merged.status==='ambiguous'){
+        comicView.setOCR({status:'idle'});
+        toast('Порядок реплик неясен. Старый текст оставлен. Выберите одно облачко.');
+        return;
+      }
     }
     if(merged.paragraphs.length>2000||(merged.words?.length??0)>5000||
        merged.paragraphs.reduce((n,p)=>n+p.text.length,0)>160_000)throw Error('Слишком много текста на странице.');
