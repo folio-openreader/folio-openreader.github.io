@@ -2438,6 +2438,15 @@ window.addEventListener('storage',e=>{
 });
 window.addEventListener('pagehide',()=>{syncEpoch++;syncPanel?.dispose();syncPanel=null;wordDisk?.close()});
 window.addEventListener('pageshow',e=>{if(e.persisted&&(wordDisk?.enrolled||storedValue(SYNC_WORDS)!==null)){location.reload();return}if(e.persisted){resumeReading();if(location.hash==='#profile/sync')void showSyncPanel()}});
+function recoverCatalogLink(url,kind,intent){
+  if(location.hash!==url||intent!==(kind==='books'?starterIntent:editorialIntent))return;
+  // The reader never opened. Replace the failed deep link with a usable
+  // shelf so refresh does not repeat the rejected request.
+  history.replaceState(null,'','#library');
+  setCatalogKind(kind);showHome('library',{focus:true});
+  toast(kind==='books'?'Не удалось загрузить книгу. Попробуйте открыть её из каталога.':
+    'Не удалось загрузить текст. Попробуйте открыть его из каталога.');
+}
 function readHash(){
   if(!location.hash.startsWith('#read/')){starterIntent++;editorialIntent++;showHome(homeRoute());return}
   let id='';try{id=decodeURIComponent(location.hash.slice(6))}catch{/* Invalid links use the same shelf fallback. */}
@@ -2451,13 +2460,12 @@ function readHash(){
     toast('Этой книги нет на этом устройстве. Откройте её с полки или импортируйте файл снова.');
     return;
   }
-  if(editorial&&!saved){
-    showHome(returnRoute());const url=location.hash;
-    void openEditorialBook(id).catch(()=>{if(location.hash===url)toast('Не удалось загрузить текст. Откройте его из каталога.')});
-  }else if(starter&&!saved){
+  if(!saved&&(editorial||starter)){
     showHome(returnRoute());
-    const url=location.hash;
-    void openStarterBook(id).catch(()=>{if(location.hash===url)toast('Не удалось загрузить книгу. Открой её из каталога.');});
+    const url=location.hash,kind=editorial||'books';
+    const request=editorial?openEditorialBook(id):openStarterBook(id);
+    const intent=editorial?editorialIntent:starterIntent;
+    void request.catch(()=>recoverCatalogLink(url,kind,intent));
   }else{starterIntent++;openBook(id)}
 }
 window.addEventListener('hashchange',readHash);
