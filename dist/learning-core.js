@@ -24,7 +24,8 @@ export function normalizeWord(text,language='und'){
   if(typeof text!=='string'||text.length>256)return '';
   // Preserve accents, ё, scripts and inflections. Only typographic variants of
   // apostrophe/hyphen are equivalent. En/em dashes are punctuation, not hyphens.
-  const s=text.normalize('NFC').replace(/[‘’ʼ]/gu,"'").replace(/[‐‑]/gu,'-')
+  // A discretionary soft hyphen is layout, not part of the spelling.
+  const s=text.replaceAll('\u00ad','').normalize('NFC').replace(/[‘’ʼ]/gu,"'").replace(/[‐‑]/gu,'-')
     .replace(/^[\s\p{P}]+|[\s\p{P}]+$/gu,'');
   if(!s||s.length>128||!wordPattern.test(s))return '';
   return s.toLocaleLowerCase(languageId(language)).normalize('NFC');

@@ -43,7 +43,7 @@ export function fillLanguages(select,value,{unknown=false}={}){
 
 // Preserve the existing boundaries for spaced text, apostrophes and hyphens.
 // Japanese needs word segmentation inside a continuous run of letters.
-const readingWords=/[\p{L}][\p{L}\p{M}]*(?:['‘’ʼ‐‑-][\p{L}][\p{L}\p{M}]*)*/gu;
+const readingWords=/[\p{L}][\p{L}\p{M}]*(?:['‘’ʼ‐‑\u00ad-][\p{L}][\p{L}\p{M}]*)*/gu;
 const japaneseScript=/[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}]/u;
 let japaneseSegmenter;
 export function* readingWordSegments(text,language){

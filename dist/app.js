@@ -797,7 +797,7 @@ function wordNodes(text,language){
   let cursor=0,first=true;
   for(const {word,offset} of readingWordSegments(text,language)){
     if(offset>cursor)fragment.append(document.createTextNode(text.slice(cursor,offset)));
-    const b=node('button',word,'word');b.dataset.word=word.toLocaleLowerCase();b.dataset.offset=offset;b.type='button';b.tabIndex=first?0:-1;
+    const b=node('button',word,'word');b.dataset.word=word.replaceAll('\u00ad','').toLocaleLowerCase();b.dataset.offset=offset;b.type='button';b.tabIndex=first?0:-1;
     attachStage(b,getWord(learning,word,trackingLanguage(word)));fragment.append(b);
     first=false;cursor=offset+word.length;
   }
@@ -1964,7 +1964,7 @@ function sourceExcerpt(record){
       const offset=item<0?-item-1:item;
       // Require an original token at this exact recorded UTF-16 offset. Avoid
       // clozes based on guessed sentences when a book has changed/disappeared.
-      const m=p.slice(offset,offset+140).match(/^[\p{L}][\p{L}\p{M}]*(?:['‘’ʼ‐‑-][\p{L}][\p{L}\p{M}]*)*/u);
+      const m=p.slice(offset,offset+140).match(/^[\p{L}][\p{L}\p{M}]*(?:['‘’ʼ‐‑\u00ad-][\p{L}][\p{L}\p{M}]*)*/u);
       if(!m||normalizeWord(m[0],record.language)!==record.word)continue;
       const start=Math.max(0,offset-310),end=Math.min(p.length,offset+m[0].length+310),before=p.slice(start,offset),after=p.slice(offset+m[0].length,end);
       const splitLeft=Array.from(before.matchAll(/[.!?…](?:[”’"»)]*)\s+|\n+/gu)).pop(),splitRight=/[.!?…](?:[”’"»)]*)(?=\s|$)|\n/u.exec(after);
