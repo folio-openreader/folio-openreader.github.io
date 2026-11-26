@@ -1,0 +1,66 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img" aria-labelledby="title detail">
+  <!-- Export at 1200x630 in Inkscape, then optimize the opaque RGB artwork to a 160-color PNG. -->
+  <title id="title">Folio. Читайте в оригинале</title>
+  <desc id="detail">Раскрытая книга The Secret Garden и перевод слова wintry: по-зимнему.</desc>
+  <defs>
+    <linearGradient id="left">
+      <stop stop-color="#f9eed9"/><stop offset=".85" stop-color="#fff7e8"/><stop offset="1" stop-color="#d7c6aa"/>
+    </linearGradient>
+    <linearGradient id="right">
+      <stop stop-color="#d8c6a9"/><stop offset=".13" stop-color="#fff7e8"/><stop offset="1" stop-color="#faeed6"/>
+    </linearGradient>
+    <filter id="blur" x="-25%" y="-100%" width="150%" height="300%"><feGaussianBlur stdDeviation="19"/></filter>
+    <filter id="note-shadow" x="-20%" y="-30%" width="140%" height="180%"><feGaussianBlur stdDeviation="8"/></filter>
+  </defs>
+  <rect width="1200" height="630" fill="#f7f2e8"/>
+  <path d="M72 90h1056M72 542h1056" stroke="#cbbda8" stroke-width="1.5"/>
+  <g fill="#30271f" font-family="Liberation Serif, serif">
+    <text x="72" y="64" font-size="47" font-weight="bold">Folio</text>
+    <text x="69" y="258" font-size="91">Читайте</text>
+    <text x="71" y="353" font-size="88" font-style="italic" fill="#7b5039">в оригинале.</text>
+  </g>
+  <g font-family="DejaVu Sans, sans-serif">
+    <path d="M74 138h32" stroke="#89583b" stroke-width="1.5"/>
+    <text x="116" y="144" font-size="14.5" letter-spacing="2" font-weight="bold" fill="#754a35">ЧИТАЛКА СО СЛОВАРЁМ</text>
+    <text x="74" y="413" font-size="24" fill="#54493d">Нажмите на слово.</text>
+    <text x="74" y="448" font-size="24" fill="#54493d">Перевод появится рядом.</text>
+    <text x="74" y="586" font-size="17" fill="#5a4d3f">Бесплатно · Без регистрации · В браузере</text>
+  </g>
+  <g fill="none" stroke="#a8a68c" opacity=".2">
+    <path d="M652 451c116-35 106-197 185-258S1027 143 1141 105M665 466c106-38 100-186 174-251S1036 161 1158 122M678 481c106-44 101-186 166-243S1043 180 1153 147M694 497c104-47 93-169 162-237S1046 205 1150 176"/>
+    <path d="M741 113c90 36 157 33 210 81s93 142 175 162M710 118c92 33 169 46 219 93s96 138 210 163"/>
+  </g>
+  <ellipse cx="884" cy="428" rx="216" ry="33" fill="#473821" opacity=".31" filter="url(#blur)"/>
+  <g transform="translate(874 282) rotate(-8) translate(-215 -133)">
+    <path d="M2 33Q114 5 215 31Q321 5 428 27L428 256Q319 237 215 269Q104 242 2 265Z" fill="#344b33" stroke="#263724" stroke-width="2"/>
+    <path d="M11 26Q111 4 215 28Q319 3 421 24L421 252Q324 236 215 262Q112 237 11 260Z" fill="#cab98f" stroke="#a2926f"/>
+    <path d="M10 18Q110-3 215 21L215 256Q108 230 10 251Z" fill="url(#left)" stroke="#b6a784"/>
+    <path d="M215 21Q319-3 420 18L420 248Q319 228 215 256Z" fill="url(#right)" stroke="#b6a784"/>
+    <path d="M215 23v229" stroke="#a49270" stroke-width="1.4" opacity=".65"/>
+    <path d="M22 28Q113 13 200 29M230 30q91-18 178-3M24 239q91-18 174 1M232 241q89-22 175-7" fill="none" stroke="#c7b891"/>
+    <g text-anchor="middle" fill="#3d5034" font-family="Liberation Serif, serif">
+      <text x="111" y="58" font-size="10" letter-spacing="1">FRANCES HODGSON BURNETT</text>
+      <text x="112" y="92" font-size="29" font-weight="bold">The Secret</text>
+      <text x="111" y="119" font-size="33" font-style="italic">Garden</text>
+    </g>
+    <g transform="translate(65 128) scale(.91)" fill="none" stroke="#5b694c" stroke-width="1.4" stroke-linecap="round">
+      <path d="M23 78V47a29 29 0 0 1 58 0v31M17 78h70M29 77V47a23 23 0 0 1 46 0v30M41 77V28m11 49V25m11 52V28M31 48h42M33 61h38M13 61q-5-12 3-18m69 13q10-8 6-19M38 87h28m-22 5h16"/>
+      <path d="M14 53q-8-1-8-10 7 1 8 10m77-4q7-4 8-12-8 3-8 12M49 55h6"/><circle cx="52" cy="54.5" r="3.5"/>
+    </g>
+    <g id="share-excerpt" fill="#403529" font-family="Liberation Serif, serif">
+      <text x="239" y="58" font-size="12" letter-spacing="1.6" fill="#6d593e">CHAPTER IV · MARTHA</text>
+      <text x="239" y="94" font-size="18">There were gardens and</text>
+      <text x="239" y="120" font-size="18">paths and big trees, but</text>
+      <text x="239" y="146" font-size="18">everything looked dull</text>
+      <rect x="269" y="154" width="55" height="23" rx="3" fill="#ead49d"/>
+      <text x="239" y="172" font-size="18">and <tspan x="273" font-weight="bold">wintry</tspan>.</text>
+    </g>
+  </g>
+  <rect x="886" y="422" width="240" height="71" rx="12" fill="#695137" opacity=".26" filter="url(#note-shadow)"/>
+  <rect x="885" y="413" width="240" height="72" rx="11" fill="#f4e7cd" stroke="#c8b28c"/>
+  <circle cx="910" cy="450" r="11" fill="#e9d8b9"/>
+  <path d="M905 445h9v10h-9zm2 3h5m-5 3h4" fill="none" stroke="#76533c"/>
+  <text x="931" y="439" fill="#6b5742" font-family="DejaVu Sans, sans-serif" font-size="11" font-weight="bold" letter-spacing="1.8">EN / RU</text>
+  <text x="930" y="462" fill="#35281f" font-family="Liberation Serif, serif" font-size="22" font-weight="bold">wintry</text>
+  <text x="994" y="461" fill="#76553b" font-family="Liberation Serif, serif" font-size="19">·  по-зимнему</text>
+</svg>

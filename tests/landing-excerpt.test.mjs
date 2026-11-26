@@ -64,3 +64,20 @@ test('book showcase retains an intentional non-animated state', () => {
   assert.match(script, /if \(preference\.matches\) \{\s+stage\.classList\.remove\('book-ready', 'book-playing'\);/);
   assert.match(script, /new IntersectionObserver/);
 });
+
+test('the social preview uses the real catalogue demo and an optimized 1200×630 asset', async () => {
+  for (const [key,attr] of [['og','property'],['twitter','name']]) {
+    const image = html.match(new RegExp('<meta '+attr+'="'+key+':image" content="([^"]+)"'))[1];
+    const alt = html.match(new RegExp('<meta '+attr+'="'+key+':image:alt" content="([^"]+)"'))[1];
+    assert.equal(image,'https://folio-openreader.github.io/landing/share.png?v=secret-garden');
+    assert.match(alt,/The Secret Garden.*wintry.*по-зимнему/);
+  }
+  const source = await readFile(new URL('../tools/landing-share-garden.svg',import.meta.url),'utf8');
+  const drawing = source.match(/<g id="share-excerpt"[^>]*>([^]*?)<\/g>/)[1];
+  const rendered = [...drawing.matchAll(/<text[^>]*>([^]*?)<\/text>/g)].slice(1).map(m=>textOnly(m[1])).join(' ');
+  assert.ok(book.chapters[3].paragraphs.some(p=>p.text.endsWith(rendered)));
+  const png = await readFile(new URL('landing/share.png',dist));
+  assert.equal(png.subarray(0,8).toString('hex'),'89504e470d0a1a0a');
+  assert.deepEqual([png.readUInt32BE(16),png.readUInt32BE(20)],[1200,630]);
+  assert.ok(png.length < 128 * 1024);
+});
