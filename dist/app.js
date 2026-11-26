@@ -836,6 +836,11 @@ function renderChapter(position={chapter,paragraph:0,fraction:0},{bookmark=false
   listenButton.hidden=isComic(book);
   if(isComic(book)){host.removeAttribute('aria-busy');void renderComicPage(position,{bookmark});return}
   const epoch=++renderEpoch,c=book.chapters[chapterIndex],language=book.language||'';
+  // Use estimated off-screen row sizes only for substantial chapters. A
+  // small chapter is cheap to lay out and its exact geometry stays stable
+  // when a background tab becomes visible before the checkpoint is saved.
+  let chapterChars=0;
+  host.toggleAttribute('data-deferred-layout',c.paragraphs.length>96||c.paragraphs.some(p=>(chapterChars+=p.text.length)>48_000));
   const alive=()=>epoch===renderEpoch&&!$('#reader').hidden;
   suppressScroll=true;cancelSpeech();
   paragraph=Math.max(0,Math.min(c.paragraphs.length-1,position.paragraph||0));

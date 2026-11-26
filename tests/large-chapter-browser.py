@@ -60,6 +60,7 @@ def run(dist, chromium):
         expect(p.locator("#passage .reading-paragraph")).to_have_count(ROWS, timeout=16000)
         expect(p.locator("#paragraph-0.active")).to_be_attached()
         expect(p.locator("#paragraph-4999")).to_have_text("Paragraph 5000. The ferry crossed the water just after dawn.")
+        assert p.locator("#paragraph-0").evaluate("e=>getComputedStyle(e).contentVisibility")=="auto"
         assert not errors, errors
         print(f"Back acted after {at_back}/{ROWS} rows; stale build stopped; reopen displayed all {ROWS}.")
         b.close()

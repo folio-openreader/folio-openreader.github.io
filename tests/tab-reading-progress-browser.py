@@ -31,6 +31,11 @@ def run(dist, chromium):
             p.locator("#paragraph-0").wait_for(state="attached")
             p.evaluate("document.fonts.ready")
 
+        def row_top(p, row):
+            return p.evaluate("""(row) => document.querySelector('#paragraph-'+row)
+                .getBoundingClientRect().top-document.querySelector('#reading-scroll').getBoundingClientRect().top
+            """, row)
+
         def read(p, row):
             p.bring_to_front()
             p.evaluate("""(row) => {
@@ -68,6 +73,11 @@ def run(dist, chromium):
             pick(check, title)
             expect(check.locator("#reading-progress")).to_contain_text(f"абзац {row + 1} / 30")
             expect(check.locator(f"#paragraph-{row}.active")).to_be_attached()
+            check.wait_for_timeout(250) # allow subsequent viewport paint and debounced save
+            offset=row_top(check,row)
+            assert abs(offset-24)<=2, (title,row,offset)
+            expect(check.locator(f"#paragraph-{row}.active")).to_be_attached()
+            print(f'{title}: paragraph {row+1}, restored row offset {offset:.2f}px.')
             check.close()
 
         assert not errors, errors
