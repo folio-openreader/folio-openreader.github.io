@@ -3,13 +3,13 @@ import assert from 'node:assert/strict';
 import {ocrSession} from '../dist/ocr-engine.js';
 
 test('OCR setup and recognition deadlines keep their exact error and release the worker',async t=>{
-  let active=0, stalled='load';
+  let active=0, stalled='load', rejected='';
   const Original=globalThis.Worker, originalSetTimeout=globalThis.setTimeout;
   t.after(()=>{if(Original)globalThis.Worker=Original;else delete globalThis.Worker;globalThis.setTimeout=originalSetTimeout});
   class FakeWorker{
     constructor(){active++;}
     postMessage({jobId,action}){
-      if(action!==stalled)queueMicrotask(()=>this.onmessage?.({data:{jobId,status:'resolve',data:{}}}));
+      if(action!==stalled)queueMicrotask(()=>this.onmessage?.({data:{jobId,status:action===rejected?'reject':'resolve',data:{}}}));
     }
     terminate(){active--;}
   }
@@ -26,5 +26,10 @@ test('OCR setup and recognition deadlines keep their exact error and release the
   stalled='load';
   const standard=ocrSession(['eng'],new AbortController().signal);
   await assert.rejects(standard.read(canvas,1,1),{code:'OCR_MODEL_UNAVAILABLE'});
+  assert.equal(active,0);
+  stalled='';rejected='recognize';
+  const crashed=ocrSession(['eng'],new AbortController().signal);
+  await assert.rejects(crashed.read(canvas,1,1),{code:'OCR_WORKER_FAILURE',message:/обработать страницу/});
+  crashed.close();
   assert.equal(active,0);
 });

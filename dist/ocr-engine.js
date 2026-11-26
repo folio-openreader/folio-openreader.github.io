@@ -8,7 +8,8 @@ export const MAX_IMAGE_BYTES = 16 * 1024 * 1024;
 const PIXELS = 5_000_000, LONG_SIDE = 3000;
 export class OCRIssue extends Error {}
 const error = s => new OCRIssue(s);
-const ocrFailed = () => error('Не удалось запустить локальное OCR. Обновите страницу или выберите файл с текстовым слоем.');
+const ocrFailed = () => Object.assign(error('Не удалось обработать страницу локальным OCR. Попробуйте ещё раз или выберите файл с текстовым слоем.'),{code:'OCR_WORKER_FAILURE'});
+const modelUnavailable = () => Object.assign(error('Не удалось запустить локальное OCR. Обновите страницу или выберите файл с текстовым слоем.'),{code:'OCR_MODEL_UNAVAILABLE'});
 export const noOCRText = () => Object.assign(error('OCR не нашло читаемого текста. Проверьте язык, чёткость и ориентацию изображения.'),{code:'OCR_NO_TEXT'});
 export function languages(input) {
   const values = input === undefined ? ['eng'] : input;
@@ -227,7 +228,7 @@ export function ocrSession(selected, signal, onProgress, {positioned=false,prese
         await run('initialize',{langs:selected.join('+'),oem:1,config:{}});
         await run('setParameters',{params:{tessedit_pageseg_mode:positioned?'11':'3',preserve_interword_spaces:'1',user_defined_dpi:'220'}});
         ready=true;
-      }catch(e){check(signal);if(e?.name==='AbortError'||(preserveLoadDeadline&&e?.code==='OCR_JOB_TIMEOUT'))throw e;throw Object.assign(ocrFailed(),{code:'OCR_MODEL_UNAVAILABLE'});}
+      }catch(e){check(signal);if(e?.name==='AbortError'||(preserveLoadDeadline&&e?.code==='OCR_JOB_TIMEOUT'))throw e;throw modelUnavailable();}
     }
     check(signal);
     const recognize=async (target,role)=>{

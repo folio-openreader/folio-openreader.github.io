@@ -1615,7 +1615,7 @@ async function previewImport(event){
     if(sequence!==importSequence)return;
     previewBook=null;setBookTiles('selected');dropMotions.get($('#'+role+'-file'))?.state('rejected');
     importStatus((translation?(role==='original'?'Оригинал: ':'Перевод: '):'')+(e.message||'Не удалось прочитать файл.'),'error');
-    if((isPdf(getFile(role))||isImage(getFile(role)))&&['OCR_NO_TEXT','OCR_MODEL_UNAVAILABLE'].includes(e.code)){$('#retry-ocr').hidden=false;$('#retry-ocr').dataset.role=role}
+    if((isPdf(getFile(role))||isImage(getFile(role)))&&['OCR_NO_TEXT','OCR_MODEL_UNAVAILABLE','OCR_WORKER_FAILURE','OCR_JOB_TIMEOUT'].includes(e.code)){$('#retry-ocr').hidden=false;$('#retry-ocr').dataset.role=role}
   }finally{if(sequence===importSequence)finishImportJob()}
 }
 $('#cancel-import').onclick=cancelImport;

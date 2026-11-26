@@ -288,7 +288,7 @@ export async function parsePdf(buffer, name = '', options={}) {
       if (info?.EncryptFilterName || (await doc.getPermissions()) !== null) throw protectedBook();
       const chapters=[], skipped=[], totals={items:0,chars:0,paragraphs:0}, meta=status([]);
       const images=enabled?imageOps(pdf.OPS):null;
-      let language='', attempted=0, unavailable=null;
+      let language='', attempted=0, unavailable=null, interruptedAt=0;
       const capped=[], outlineCapped=[], outlineFailed=[], outlineResults=[];
       let outlineChecked=0, outlineUnavailable=false;
       const report=(n,r)=>{
@@ -402,10 +402,17 @@ export async function parsePdf(buffer, name = '', options={}) {
                   try{r=await ocr.read(canvas,n,doc.numPages,keep && !regionHint.skip);check();}
                   catch(e){
                     check();
-                    if(e?.code!=='OCR_MODEL_UNAVAILABLE'||(!automatic&&!outlines))throw e;
+                    const interrupted=automatic&&['OCR_WORKER_FAILURE','OCR_JOB_TIMEOUT'].includes(e?.code);
+                    if(!interrupted&&(e?.code!=='OCR_MODEL_UNAVAILABLE'||(!automatic&&!outlines)))throw e;
                     ocr.close();ocr=null;
                     if(outlines){outlineFailed.push(n);outlineUnavailable=true;}
-                    else{unavailable=e;if(keep)paragraphs=collector.columns();}
+                    else{
+                      unavailable=e;
+                      // One failed worker cannot erase the native text already
+                      // read or prevent later PDF pages from being extracted.
+                      if(interrupted)interruptedAt=n;
+                      if(keep)paragraphs=collector.columns();
+                    }
                   }
                   if(r){
                     if(outlines){
@@ -451,7 +458,8 @@ export async function parsePdf(buffer, name = '', options={}) {
       }
       const warnings=['Импортирован текст по страницам, без изображений. В колонках и таблицах проверьте порядок чтения.'];
       if(engine) explainOcr(meta,warnings);
-      if(unavailable)warnings.push('Не удалось загрузить локальное распознавание. Доступный текст сохранён в предпросмотре. Для сканов подключитесь к интернету, перезагрузите Folio и повторите предпросмотр.');
+      if(interruptedAt)warnings.push('Распознавание прервалось на странице '+interruptedAt+'. Доступный текст сохранён. Изображения на этой и следующих страницах не распознаны.');
+      else if(unavailable)warnings.push('Не удалось загрузить локальное распознавание. Доступный текст сохранён в предпросмотре. Для сканов подключитесь к интернету, перезагрузите Folio и повторите предпросмотр.');
       if(capped.length)warnings.push('Достигнут предел в 150 страниц с распознаванием. Если нужен весь текст сканов, разделите PDF на части и повторите.');
       if(outlineFailed.length)warnings.push('Дополнительное распознавание контуров временно недоступно. Обычный текст сохранён. Страницы: '+numbers(outlineFailed));
       if(outlineCapped.length)warnings.push('Достигнут отдельный предел дополнительного распознавания контуров. Обычный текст сохранён. Страницы: '+numbers(outlineCapped.sort((a,b)=>a-b)));
