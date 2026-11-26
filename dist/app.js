@@ -1362,7 +1362,10 @@ function renderRibbon(){
     current.chapters[chapter].paragraphs.forEach((p,pi)=>{
       const span=node('span',null,'translation-segment');span.id=`translation-${chapter}-${pi}`;span.dataset.chapter=chapter;span.dataset.paragraph=pi;span.lang=current.translationLanguage||'';
       if(pi===0)span.append(node('span',`${chapter+1} ·`,'separator'));
-      span.append(node('span',p.translation||'[У этого абзаца нет перевода]','translation-copy'));fragment.append(span)
+      // Isolate the translation direction without reversing the chapter prefix
+      // or the horizontal track used by all book languages.
+      const copy=node('bdi',p.translation||'[У этого абзаца нет перевода]','translation-copy');
+      copy.dir='auto';span.append(copy);fragment.append(span)
     });
   }else fragment.append(node('span','Нет готового перевода.','translation-empty'));
   track.replaceChildren(fragment);track.toggleAttribute('data-readable',ribbonHasPairs);
