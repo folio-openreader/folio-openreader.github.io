@@ -201,6 +201,10 @@ async function readChapter(source, fallback, signal) {
         if (firstHeading && firstHeading.length <= 240) { buffer = []; return; }
       }
       flush();
+    } else if (tag === 'td' || tag === 'th') {
+      // The reader flattens each table row; separate neighboring cells while
+      // leaving inline formatting (emphasis inside a word) untouched.
+      buffer.push(' ');
     }
   }
   for(const _ of visit(body,0)){
