@@ -59,7 +59,12 @@ export function accentPalette(prefs) {
   const soft=mix(t.surface,accent,dark?.18:.09);
   return {accent,onAccent,soft,selection:mix(t.surface,accent,dark?.27:.18),focus:accent,themeColor:t.bg};
 }
-export function searchKey(text) {return String(text).normalize('NFKC').toLocaleLowerCase().replaceAll('ё','е').trim()}
+export function searchKey(text) {
+  // Match the same in-word punctuation variants saved by the vocabulary.
+  // Preserve real en/em dashes; a discretionary soft hyphen is only layout.
+  return String(text).normalize('NFKC').replaceAll('\u00ad','').replace(/[‘’ʼ]/gu,"'").replace(/[‐‑]/gu,'-')
+    .toLocaleLowerCase().replaceAll('ё','е').trim();
+}
 export function sanitizeSaved(words) {
   return [...new Set((Array.isArray(words)?words:[]).filter(w=>typeof w==='string').map(w=>w.trim().slice(0,128)).filter(Boolean))].slice(0,20000);
 }
