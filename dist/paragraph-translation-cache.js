@@ -14,8 +14,8 @@ const rangeFor=id=>IDBKeyRange.bound([PREFIX,id],[PREFIX,id,[]],false,true);
 const sameKey=(a,b)=>a.length===b.length&&a.every((v,i)=>v===b[i]);
 const recentRows=row=>Array.isArray(row?.keys)?row.keys.slice(-MAX_ROWS).filter(k=>
   Array.isArray(k)&&k.length===6&&k[0]===PREFIX&&titleId(k[1])&&validGeneration(k[2])&&index(k[3])&&index(k[4])&&revision(k[5])):[];
-const sourceMatches=(book,entry)=>{
-  const p=book?.chapters?.[entry.ci]?.paragraphs?.[entry.pi];
+const sourceMatches=(book,entry,ci=entry.ci,pi=entry.pi)=>{
+  const p=book?.chapters?.[ci]?.paragraphs?.[pi];
   return book?.kind!=='comic'&&p?.text===entry.text&&!p.translation;
 };
 const currentGeneration=(book,entry)=>book?.[GENERATION]===entry.generation&&sourceMatches(book,entry);
@@ -73,16 +73,37 @@ export async function prepareParagraphCache(db,loc,model,{createGeneration=true}
   return Object.freeze({...entry,generation:saved});
 }
 
-export function readParagraphCache(db,entry){
+export function readParagraphCache(db,entry,openBook){
   if(!validEntry(entry))return Promise.resolve(null);
   return transaction(db,'readonly',(store,done)=>{
-    const row=store.get(keyOf(entry.id,entry.generation,entry));
-    row.onsuccess=()=>{
-      const value=row.result?.value;
-      // A cold cache miss should never clone the full book from IndexedDB.
+    const key=keyOf(entry.id,entry.generation,entry);
+    function verifyValue(value,from=key){
       if(!valueText(value))return;
       const book=store.get(entry.id);
-      book.onsuccess=()=>{if(currentGeneration(book.result,entry))done(value);};
+      book.onsuccess=()=>{
+        if(currentGeneration(book.result,entry)&&sourceMatches(book.result,entry,from[3],from[4]))done(value);
+      };
+    }
+    const row=store.get(key);
+    row.onsuccess=()=>{
+      const value=row.result?.value;
+      if(valueText(value)){verifyValue(value);return;}
+      // An equivalent reader position may have used hot memory in the prior
+      // session without making its own sidecar. Reuse only exact text in this
+      // same edition/model, from at most the already bounded recent index.
+      if(openBook?.id!==entry.id||!currentGeneration(openBook,entry))return;
+      const recent=store.get(RECENT);
+      recent.onsuccess=()=>{
+        const keys=recentRows(recent.result);
+        for(let i=keys.length-1;i>=0;i--){
+          const alias=keys[i];
+          if(alias[1]!==entry.id||alias[2]!==entry.generation||alias[5]!==entry.model||
+             (alias[3]===entry.ci&&alias[4]===entry.pi)||!sourceMatches(openBook,entry,alias[3],alias[4]))continue;
+          const saved=store.get(alias);
+          saved.onsuccess=()=>verifyValue(saved.result?.value,alias);
+          break;
+        }
+      };
     };
   });
 }

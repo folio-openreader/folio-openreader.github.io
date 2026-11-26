@@ -1407,7 +1407,7 @@ function queueSavedRibbonProbe(loc){
 async function savedLocalTranslation(loc,stillHere){
   try{
     const entry=await prepareParagraphCache(db,loc,translationRevision(loc.source,loc.target),{createGeneration:false});
-    return entry&&stillHere()?await readParagraphCache(db,entry):null;
+    return entry&&stillHere()?await readParagraphCache(db,entry,loc.book):null;
   }catch{return null} // A storage error is equivalent to an unavailable cached result.
 }
 async function loadSavedDialogTranslation(probe){
@@ -1497,7 +1497,7 @@ async function pumpLocal(){
       try{
         entry=await prepareParagraphCache(db,job,translationRevision(job.source,job.target));
         if(localJob!==job)return;
-        saved=await readParagraphCache(db,entry);
+        saved=await readParagraphCache(db,entry,job.book);
       }catch{/* A storage error is only a cache miss, never a translation error. */}
     }
     if(localJob!==job||!books.includes(job.book))return;

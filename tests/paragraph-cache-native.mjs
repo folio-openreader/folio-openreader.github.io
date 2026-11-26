@@ -5,7 +5,7 @@ const id='book-a45c1397-b71f-4cf8-aaff-55660c574919',other='book-89752796-bd17-4
 const model='folio-bergamot-en-ru-2.1-packed',nextModel='folio-bergamot-en-ru-2.2-packed';
 const make=(key=id)=>({id:key,createdAt:6,title:'Synthetic title',author:'',language:'en',format:'TXT',alignment:'none',
   chapters:[{title:'Chapter',paragraphs:[{text:'The river enters the sea.',translation:null}]}]});
-const locationOf=book=>({book,ci:0,pi:0,p:book.chapters[0].paragraphs[0]});
+const locationOf=(book,pi=0)=>({book,ci:0,pi,p:book.chapters[0].paragraphs[pi]});
 const equal=(value,expected,label)=>{if(value!==expected)throw Error(label+': got '+JSON.stringify(value)+', expected '+JSON.stringify(expected))};
 function open(name){
   return new Promise((resolve,reject)=>{
@@ -49,6 +49,25 @@ export async function testNativeParagraphCache(){
     equal(await writeParagraphCache(b,otherEntry,'unrelated translation'),true,'other book write');
     equal(await readParagraphCache(b,first),'old translation','cross-connection cached read');
     equal(await readParagraphCache(b,await prepareParagraphCache(b,locationOf(legacy),nextModel)),null,'model revision isolated');
+
+    const excerpt=stampTextBook(make('book-9b7fad3e-fcda-4009-a045-b4f529bba06c'));
+    const same=excerpt.chapters[0].paragraphs[0].text;
+    excerpt.chapters[0].paragraphs.push({text:same},{text:same+' Different.'},{text:same,translation:'Paired text'});
+    await add(a,excerpt);
+    const from=await prepareParagraphCache(a,locationOf(excerpt),model);
+    const repeat=await prepareParagraphCache(a,locationOf(excerpt,1),model);
+    await writeParagraphCache(a,from,'same-edition translation');
+    equal(await readParagraphCache(b,repeat,excerpt),'same-edition translation','identical paragraph reused on another connection');
+    equal(await cacheCount(a,excerpt.id),1,'duplicate fallback never writes a new sidecar');
+    equal(await readParagraphCache(b,repeat,unrelated),null,'a different book cannot supply a locator');
+    equal(await readParagraphCache(b,await prepareParagraphCache(b,locationOf(excerpt,1),nextModel),excerpt),null,'duplicate cannot cross model revisions');
+    equal(await readParagraphCache(b,await prepareParagraphCache(b,locationOf(excerpt,2),model),excerpt),null,'similar text is not identical');
+    equal(await prepareParagraphCache(b,locationOf(excerpt,3),model),null,'duplicate never replaces paired text');
+    const stale=structuredClone(excerpt);stale.chapters[0].paragraphs[0].text+=' Edited.';
+    await transact(a,'readwrite',store=>store.put(stale)); // Deliberately leave the old sidecar in place.
+    equal(await readParagraphCache(b,repeat,excerpt),null,'duplicate source verified again against canonical IndexedDB edition');
+    await remove(b,excerpt.id);
+    equal(await readParagraphCache(b,repeat,excerpt),null,'deleted edition does not supply a duplicate');
 
     // Rolled-back transaction must not remove only half of the book or cache.
     let aborted=false;
@@ -94,6 +113,6 @@ export async function testNativeParagraphCache(){
     await add(b,replacement,true);
     equal(await writeParagraphCache(a,reusedEntry,'stale late replacement'),false,'same ID reused for a different text');
     equal(await cacheCount(a),0,'replacement physically removes all older sidecars');
-    return 'Native IndexedDB: delete abort, cross-tab delete/restore, late writes, same-ID replacement and model revision passed.';
+    return 'Native IndexedDB: delete abort, cross-tab delete/restore, late writes, same-ID replacement, exact duplicates, and model revision passed.';
   }finally{a.close();b.close();await new Promise((ok,bad)=>{const req=indexedDB.deleteDatabase(name);req.onsuccess=ok;req.onerror=()=>bad(req.error);});}
 }
