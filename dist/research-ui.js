@@ -49,19 +49,30 @@ export function installResearchCatalog(root,{loadCatalog,loadStoredCatalog,openB
       const cached=loadStoredCatalog();
       if(cached.length)paint(cached);
     }
-    if(!entries)status.textContent='Загружаем…'; retry.hidden=true;
+    if(!retry.hidden){
+      // Do not hide or natively disable the focused control during a retry.
+      retry.setAttribute('aria-disabled','true');retry.setAttribute('aria-busy','true');
+      status.textContent='Обновляем каталог…';
+    }else if(!entries)status.textContent='Загружаем…';
     pending=(async()=>{
       try{
         const next=await loadCatalog({force});
         paint(next);loaded=true;status.textContent=entries.length?'':'Пока нет материалов.';
+        const handoff=document.activeElement===retry&&!root.closest('[hidden],[inert]');
+        retry.hidden=true;
+        if(handoff){
+          const first=buttons.values().next().value?.open;
+          if(first)first.focus();
+          else{const title=root.querySelector('h2');if(title){title.tabIndex=-1;title.focus()}}
+        }
       }catch{
         loaded=false;status.textContent=entries?.length?'Каталог не обновился. Показан сохранённый список.':'Каталог недоступен.';
         retry.hidden=false;
       }
-      finally{pending=null}
+      finally{pending=null;retry.removeAttribute('aria-disabled');retry.removeAttribute('aria-busy')}
     })();
     return pending;
   }
-  retry.onclick=()=>void refresh({force:true})
+  retry.onclick=()=>{if(!pending)void refresh({force:true})};
   return {refresh,focusArticle(id){const el=buttons.get(id)?.open;if(!el||el.disabled)return false;el.focus({preventScroll:true});return true}};
 }
