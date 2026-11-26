@@ -33,7 +33,7 @@ function el(namespaceURI,localName,attrs={},children=[],textContent=''){
   return {nodeType:1,namespaceURI,localName,children,textContent,
     childNodes:children.length?children:[{nodeType:3,nodeValue:textContent}],hasAttribute:k=>Object.hasOwn(attrs,k),getAttribute:k=>attrs[k]??null};
 }
-function epub(t,{packed=false,count=3,onChapter=()=>{}}={}){
+function epub(t,{packed=false,count=3,rows=1,onChapter=()=>{}}={}){
   const paths=Array.from({length:count},(_,i)=>'chapter-'+i+'.xhtml'),book=el(P,'package',{},[
     el(P,'metadata',{},[el(D,'title',{},[],'Test volume')]),
     el(P,'manifest',{},paths.map(href=>el(P,'item',{id:href,href,'media-type':'application/xhtml+xml'}))),
@@ -44,7 +44,7 @@ function epub(t,{packed=false,count=3,onChapter=()=>{}}={}){
     let documentElement;
     if(text==='container')documentElement=container;
     else if(text==='book')documentElement=book;
-    else {onChapter(text);documentElement=el(X,'html',{},[el(X,'body',{},[el(X,'p',{},[],text)])]);}
+    else {onChapter(text);documentElement=el(X,'html',{},[el(X,'body',{},Array.from({length:rows},()=>el(X,'p',{},[],text)))]);}
     return {documentElement,getElementsByTagNameNS:()=>[]};
   }});
   return zipFile('test.epub',[['mimetype','application/epub+zip'],['META-INF/container.xml','container'],
@@ -86,6 +86,15 @@ test('a dense uncompressed EPUB allows a pending touch or click to cancel remain
   }});
   await assert.rejects(parseBook(file,{signal:abort.signal}),{name:'AbortError'});
   assert.deepEqual(visited,['Chapter source 0']);
+});
+test('cancellation interrupts traversal inside one large XHTML chapter',async t=>{
+  const controller=new AbortController(),sentinel=[];
+  let now=0;replace(t,'performance',{now:()=>now+=14});
+  const file=epub(t,{count:1,rows:1000,onChapter:text=>{
+    sentinel.push(text);setTimeout(()=>controller.abort(),0);
+  }});
+  await assert.rejects(parseBook(file,{signal:controller.signal}),{name:'AbortError'});
+  assert.deepEqual(sentinel,['Chapter source 0']);
 });
 test('normal EPUB import still returns text in spine order',async t=>{
   const book=await parseBook(epub(t,{packed:true}),{signal:new AbortController().signal});

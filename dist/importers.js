@@ -164,7 +164,9 @@ function resolvePath(base, href) {
 
 const OMIT = new Set(['script', 'style', 'template', 'nav', 'svg', 'math', 'iframe', 'object', 'embed', 'audio', 'video', 'canvas', 'noscript', 'img']);
 const BLOCK = new Set(['h1','h2','h3','h4','h5','h6','p','li','dt','dd','section','div','article','pre','blockquote','figcaption','tr','hr']);
-function readChapter(source, fallback) {
+const yieldImportTurn=()=>new Promise(resolve=>setTimeout(resolve,0));
+const IMPORT_SLICE_MS=12;
+async function readChapter(source, fallback, signal) {
   const doc = xml(source);
   const root = doc.documentElement;
   if (root.namespaceURI !== XHTML_NS || root.localName !== 'html') throw invalid();
@@ -178,7 +180,11 @@ function readChapter(source, fallback) {
     if (paragraphs.length > MAX_PARAGRAPHS) throw oversized();
     buffer = [];
   };
-  function visit(node, depth) {
+  let visited=0,sliceStarted=performance.now();
+  function* visit(node, depth) {
+    // A spine containing a single long chapter must yield too. Use one
+    // sampled deadline, not a new promise for each XML node.
+    if ((++visited&127)===0&&performance.now()-sliceStarted>=IMPORT_SLICE_MS)yield;
     if (depth > 128) throw invalid();
     if (node.nodeType === 3 || node.nodeType === 4) { buffer.push(node.nodeValue); return; }
     if (node.nodeType !== 1 || node.namespaceURI !== XHTML_NS || OMIT.has(node.localName) || node.hasAttribute('hidden')) return;
@@ -187,7 +193,7 @@ function readChapter(source, fallback) {
     if (block) flush();
     const heading = /^h[1-6]$/.test(tag);
     const before = paragraphs.length;
-    for (const n of node.childNodes) visit(n, depth + 1);
+    for (const n of node.childNodes) yield* visit(n, depth + 1);
     if (block) {
       if (heading && before === 0 && !firstHeading) {
         firstHeading = clean(buffer.join(''));
@@ -197,7 +203,10 @@ function readChapter(source, fallback) {
       flush();
     }
   }
-  visit(body, 0);
+  for(const _ of visit(body,0)){
+    await yieldImportTurn();checkImport(signal);sliceStarted=performance.now();
+  }
+  checkImport(signal);
   flush();
   return {title: candidate || metadata(child(root, XHTML_NS, 'head'), XHTML_NS, 'title') || fallback, paragraphs};
 }
@@ -267,8 +276,8 @@ async function parseEpub(file,signal) {
     for (const ref of spine) {
       // ZIP members stored without compression settle in microtasks only.
       // In a long spine, give the import dialog a turn to process Cancel.
-      if(performance.now()-sliceStarted>=12){
-        await new Promise(resolve=>setTimeout(resolve,0));sliceStarted=performance.now();
+      if(performance.now()-sliceStarted>=IMPORT_SLICE_MS){
+        await yieldImportTurn();sliceStarted=performance.now();
       }
       checkImport(signal);
       if (ref.getAttribute('linear') === 'no') continue;
@@ -279,7 +288,7 @@ async function parseEpub(file,signal) {
       const path = resolvePath(opfPath, item.getAttribute('href') ?? '');
       if(unusedFonts.has(path))throw protectedBook(); // An alias must not make a skipped asset readable.
       const section=await readXmlResource(path);checkImport(signal);
-      const c = readChapter(section, `Chapter ${chapters.length + 1}`);
+      const c = await readChapter(section, `Chapter ${chapters.length + 1}`,signal);
       if (!c.paragraphs.length) { skipped++; continue; }
       count += c.paragraphs.length;
       chars += c.paragraphs.reduce((n, p) => n + p.length, 0);
