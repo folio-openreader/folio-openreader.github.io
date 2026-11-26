@@ -15,6 +15,7 @@ function session(disk=new Map(),step=100,rowHeight=step){
     replaceChildren(fragment){this.children=fragment?.children||[]},setAttribute:noop,removeAttribute:noop,toggleAttribute:noop,addEventListener:noop,firstElementChild:{},hidden:false,
     querySelector(selector){return this.children.find(x=>x.className===selector.slice(1))||null},
     focus(options){focused.push({node:this,options});doc.activeElement=this;},
+    getBoundingClientRect(){return {top:0,height:48}},scrollTop:0,clientHeight:240,
     showModal(){this.open=true;doc.activeElement=this;},
     close(){this.open=false},open:false});
   const $=id=>id.startsWith('#paragraph-')?$('#passage').children[Number(id.slice(11))]:
@@ -55,7 +56,7 @@ function session(disk=new Map(),step=100,rowHeight=step){
   runInNewContext([part('let rememberedReadingPositions=','function escapeHTML('),part('function showHome(','let comicView='),
     part('function scheduleSeen(','function wordNodes('),part('function renderChapter(','let ribbonBook='),
     part('function comicPageGeometry(','function updateComicProgress('),
-    part('let prefsLayoutEpoch=','function renderProfileStats('),part('function switchChapter(','function updateBookmark('),line('function renderContents('),
+    part('let prefsLayoutEpoch=','function renderProfileStats('),part('function switchChapter(','function updateBookmark('),part('function openReaderContents(','function sourceLanguage('),
     part("$('#reading-scroll').addEventListener('scroll'", ";$('#sync-translation')"),
     part("$('#reader-back').onclick=e=>", ";$('#previous-chapter')"),
     part("$('#previous-chapter').onclick=", ";$('#reader-bookmark')"),...handlers,
@@ -192,7 +193,7 @@ test('failed lifecycle write is retried at pagehide',()=>{
 });
 test('bookmark click, immediate back before layout, then reopen use the explicit seek',()=>{
   const h=session();h.open(pos(2,0));h.scroll(1000);
-  h.c.state.bookmarks.test=[pos(7,.4,1)];h.c.renderContents();h.$('#bookmarks-list').children[0].children[0].onclick();
+  h.c.state.bookmarks.test=[pos(7,.4,1)];h.c.renderReaderBookmarks();h.$('#bookmarks-list').children[0].children[0].onclick();
   h.$('#reader-back').onclick({detail:1});h.drain();h.tick180();assert.equal(h.$('#reader').hidden,true);
   assert.deepEqual(h.read(),pos(7,.4,1));
   const fresh=session(new Map(h.disk));fresh.open();assert.deepEqual(fresh.read(),pos(7,.4,1));assert.equal(fresh.sc.scrollTop,718);
@@ -345,7 +346,9 @@ test('pointer changes do not steal focus and an older focus request cannot overr
   h.$('#next-chapter').onclick({detail:0});
   h.$('#previous-chapter').onclick({detail:1});
   h.drain();assert.equal(h.focused.length,0);
-  h.$('#chapter-open').onclick();h.$('#chapter-list').children[1].onclick({detail:1});h.drain();
+  h.$('#chapter-open').onclick();
+  assert.equal(h.doc.activeElement,h.$('#chapter-list').children[0]);h.focused.length=0;
+  h.$('#chapter-list').children[1].onclick({detail:1});h.drain();
   assert.equal(h.focused.length,0);
 });
 

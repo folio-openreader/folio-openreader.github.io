@@ -1308,7 +1308,27 @@ function syncTranslation(){
 function markExploring(){if(ribbonManual)return;ribbonManual=true;$('#sync-translation').textContent='Вернуться ↻';$('#ribbon-label').textContent='ПРОСМОТР ПЕРЕВОДА'}
 function switchChapter(next,{focus=false}={}){if(!current?.chapters[next])return;if(isComic(current)){dismissWord();capturePosition()}chapter=next;paragraph=0;renderChapter({chapter,paragraph:0,fraction:0},{focus});saveState()}
 function updateBookmark(){const list=state.bookmarks[current.id]||[];const active=list.some(x=>x.chapter===chapter&&x.paragraph===paragraph);$('#reader-bookmark').setAttribute('aria-pressed',String(active));$('#reader-bookmark').setAttribute('aria-label',active?'Удалить закладку':'Сохранить закладку')}
-function renderContents(){const list=$('#chapter-list');list.replaceChildren();current.chapters.forEach((c,i)=>{const b=node('button',`${i+1}. ${c.title}`,'chapter-row'+(i===chapter?' active':''));b.onclick=e=>{switchChapter(i,{focus:e.detail===0});$('#contents-dialog').close()};list.append(b)});const marks=$('#bookmarks-list');marks.replaceChildren();const tally=bookStats(learning,current.id);$('#reading-book-stats').textContent=`${wordCountText(tally.words)} · ${encounterText(tally.encounters)}`;const bookmarks=state.bookmarks[current.id]||[];if(!bookmarks.length)marks.append(node('p','Сохраните абзац значком закладки.','muted'));bookmarks.forEach(p=>{const row=node('div',null,'bookmark-row');const b=node('button',`${current.chapters[p.chapter]?.title||'Глава'} · абзац ${p.paragraph+1}`,'chapter-row');b.onclick=()=>{capturePosition();chapter=p.chapter;paragraph=p.paragraph;$('#contents-dialog').close();renderChapter(p,{bookmark:true})};const del=node('button','×','icon-button');del.setAttribute('aria-label','Удалить закладку');del.onclick=()=>{state.bookmarks[current.id]=(state.bookmarks[current.id]||[]).filter(mark=>bookmarkLocation(mark)!==bookmarkLocation(p));saveState();renderContents();updateBookmark()};row.append(b,del);marks.append(row)})}
+function openReaderContents(){
+  const dialog=$('#contents-dialog'),list=$('#chapter-list');
+  const rows=document.createDocumentFragment();
+  let active;
+  current.chapters.forEach((c,i)=>{
+    const b=node('button',(i+1)+'. '+c.title,'chapter-row'+(i===chapter?' active':''));
+    if(i===chapter){b.setAttribute('aria-current','location');b.setAttribute('autofocus','');active=b}
+    b.onclick=e=>{dialog.close();switchChapter(i,{focus:e.detail===0})};
+    rows.append(b);
+  });
+  list.replaceChildren(rows);
+  renderReaderBookmarks();
+  dialog.showModal();
+  if(!active)return;
+  if(document.activeElement!==active)active.focus({preventScroll:true});
+  // Move only the chapter list, not the heading, close handle or bookmarks.
+  dialog.scrollTop=0;
+  const row=active.getBoundingClientRect(),box=list.getBoundingClientRect();
+  list.scrollTop+=row.top-box.top-(list.clientHeight-row.height)/2;
+}
+function renderReaderBookmarks(){const marks=$('#bookmarks-list');marks.replaceChildren();const tally=bookStats(learning,current.id);$('#reading-book-stats').textContent=`${wordCountText(tally.words)} · ${encounterText(tally.encounters)}`;const bookmarks=state.bookmarks[current.id]||[];if(!bookmarks.length)marks.append(node('p','Сохраните абзац значком закладки.','muted'));bookmarks.forEach(p=>{const row=node('div',null,'bookmark-row');const b=node('button',`${current.chapters[p.chapter]?.title||'Глава'} · абзац ${p.paragraph+1}`,'chapter-row');b.onclick=()=>{capturePosition();chapter=p.chapter;paragraph=p.paragraph;$('#contents-dialog').close();renderChapter(p,{bookmark:true})};const del=node('button','×','icon-button');del.setAttribute('aria-label','Удалить закладку');del.onclick=()=>{state.bookmarks[current.id]=(state.bookmarks[current.id]||[]).filter(mark=>bookmarkLocation(mark)!==bookmarkLocation(p));saveState();renderReaderBookmarks();updateBookmark()};row.append(b,del);marks.append(row)})}
 function sourceLanguage(text,bookLanguage){return resolveLanguage(bookLanguage,state.prefs.readingLanguage,text)}
 function trackingLanguage(token){
   const raw=readingSourceLanguage(current,chapter)||'und';
@@ -1879,7 +1899,7 @@ passageEl.addEventListener('keydown',e=>{
 passageEl.onclick=e=>{
   const b=e.target.closest('[data-word]');
   if(b){setReadingWordTabStop(b);showWord(b,e)}
-};$('#reader-back').onclick=e=>{history.replaceState(null,'','#'+readerReturn);showHome(readerReturn,{motion:e.detail>0,focus:e.detail===0})};$('#previous-chapter').onclick=e=>switchChapter(chapter-1,{focus:e.detail===0});$('#next-chapter').onclick=e=>switchChapter(chapter+1,{focus:e.detail===0});$('#chapter-open').onclick=()=>{renderContents();$('#contents-dialog').showModal()};$('#reader-bookmark').onclick=()=>{capturePosition();const list=state.bookmarks[current.id]||[],key=chapter+'/'+paragraph;const rest=list.filter(p=>bookmarkLocation(p)!==key);if(rest.length<list.length){state.bookmarks[current.id]=rest;toast('Закладка удалена')}else{state.bookmarks[current.id]=[...list,{...state.positions[current.id]}];toast('Абзац сохранён в закладках')}saveState();updateBookmark()};$('#translation-full').onclick=()=>openLocalDialog(currentLocalTarget());$('#word-save').onclick=toggleWordSaved;
+};$('#reader-back').onclick=e=>{history.replaceState(null,'','#'+readerReturn);showHome(readerReturn,{motion:e.detail>0,focus:e.detail===0})};$('#previous-chapter').onclick=e=>switchChapter(chapter-1,{focus:e.detail===0});$('#next-chapter').onclick=e=>switchChapter(chapter+1,{focus:e.detail===0});$('#chapter-open').onclick=openReaderContents;$('#reader-bookmark').onclick=()=>{capturePosition();const list=state.bookmarks[current.id]||[],key=chapter+'/'+paragraph;const rest=list.filter(p=>bookmarkLocation(p)!==key);if(rest.length<list.length){state.bookmarks[current.id]=rest;toast('Закладка удалена')}else{state.bookmarks[current.id]=[...list,{...state.positions[current.id]}];toast('Абзац сохранён в закладках')}saveState();updateBookmark()};$('#translation-full').onclick=()=>openLocalDialog(currentLocalTarget());$('#word-save').onclick=toggleWordSaved;
 const wordSpeech=createWordSpeech({publish:({status,language,apple})=>{
   const button=$('#word-speech'),guide=$('#word-speech-guide'),notice=$('#word-speech-status');
   button.dataset.speechState=status;

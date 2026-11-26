@@ -99,6 +99,7 @@ button:not(.word):not(:disabled):active,.brand:active{transform:scale(.97);opaci
 #progress-fill{width:100%!important;transform:scaleX(0);transform-origin:left;transition:transform 170ms var(--ease-out)}
 /* Native dialog keeps browser focus/reaction and Escape; CSS only decorates. */
 dialog{border-radius:19px;overscroll-behavior-y:contain;scroll-padding-block:20px;max-height:calc(100dvh - 32px);box-shadow:0 16px 65px #181b182b}
+#chapter-list{max-block-size:min(44dvh,24rem);overflow-y:auto;overscroll-behavior-y:contain;scrollbar-width:thin;scroll-padding-block:4px;padding:3px}
 dialog::backdrop{background:#121b16a0;backdrop-filter:none}
 dialog[open]{animation:dialog-enter var(--sheet-time) var(--ease-drawer) both}
 dialog[open]::backdrop{animation:backdrop-in 180ms var(--ease-out) both}
