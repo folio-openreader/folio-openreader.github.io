@@ -456,7 +456,7 @@ export async function parsePdf(buffer, name = '', options={}) {
       if(outlineFailed.length)warnings.push('Дополнительное распознавание контуров временно недоступно. Обычный текст сохранён. Страницы: '+numbers(outlineFailed));
       if(outlineCapped.length)warnings.push('Достигнут отдельный предел дополнительного распознавания контуров. Обычный текст сохранён. Страницы: '+numbers(outlineCapped.sort((a,b)=>a-b)));
       if(skipped.length)warnings.push('Пропущены страницы без читаемого текста ('+skipped.length+'): '+numbers(skipped));
-      return {format:'PDF',title:trimMeta(info?.Title)||trimMeta(name.replace(/\.pdf$/i,''))||'Без названия',author:trimMeta(info?.Author),language,chapters,warnings,...(attempted||outlineChecked||options.ocr===true?{ocr:meta}:{})};
+      return {format:'PDF',pageCount:doc.numPages,title:trimMeta(info?.Title)||trimMeta(name.replace(/\.pdf$/i,''))||'Без названия',author:trimMeta(info?.Author),language,chapters,warnings,...(attempted||outlineChecked||options.ocr===true?{ocr:meta}:{})};
     };
     const result=await Promise.race([run.stopped,read()]);finished=true;return result;
   } catch(e){

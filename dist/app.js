@@ -1568,7 +1568,14 @@ function renderImportPreview(a,b,event){
     select.onchange=commit;commit();wrapper.append(select);box.append(wrapper);
   }
   const warnings=[...new Set([...(a.warnings||[]),...(b?.warnings||[])])];
-  if(b){const r=previewBook.alignmentReport;warnings.unshift(`По порядку сопоставлено ${r.matchedCount} из ${r.originalCount} абзацев оригинала. Без пары: ${r.unmatchedOriginal} в оригинале, ${r.unmatchedTranslation} в переводе. Смысл не проверен.`);if(!r.paragraphCountsMatch||!r.chapterCountsMatch)warnings.unshift('Структуры файлов различаются. Несовпавшие главы останутся без перевода.')}
+  if(b){
+    const r=previewBook.alignmentReport,method=r.pdfPagesMatch===true?'По номерам страниц':'По порядку';
+    warnings.unshift(`${method} сопоставлено ${r.matchedCount} из ${r.originalCount} абзацев оригинала. Без пары: ${r.unmatchedOriginal} в оригинале, ${r.unmatchedTranslation} в переводе. Смысл не проверен.`);
+    if(r.pdfPagesMatch===false)warnings.unshift('У PDF разное число страниц. Файлы не сопоставлены. Выберите файлы одного издания.');
+    else if(!r.paragraphCountsMatch||!r.chapterCountsMatch)warnings.unshift(r.pdfPagesMatch===true
+      ?'Страницы без текста или с разным числом абзацев остались без пары.'
+      :'Структуры файлов различаются. Несовпавшие главы останутся без перевода.');
+  }
   else warnings.unshift('Готовый перевод не добавлен.');
   warnings.forEach(w=>box.append(node('p',w,'warning')));
   for(const [role,parsed] of [['original',a],['translation',b]]){

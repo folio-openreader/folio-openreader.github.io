@@ -318,11 +318,17 @@ export function pairBooks(original, translation) {
   const total = b => b.chapters.reduce((n, c) => n + c.paragraphs.length, 0);
   const originalCount = total(original), translationCount = total(translation);
   const chapterCountsMatch = original.chapters.length === translation.chapters.length;
+  const pdfPair = original.format === 'PDF' && translation.format === 'PDF';
+  // PDF imports keep physical page numbers even when OCR or extraction omits a
+  // page. Never shift by the surviving index or compare different-length PDFs.
+  const pdfPagesMatch = pdfPair && Number.isInteger(original.pageCount) &&
+    original.pageCount > 0 && original.pageCount === translation.pageCount;
+  const pages = pdfPagesMatch ? new Map(translation.chapters.map(c => [c.title, c])) : null;
   let matchedCount = 0;
-  let paragraphCountsMatch = chapterCountsMatch;
-  if (chapterCountsMatch) book.chapters.forEach((c, i) => {
-    const other = translation.chapters[i];
-    if ((original.format==='PDF'&&translation.format==='PDF'&&c.title!==other.title)||c.paragraphs.length!==other.paragraphs.length) { paragraphCountsMatch = false; return; }
+  let paragraphCountsMatch = chapterCountsMatch && (!pdfPair || pdfPagesMatch);
+  if (pdfPair ? pdfPagesMatch : chapterCountsMatch) book.chapters.forEach((c, i) => {
+    const other = pages ? pages.get(c.title) : translation.chapters[i];
+    if (!other || c.paragraphs.length !== other.paragraphs.length) { paragraphCountsMatch = false; return; }
     c.paragraphs.forEach((p, j) => { p.translation = other.paragraphs[j]; matchedCount++; });
   });
   return {
@@ -331,7 +337,7 @@ export function pairBooks(original, translation) {
     ...(translation.ocr?{translationOcr:translation.ocr}:{}),
     translationLanguage: translation.language,
     alignment: 'positional-unverified',
-    alignmentReport: {originalCount, translationCount, matchedCount, unmatchedOriginal: originalCount - matchedCount, unmatchedTranslation: translationCount - matchedCount, chapterCountsMatch, paragraphCountsMatch},
+    alignmentReport: {originalCount, translationCount, matchedCount, unmatchedOriginal: originalCount - matchedCount, unmatchedTranslation: translationCount - matchedCount, chapterCountsMatch, paragraphCountsMatch, ...(pdfPair?{pdfPagesMatch}:{})},
     warnings: [...new Set([...original.warnings, ...translation.warnings])],
   };
 }
