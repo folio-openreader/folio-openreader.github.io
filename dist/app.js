@@ -1299,8 +1299,11 @@ const localTarget=(book,ci,pi)=>{
 const currentLocalTarget=()=>localTarget(current,chapter,paragraph);
 const sameLocalPair=(a,b)=>!!a&&!!b&&a.book===b.book&&a.source===b.source&&a.target===b.target;
 const sameLocal=(a,b)=>sameLocalPair(a,b)&&a.ci===b.ci&&a.pi===b.pi&&a.p===b.p;
+// Share running work for exact repeats in this same edition and language/model
+// pair, while keeping storage and navigation bound to the original locator.
+const sameLocalText=(a,b)=>sameLocalPair(a,b)&&a.p.text===b.p.text;
 const localFailureFor=loc=>sameLocalPair(localFailure,loc)&&
-  (!['length','empty'].includes(localFailure.reason)||sameLocal(localFailure,loc))?localFailure:null;
+  (!['length','empty'].includes(localFailure.reason)||sameLocalText(localFailure,loc))?localFailure:null;
 const autoLocal=loc=>localAuto.has(loc.book,loc.source,loc.target);
 function setAutoLocal(loc,enabled){
   if(!localAuto.set(loc.book,loc.source,loc.target,enabled))toast('Браузер не сохранил настройку автоперевода.');
@@ -1395,7 +1398,7 @@ function queueSavedRibbonProbe(loc){
   cancelSavedRibbonProbe();
   const probe=localRibbonProbe=loc;
   const stillHere=()=>localRibbonProbe===probe&&!ribbonManual&&!localWorkPaused()&&!$('#reader').hidden&&
-    sameLocal(currentLocalTarget(),probe)&&!sameLocal(localJob,probe)&&!sameLocal(localWanted,probe);
+    sameLocal(currentLocalTarget(),probe)&&!sameLocalText(localJob,probe)&&!sameLocalText(localWanted,probe);
   // Showing a persisted result is a read-only action. Debounce active-row
   // changes, and never let a stale answer move the ribbon after navigation.
   localRibbonTimer=setTimeout(async()=>{
@@ -1426,7 +1429,7 @@ function openLocalDialog(loc){
   if(!loc)return;
   localDialogTarget=loc;localDialogProbe=null;
   const dialog=$('#translation-dialog');
-  if(!loc.p.translation&&!peekLocal(loc)&&supportsTranslation(loc.source,loc.target)&&canProbeLocalCache(loc)&&!sameLocal(localJob,loc)&&!sameLocal(localWanted,loc)){
+  if(!loc.p.translation&&!peekLocal(loc)&&supportsTranslation(loc.source,loc.target)&&canProbeLocalCache(loc)&&!sameLocalText(localJob,loc)&&!sameLocalText(localWanted,loc)){
     // Viewing a past result is not consent to resume inference or download a model.
     localDialogProbe={...loc};void loadSavedDialogTranslation(localDialogProbe);
   }
@@ -1468,7 +1471,7 @@ function paintLocalDialog(loc){
   }
   if(checking){status.textContent='Ищем сохранённый перевод…';button.textContent='Подождите…';setWaiting(true);bar.hidden=true;return}
   if(!canLocal(loc)){wrap.append(node('p',localTranslator.capabilities()?(loc.source===loc.target?'Оригинал уже на выбранном языке.':loc.source==='und'?'Язык оригинала не определён.':'Нет локальной модели для '+pairCode(loc.source,loc.target)+'.'):'Локальный перевод недоступен в этом браузере.','muted'));return}
-  const busy=sameLocal(localJob,loc)||sameLocal(localWanted,loc);
+  const busy=sameLocalText(localJob,loc)||sameLocalText(localWanted,loc);
   setWaiting(busy);bar.hidden=!busy||!localDownload.total||localDownload.loaded>=localDownload.total;
   bar.max=localDownload.total||1;bar.value=localDownload.loaded;
   const failure=localFailureFor(loc)?.reason||'';
@@ -1479,9 +1482,9 @@ function paintLocalDialog(loc){
   });
 }
 function queueLocal(loc,{explicit=false}={}){
-  if(!loc||loc.p.translation||!canLocal(loc)||sameLocal(localJob,loc)||(!explicit&&localWorkPaused()))return;
+  if(!loc||loc.p.translation||!canLocal(loc)||sameLocalText(localJob,loc)||(!explicit&&localWorkPaused()))return;
   if(localWanted?.explicit&&!explicit)return;
-  if(!explicit&&sameLocal(localWanted,loc))return;
+  if(!explicit&&sameLocalText(localWanted,loc))return;
   localWanted={...loc,explicit};
   clearTimeout(localTimer);localTimer=setTimeout(pumpLocal,explicit?0:260);
 }
@@ -1491,7 +1494,8 @@ async function pumpLocal(){
   if(!job.explicit&&!autoLocal(job))return;
   localJob=job;
   const pair={source:job.source,target:job.target};
-  localDownload={loaded:0,total:0};paintLocalDialog(job);
+  localDownload={loaded:0,total:0};
+  if(sameLocalText(localDialogTarget,job))paintLocalDialog(localDialogTarget);
   try{
     let entry,saved;
     if(canProbeLocalCache(job)){
@@ -1507,14 +1511,14 @@ async function pumpLocal(){
       if(job.explicit&&!localPageAway&&!localWanted)localWanted=job;
       return;
     }
-    if(!job.explicit&&($('#reader').hidden||!sameLocal(job,currentLocalTarget())||!autoLocal(job)))return;
+    if(!job.explicit&&($('#reader').hidden||!sameLocalText(job,currentLocalTarget())||!autoLocal(job)))return;
     if(saved)localTranslator.prime(job.p.text,saved,pair);
     else{
       if(!job.explicit&&localFailureFor(job))return;
       const value=await localTranslator.translate(job.p.text,{...pair,allowNetwork:job.explicit,onProgress:(loaded,total)=>{
         if(localJob!==job)return;
         localDownload={loaded,total};
-        if(!localWorkPaused())paintLocalDialog(job);
+        if(!localWorkPaused()&&sameLocalText(localDialogTarget,job))paintLocalDialog(localDialogTarget);
       }});
       if(localJob!==job)return;
       // Pause stops automatic work, not saving a translation the reader explicitly requested.
@@ -1533,8 +1537,10 @@ async function pumpLocal(){
     if(localJob===job){
       localJob=null;localDownload={loaded:0,total:0};
       if(!localWorkPaused()){
-        paintLocalDialog(job);refreshWordContextTranslation(job);
-        if(sameLocal(job,currentLocalTarget())&&!$('#reader').hidden&&!ribbonManual)syncTranslation();
+        if(sameLocalText(job,localDialogTarget))paintLocalDialog(localDialogTarget);
+        const context=wordContextTranslation?.loc;
+        if(sameLocalText(job,context))refreshWordContextTranslation(context);
+        if(sameLocalText(job,currentLocalTarget())&&!$('#reader').hidden&&!ribbonManual)syncTranslation();
         if(localWanted)void pumpLocal();
       }
     }
@@ -1551,7 +1557,7 @@ $('#local-translation-open').onclick=()=>{
 };
 $('#local-translation-start').onclick=()=>{
   const loc=localDialogTarget;if(!loc||!canLocal(loc)||loc.p.translation||
-    sameLocal(localDialogProbe,loc)||sameLocal(localJob,loc)||sameLocal(localWanted,loc))return;
+    sameLocal(localDialogProbe,loc)||sameLocalText(localJob,loc)||sameLocalText(localWanted,loc))return;
   setAutoLocal(loc,true);
   if(sameLocalPair(localFailure,loc))localFailure=null;
   queueLocal(loc,{explicit:true});paintLocalDialog(loc);
