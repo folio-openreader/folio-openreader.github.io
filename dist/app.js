@@ -843,7 +843,7 @@ async function renderComicStrip(position,{bookmark=false}={}){
     const {createComicStrip}=await import('./comic-strip.js');
     if(!owns())return;
     comicStrip=createComicStrip(host,sc,book.comicPages,{
-      load:index=>readComicPage(db,book.id,index),
+      load:(index,signal)=>readComicPage(db,book.id,index,signal),
       onPosition:pos=>{
         if(!owns())return;
         const moved=chapter!==pos.chapter;

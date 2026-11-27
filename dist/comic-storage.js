@@ -10,23 +10,28 @@ export function comicBook(id,parsed,ocrLanguage,createdAt=Date.now()){
     comicPages:parsed.pages.map(({name,width,height})=>({name,width,height})),
     chapters:parsed.pages.map((_,i)=>({title:'Страница '+(i+1),paragraphs:[{text:'',translation:null}]}))};
 }
-export function comicTransaction(db,mode,action){
+export function comicTransaction(db,mode,action,signal){
   return new Promise((resolve,reject)=>{
+    const canceled=()=>new DOMException('Открытие страницы отменено.','AbortError');
+    if(signal?.aborted){reject(canceled());return;}
     if(!db){reject(new Error('Хранилище комиксов недоступно.'));return}
     const tx=db.transaction('books',mode);let value;
-    tx.oncomplete=()=>resolve(value);
-    tx.onabort=()=>reject(tx.error||new Error('Изменения не сохранились.'));
+    const abort=()=>{try{tx.abort()}catch{/* It may already be completing. */}};
+    const detach=()=>signal?.removeEventListener('abort',abort);
+    tx.oncomplete=()=>{detach();signal?.aborted?reject(canceled()):resolve(value);};
+    tx.onabort=()=>{detach();reject(signal?.aborted?canceled():tx.error||new Error('Изменения не сохранились.'));};
+    signal?.addEventListener('abort',abort,{once:true});
     try{
       const request=action(tx.objectStore('books'));
       if(request)request.onsuccess=()=>{value=request.result};
-    }catch(e){try{tx.abort()}catch{}reject(e)}
+    }catch(e){detach();abort();reject(e)}
   });
 }
 export const putComic=(db,book,pages)=>comicTransaction(db,'readwrite',store=>{
   store.add(book);
   pages.forEach(({blob},index)=>store.add({id:imageKey(book.id,index),index,blob}));
 });
-export const readComicPage=(db,id,index)=>comicTransaction(db,'readonly',store=>store.get(imageKey(id,index)));
+export const readComicPage=(db,id,index,signal)=>comicTransaction(db,'readonly',store=>store.get(imageKey(id,index)),signal);
 export const dropComic=(db,id,count)=>comicTransaction(db,'readwrite',store=>{
   store.delete(id);store.delete(IDBKeyRange.bound(imageKey(id,0),imageKey(id,count-1)));
 });

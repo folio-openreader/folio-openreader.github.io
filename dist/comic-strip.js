@@ -68,21 +68,27 @@ export function createComicStrip(host,scroller,pages,{load,onPosition,onReadPage
     scroller.scrollTop+=frame.top-viewportTop()+inset;
   }
   function drop(index,slot){
+    active.delete(index);
+    // The page may be queued behind another local write. Don't read its Blob
+    // once it has left the window (the latest viewport keeps its requests).
+    slot.load?.abort();
     if(slot.image){slot.image.onerror=null;slot.image.removeAttribute('src');}
     if(slot.url)URL.revokeObjectURL(slot.url);
-    frames[index].replaceChildren();active.delete(index);
+    frames[index].replaceChildren();
   }
   function mount(index){
-    const slot={};active.set(index,slot);
+    const slot={load:new AbortController()};active.set(index,slot);
     const fail=()=>{
       if(dead||active.get(index)!==slot)return;
+      slot.load=null;
       if(slot.image){slot.image.onerror=null;slot.image.removeAttribute('src');}
       if(slot.url){URL.revokeObjectURL(slot.url);slot.url=null;}
       const msg=el('p','comic-image-error','Не удалось открыть страницу '+(index+1)+'.');
       frames[index].replaceChildren(msg);
     };
-    Promise.resolve().then(()=>!dead&&active.get(index)===slot?load(index):null).then(row=>{
+    Promise.resolve().then(()=>!dead&&active.get(index)===slot?load(index,slot.load.signal):null).then(row=>{
       if(dead||active.get(index)!==slot)return;
+      slot.load=null;
       if(!(row?.blob instanceof Blob)){fail();return;}
       const img=slot.image=el('img','comic-strip-art');
       const meta=pages[index];
