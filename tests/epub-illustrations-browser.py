@@ -58,6 +58,17 @@ def run(dist, chromium):
         p.goto(origin+"/app.html#library")
         p.locator("#folio-boot").wait_for(state="detached")
         p.locator("#import-open").tap()
+        format_help=p.locator('#import-dialog summary[aria-label="Поддерживаемые форматы книг"]')
+        format_help.tap()
+        help_copy=p.locator("#import-dialog .import-formats .help-copy")
+        expect(help_copy).to_be_visible()
+        expect(help_copy).to_contain_text("встроенные иллюстрации оригинала (PNG, JPEG, WebP)")
+        expect(help_copy).to_contain_text("из PDF или фото сохраняется только текст")
+        expect(help_copy).to_contain_text("сохранить страницы целиком, выберите «Импортировать комикс»")
+        box=help_copy.bounding_box()
+        assert 0<=box["x"]<box["x"]+box["width"]<=320,box
+        format_help.tap()
+        expect(help_copy).to_be_hidden()
         for field,data in [
             ("original",epub("Illustrated lantern","en",BEFORE,AFTER,art=True)),
             ("translation",epub("Иллюстрация","ru","Сад за холмом.",PAIRED))]:
