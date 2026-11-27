@@ -75,7 +75,11 @@ export function safePosition(p,book) {
   const position={chapter:p.chapter,paragraph:p.paragraph,fraction};
   if(book.kind==='comic'&&Number.isFinite(p.comicImageOffset)&&p.comicImageOffset>=0&&p.comicImageOffset<=1)
     position.comicImageOffset=p.comicImageOffset;
-  if(book.kind==='comic'&&p.comicLayout==='strip')position.comicLayout='strip';
+  if(book.kind==='comic'&&p.comicLayout==='strip'){
+    position.comicLayout='strip';
+    if(Number.isFinite(p.comicStripArtworkOffset)&&p.comicStripArtworkOffset>0&&p.comicStripArtworkOffset<1)
+      position.comicStripArtworkOffset=p.comicStripArtworkOffset;
+  }
   if(book.kind!=='comic'&&book.chapters.length===1&&book.chapters[0].paragraphs.length===1&&
      Number.isFinite(p.soloScrollProgress)&&p.soloScrollProgress>=0&&p.soloScrollProgress<=1)
     position.soloScrollProgress=p.soloScrollProgress;

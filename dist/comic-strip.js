@@ -37,12 +37,24 @@ export function createComicStrip(host,scroller,pages,{load,onPosition,onReadPage
     }
     return index;
   }
+  function artwork(frame,index){
+    const {width,height}=pages[index];
+    // Mirrors object-fit: contain, including the slot's minimum-height padding.
+    // Layout can find the artwork even before IndexedDB delivers its image.
+    const artHeight=width>0&&height>0?Math.min(frame.height,frame.width*height/width):frame.height;
+    return {height:artHeight,padding:(frame.height-artHeight)/2};
+  }
   function sample(head,index){
     const max=maxScroll();
     if(max>1&&max-scroller.scrollTop<1)return {chapter:last,paragraph:0,fraction:.99,comicImageOffset:1,comicLayout:'strip'};
     const frame=frames[index].getBoundingClientRect();
     const comicImageOffset=cap((head-frame.top)/Math.max(1,frame.height),0,.999999);
-    return {chapter:index,paragraph:0,fraction:Math.min(.99,comicImageOffset),comicImageOffset,comicLayout:'strip'};
+    const art=artwork(frame,index),point=head-frame.top-art.padding;
+    const position={chapter:index,paragraph:0,fraction:Math.min(.99,comicImageOffset),comicImageOffset,comicLayout:'strip'};
+    // Preserve legacy slot coordinates and whitespace edges; only a point on the
+    // art itself is portable as an artwork offset to a different viewport.
+    if(point>0&&point<art.height)position.comicStripArtworkOffset=point/art.height;
+    return position;
   }
   function jump(p){
     const index=cap(p.chapter,0,last),offset=p.comicImageOffset??p.fraction??0;
@@ -50,7 +62,9 @@ export function createComicStrip(host,scroller,pages,{load,onPosition,onReadPage
     const frame=frames[index].getBoundingClientRect();
     // At the bottom of a non-final page, leave its last pixel in view so that
     // moving between modes retains the page identity.
-    const inset=Math.min(frame.height*cap(offset,0,1),Math.max(0,frame.height-2));
+    const art=artwork(frame,index),anchor=p.comicStripArtworkOffset;
+    const within=Number.isFinite(anchor)?art.padding+art.height*cap(anchor,0,1):frame.height*cap(offset,0,1);
+    const inset=Math.min(within,Math.max(0,frame.height-2));
     scroller.scrollTop+=frame.top-viewportTop()+inset;
   }
   function drop(index,slot){

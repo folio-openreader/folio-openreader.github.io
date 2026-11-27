@@ -24,7 +24,12 @@ test('comic metadata is light, can save the page position, and knows OCR languag
   for(const value of [null,'0',NaN,Infinity,-.1,1.001]){
     assert.deepEqual(safePosition({...position,comicImageOffset:value},b),position);
   }
-  assert.deepEqual(safePosition({...position,comicLayout:'strip'},b),{...position,comicLayout:'strip'});
+  const strip={...position,comicLayout:'strip'},art={...strip,comicStripArtworkOffset:.4};
+  assert.deepEqual(safePosition(strip,b),strip);
+  assert.deepEqual(safePosition(art,b),art);
+  assert.deepEqual(safePosition({...position,comicStripArtworkOffset:.4},b),position);
+  for(const value of [null,'0.4',Infinity,-.1,0,1,1.001])
+    assert.deepEqual(safePosition({...strip,comicStripArtworkOffset:value},b),strip);
   assert.deepEqual(safePosition({...position,comicLayout:'invalid'},b),position);
   assert.deepEqual(safePosition({...position,comicLayout:'strip'},{chapters:b.chapters}),position);
   assert.equal(safePosition({chapter:2,paragraph:0},b),null);

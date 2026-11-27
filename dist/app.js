@@ -236,7 +236,7 @@ function toast(message){$('#toast').textContent=message;$('#toast').style.displa
 function updateStorageStatus(){const status=$('#local-storage-status');if(status)status.textContent=storageWarning||(!db?'Хранилище книг недоступно. Восстановление книг отключено.':'')}
 let rememberedReadingPositions={...state.positions},rememberedBookmarks={...record(prior.bookmarks)};
 function sameReadingPosition(a,b){
-  return a===b||!!a&&!!b&&['chapter','paragraph','fraction','viewportDelta','chapterTop','textEnd','comicImageOffset','comicLayout','soloScrollProgress'].every(k=>a[k]===b[k]);
+  return a===b||!!a&&!!b&&['chapter','paragraph','fraction','viewportDelta','chapterTop','textEnd','comicImageOffset','comicLayout','comicStripArtworkOffset','soloScrollProgress'].every(k=>a[k]===b[k]);
 }
 function readingPositionsToSave(stored,previous,local){
   // A stale tab only owns reading positions it actually changed. Do not
@@ -768,7 +768,7 @@ function comicPageGeometry(sc){
 function restoreComicPosition(sc,position){
   const g=comicPageGeometry(sc);
   if(!g)return;
-  const anchor=position.comicImageOffset;
+  const anchor=position.comicStripArtworkOffset??position.comicImageOffset;
   if(anchor===1){sc.scrollTop=g.maxScroll;return}
   if(anchor===0){sc.scrollTop=0;return}
   // Older bookmarks lack an artwork anchor. Keep their existing interpretation.
