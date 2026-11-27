@@ -56,10 +56,12 @@ self.addEventListener('fetch',event=>{
   const request=event.request,url=new URL(request.url);
   url.hash='';
   if(request.method!=='GET'||url.origin!==scope.origin)return;
-  if(request.mode==='navigate'&&url.href===entry.href){
+  // A Home Screen shortcut can point to the landing root instead of app.html.
+  // Both exact, query-free entry points stay network-first; no landing is cached.
+  if(request.mode==='navigate'&&(url.href===entry.href||url.href===scope.href)){
     event.respondWith(fetch(request).catch(async()=>{
       const cache=await completeCache().catch(()=>null);
-if(!cache)return Response.error();
+      if(!cache)return Response.error();
       const target=new URL('app.html',mount).href;
       // A reload may carry a deep reading hash which is never sent to the
       // server. Preserve it while entering the explicitly pinned package.

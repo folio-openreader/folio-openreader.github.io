@@ -1,4 +1,4 @@
-"""Exercise the opt-in Folio offline shell at a non-root URL with real origin loss."""
+"""Exercise Folio offline entry points at root and nested URLs with real origin loss."""
 from argparse import ArgumentParser
 from contextlib import contextmanager
 from functools import partial
@@ -20,21 +20,29 @@ WORKER="folio-offline-worker.js"
 class Handler(SimpleHTTPRequestHandler):
     disconnected=False
     corrupt=False
+    root_error=False
+    prefix=PREFIX
     paths=[]
     def log_message(self,*args):pass
+    def end_headers(self):
+        if urlsplit(self.path).path==self.prefix:self.send_header("Cache-Control","no-store")
+        super().end_headers()
     def translate_path(self,path):
         path=urlsplit(path).path
-        return super().translate_path("/"+path[len(PREFIX):])
+        return super().translate_path("/"+path[len(self.prefix):])
     def do_GET(self):
         path=urlsplit(self.path).path
         Handler.paths.append(path)
         if Handler.disconnected:
             self.close_connection=True
             return
-        if not path.startswith(PREFIX):
+        if not path.startswith(self.prefix):
             self.send_error(404)
             return
-        if Handler.corrupt and path==PREFIX+"style.css":
+        if Handler.root_error and path==self.prefix:
+            self.send_error(503)
+            return
+        if Handler.corrupt and path==self.prefix+"style.css":
             body=b"Unexpected package bytes"
             self.send_response(200)
             self.send_header("Content-Type","text/css; charset=utf-8")
@@ -45,18 +53,35 @@ class Handler(SimpleHTTPRequestHandler):
 
 
 @contextmanager
-def serving(dist):
+def serving(dist,prefix=PREFIX):
+    Handler.prefix=prefix
+    Handler.disconnected=Handler.corrupt=Handler.root_error=False
+    Handler.paths=[]
     server=ThreadingHTTPServer(("127.0.0.1",0),partial(Handler,directory=str(dist)))
     thread=Thread(target=server.serve_forever,daemon=True);thread.start()
     try:yield f"http://127.0.0.1:{server.server_port}"
     finally:server.shutdown();server.server_close();thread.join()
 
 
-def run(dist,chromium):
+def offline_denied(context,url):
+    tab=context.new_page()
+    try:
+        tab.goto(url,timeout=5500,wait_until="commit")
+    except Error as e:
+        assert "net::ERR_" in str(e),(url,e)
+    else:
+        raise AssertionError(("unsupported offline path was served",tab.url))
+    finally:
+        tab.close()
+
+
+def run(dist,chromium,prefix):
     match=re.search(r"const PACKAGE=(\{.*?\});\n", (dist/WORKER).read_text("utf-8"),re.S)
     manifest=json.loads(match[1])
-    with serving(dist) as origin,sync_playwright() as pw:
-        home=origin+PREFIX+"app.html"
+    with serving(dist,prefix) as origin,sync_playwright() as pw:
+        landing=origin+prefix
+        home=landing+"app.html"
+        parked=landing+"_folio_offline/"+manifest["version"]+"/app.html"
         b=pw.chromium.launch(executable_path=chromium,headless=True,args=["--disable-dev-shm-usage"])
         c=b.new_context(viewport={"width":320,"height":740},is_mobile=True,has_touch=True,
                         reduced_motion="reduce",service_workers="allow")
@@ -66,12 +91,15 @@ def run(dist,chromium):
           prefs:{readingLanguage:'en',dictionaryTarget:'ru',languageSetup:'done'}}))""")
         p=c.new_page();p.set_default_timeout(9500)
         p.on("pageerror",lambda e:errors.append(str(e)))
+        p.goto(landing)
+        expect(p.locator(".nav-open[data-reader]")).to_be_visible()
         p.goto(home+"#library")
         p.locator("#folio-boot").wait_for(state="detached")
         assert p.evaluate("navigator.serviceWorker.getRegistrations().then(r=>r.length)")==0
         assert not any(path.endswith(WORKER) for path in Handler.paths),Handler.paths
 
         Handler.disconnected=True
+        offline_denied(c,landing)
         try:
             response=p.reload(timeout=5500,wait_until="domcontentloaded")
             assert False,("offline before consenting must not report a prepared app",response.url)
@@ -105,6 +133,9 @@ def run(dist,chromium):
         expect(p.locator("[data-offline-status]")).to_contain_text("Не удалось подготовить",timeout=28000)
         expect(p.locator("[data-offline-open]")).to_be_hidden()
         assert p.evaluate("caches.keys().then(a=>a.filter(k=>k.startsWith('folio-offline-shell:')))")==[]
+        Handler.disconnected=True
+        offline_denied(c,landing)
+        Handler.disconnected=False
         Handler.corrupt=False
         p.locator("[data-offline-prepare]").tap()
         expect(p.locator("[data-offline-status]")).to_contain_text("Готово")
@@ -114,19 +145,43 @@ def run(dist,chromium):
           const keys=(await (await caches.open(names[0])).keys()).map(r=>new URL(r.url).pathname).sort();
           return [names,keys];
         }""")
-        assert names==["folio-offline-shell:"+PREFIX+":"+manifest["version"]],names
-        assert keys==sorted([PREFIX+x["path"] for x in manifest["assets"]]+[PREFIX+"_folio_offline_complete"]),keys
+        assert names==["folio-offline-shell:"+prefix+":"+manifest["version"]],names
+        assert keys==sorted([prefix+x["path"] for x in manifest["assets"]]+[prefix+"_folio_offline_complete"]),keys
         expect(p.locator("[data-offline-open]")).to_have_attribute("href",
-            origin+PREFIX+"_folio_offline/"+manifest["version"]+"/app.html#home")
-        before=Handler.paths.count(PREFIX+"app.html")
+            origin+prefix+"_folio_offline/"+manifest["version"]+"/app.html#home")
+        before=Handler.paths.count(prefix+"app.html")
         p.goto(book_url,wait_until="domcontentloaded")
         p.reload(wait_until="domcontentloaded")
         p.locator("#folio-boot").wait_for(state="detached")
-        assert p.url==book_url and Handler.paths.count(PREFIX+"app.html")>before
+        assert p.url==book_url and Handler.paths.count(prefix+"app.html")>before
         expect(p.locator("#reading-progress")).to_contain_text("абзац 2 / 2")
 
         assert p.evaluate("navigator.serviceWorker.controller?.scriptURL"),p.url
+        root=c.new_page()
+        root.on("pageerror",lambda e:errors.append(str(e)))
+        assert root.goto(landing).ok
+        assert root.url==landing and root.evaluate("navigator.serviceWorker.controller?.scriptURL")
+        expect(root.locator(".nav-open[data-reader]")).to_be_visible()
+        Handler.root_error=True
+        assert root.reload().status==503 and root.url==landing
+        Handler.root_error=False
+        assert root.reload().ok
+        expect(root.locator(".nav-open[data-reader]")).to_be_visible()
+
         Handler.disconnected=True
+        root.reload(timeout=5500,wait_until="commit")
+        root.wait_for_url(parked,timeout=11000)
+        root.locator("#folio-boot").wait_for(state="detached")
+        root.locator("#continue-card button").tap()
+        expect(root.locator("#book-title")).to_have_text("Offline original")
+        expect(root.locator("#reading-progress")).to_contain_text("абзац 2 / 2")
+        root.wait_for_function("document.querySelector('#passage figure img')?.naturalHeight===160")
+        assert root.locator("#passage figure img").get_attribute("src").startswith("blob:")
+        assert root.evaluate("url=>fetch(url,{cache:'no-store'}).then(()=>false,()=>true)",landing)
+        root.close()
+        offline_denied(c,landing+"?launch=1")
+        offline_denied(c,landing+"index.html")
+        offline_denied(c,origin+"/not-the-folio-scope/nothing.html")
         try:
             p.reload(wait_until="domcontentloaded")
         except Error:
@@ -153,9 +208,14 @@ def run(dist,chromium):
         assert p.evaluate("fetch('app.js?random=1').then(r=>r.status)")==503
         assert p.evaluate("fetch('../000000000000000000000000/app.js').then(r=>r.status)")==503
         p.wait_for_function("!history.state?.folioIllustration")
-        c.set_offline(False)
+        assert p.evaluate("""async ([name,url])=>(await caches.open(name)).delete(url)""",
+                          [names[0],landing+"style.css"])
+        offline_denied(c,landing)
         Handler.disconnected=False
         p.goto(home+"#profile/storage")
+        expect(p.locator("[data-offline-status]")).to_have_text("Офлайн-копия ещё не готова. Нужен интернет.")
+        expect(p.locator("[data-offline-open]")).to_be_hidden()
+        p.locator("[data-offline-prepare]").tap()
         expect(p.locator("[data-offline-status]")).to_contain_text("Готово")
         p.evaluate("caches.open('another-local-feature')")
         p.locator("[data-offline-remove]").tap()
@@ -168,12 +228,13 @@ def run(dist,chromium):
         assert not unrelated,unrelated
         assert not errors,errors
         b.close()
-    print("320px nested Folio: opt-in only; damaged package rejected, exact static entries, normal online reader, offline installed entrypoint/EPUB/viewer, and safe cache removal.")
+    print(f"320px Folio {prefix}: online landing and HTTP 503 unchanged; opt-in offline exact root/app.html, local EPUB and viewer; query, neighbor and missing/corrupt package controls passed.")
 
 
 if __name__=="__main__":
     parser=ArgumentParser(description=__doc__)
     parser.add_argument("dist",type=Path)
     parser.add_argument("--chromium")
+    parser.add_argument("--scope",choices=(PREFIX,"/"),default=PREFIX)
     args=parser.parse_args()
-    run(args.dist.resolve(),args.chromium)
+    run(args.dist.resolve(),args.chromium,args.scope)
