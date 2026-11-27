@@ -24,7 +24,13 @@ export function createIllustrationLayer(scroller,load,onOpen){
     for(const {target:figure,isIntersecting} of entries){
       const state=states.get(figure);if(!state)continue;
       const {image,button}=state;
-      if(!isIntersecting){unload(state);continue;}
+      state.nearby=isIntersecting;
+      if(!isIntersecting){
+        // Page Down can scroll beyond the lazy window while the button still
+        // owns focus. Hiding it here would restart Tab at the beginning.
+        if(button.ownerDocument.activeElement!==button)unload(state);
+        continue;
+      }
       if(state.url||state.ticket||state.failed)continue;
       const ticket=state.ticket={};
       const fail=()=>{
@@ -54,8 +60,16 @@ export function createIllustrationLayer(scroller,load,onOpen){
       missing.className='muted';missing.textContent='Изображение недоступно';
       image.alt=alt;image.lang=language;image.decoding='async';image.width=width;image.height=height;
       button.append(image,badge);figure.append(button,missing);
-      const state={asset,image,button};
-      button.onclick=()=>{if(state.blob)onOpen({blob:state.blob,alt,language,button});};
+      const state={asset,image,button,nearby:false};
+      button.onclick=()=>{
+        if(!state.blob)return;
+        state.opening=true;
+        try{onOpen({blob:state.blob,alt,language,button});}finally{state.opening=false;}
+      };
+      button.addEventListener('blur',()=>{
+        // Opening the viewer temporarily transfers keyboard focus, not reading position.
+        if(!state.nearby&&!state.opening&&states.get(figure)===state)unload(state);
+      });
       states.set(figure,state);observer.observe(figure);
       return figure;
     },
@@ -102,6 +116,11 @@ export function createIllustrationViewer(dialog){
     close.focus({preventScroll:true});
   }
   close.onclick=()=>dismiss();
+  // The close button is the only tab stop; keep both Tab directions in the open viewer.
+  dialog.addEventListener('keydown',event=>{
+    if(!active||event.key!=='Tab'||event.altKey||event.ctrlKey||event.metaKey)return;
+    event.preventDefault();close.focus({preventScroll:true});
+  });
   dialog.addEventListener('cancel',event=>{event.preventDefault();dismiss();});
   dialog.addEventListener('close',()=>{if(active&&!dialog.open)dismiss();});
   win.addEventListener('popstate',()=>{

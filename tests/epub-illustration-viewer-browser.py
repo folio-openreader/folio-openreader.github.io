@@ -39,6 +39,38 @@ def run(dist,chromium):
         expect(cover).to_be_visible()
         scroll.evaluate("sc=>sc.scrollTop=55")
         p.wait_for_function("document.querySelector('#reading-scroll').scrollTop===55")
+
+        before_word=p.locator("#paragraph-0").get_by_role("button",name="hill",exact=True)
+        before_word.focus()
+        p.keyboard.press("Tab")
+        expect(cover).to_be_focused()
+        focused_url=cover.locator("img").get_attribute("src")
+        p.keyboard.press("PageDown")
+        p.keyboard.press("PageDown")
+        p.wait_for_function("""() => {
+          const sc=document.querySelector('#reading-scroll');
+          const art=sc.querySelector('figure');
+          return sc.scrollTop>600&&art.getBoundingClientRect().bottom+321<sc.getBoundingClientRect().top;
+        }""")
+        # Wait for the browser's lazy-window observer to be delivered (not merely scrollTop).
+        p.evaluate("() => new Promise(done => requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(done,0))))")
+        expect(cover).to_be_focused()
+        offscreen_point=scroll.evaluate("el=>el.scrollTop")
+        p.keyboard.press("Enter")
+        expect(viewer.get_by_role("img",name=data["ALT"],exact=True)).to_be_visible()
+        expect(close).to_be_focused()
+        p.keyboard.press("Escape")
+        expect(viewer).to_be_hidden()
+        expect(cover).to_be_focused()
+        p.wait_for_function("!history.state?.folioIllustration")
+        assert abs(scroll.evaluate("el=>el.scrollTop")-offscreen_point)<=1
+        p.keyboard.press("Tab")
+        expect(p.locator("#paragraph-1").get_by_role("button",name="The",exact=True).first).to_be_focused()
+        # Once focus moves on, the previous offscreen Blob is released as before.
+        assert not p.evaluate("url=>fetch(url).then(r=>r.ok,()=>false)",focused_url)
+        scroll.evaluate("sc=>sc.scrollTop=55")
+        p.wait_for_function("document.querySelector('#reading-scroll').scrollTop===55")
+        expect(cover).to_be_visible()
         point=scroll.evaluate("el=>el.scrollTop")
         reading=p.locator("#reading-progress").text_content()
         in_book=p.url
@@ -74,13 +106,21 @@ def run(dist,chromium):
         stayed(fullscreen_url)
         p.wait_for_function("!history.state?.folioIllustration")
 
-        cover.press("Enter")
+        before_word.focus()
+        p.keyboard.press("Tab")
+        expect(cover).to_be_focused()
+        p.keyboard.press("Enter")
         fullscreen_url=inspect()
+        for key in ("Tab","Shift+Tab","Tab"):
+            p.keyboard.press(key)
+            expect(close).to_be_focused()
         p.go_back()
         stayed(fullscreen_url)
         p.go_forward()
         fullscreen_url=inspect()
-        close.tap()
+        p.keyboard.press("Shift+Tab")
+        expect(close).to_be_focused()
+        p.keyboard.press("Enter")
         stayed(fullscreen_url)
         p.wait_for_function("!history.state?.folioIllustration")
 
@@ -121,7 +161,7 @@ def run(dist,chromium):
         assert not unexpected,unexpected
         assert not errors,errors
         b.close()
-    print("320px EPUB illustration: full-screen tap/keyboard, Escape/Back/Forward/close, reader point and independent Blob URL cleanup all passed.")
+    print("320px EPUB illustration: lazy inline keyboard order and full-screen tap/keyboard and Tab containment, Escape/Back/Forward/close, reader point and independent Blob URL cleanup all passed.")
 
 
 if __name__=="__main__":
