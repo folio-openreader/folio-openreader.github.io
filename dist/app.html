@@ -324,6 +324,12 @@ html{background-color:var(--boot-bg)}
   </header>
   <div class="settings-card profile-stack-body storage-settings">
     <div id="profile-storage-meter"></div>
+    <section id="profile-offline" aria-labelledby="offline-heading">
+      <h2 id="offline-heading">Чтение без интернета</h2>
+      <p>Подготовьте файлы читалки для запуска без сети. Это не копия книг. Каталог, загрузка словарей, облачный ИИ и дополнительные модели могут быть недоступны.</p>
+      <div class="backup-actions"><button type="button" class="quiet" data-offline-prepare>Подготовить офлайн</button><a class="quiet" data-offline-open hidden>Открыть офлайн-читалку</a><button type="button" class="quiet" data-offline-remove hidden>Удалить офлайн-копию</button></div>
+      <p class="muted" data-offline-status role="status"></p>
+    </section>
     <section id="profile-translation-storage" aria-labelledby="translation-storage-title">
       <h2 id="translation-storage-title">Модели перевода</h2>
       <dl class="translation-storage-list"><div><dt>Английский → русский</dt><dd data-model-target="ru">—</dd></div><div><dt>Английский → хинди</dt><dd data-model-target="hi">—</dd></div></dl>

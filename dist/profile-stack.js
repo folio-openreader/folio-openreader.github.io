@@ -67,6 +67,9 @@ function installProfileStack(profile,stage) {
       const batch=running;
       Promise.allSettled(batch.map(effect=>effect.finished)).then(()=>{if(running===batch)cancel()});
     }
+    if(next==='storage')void import('./offline-entry.js').catch(()=>{
+      const panel=now.querySelector('#profile-offline');if(panel)panel.hidden=true;
+    });
     profile.dispatchEvent(new CustomEvent('folio:profile-page',{detail:{page:next}}));
   }
   function handleLocation(){
