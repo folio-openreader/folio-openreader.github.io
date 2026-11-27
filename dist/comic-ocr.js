@@ -172,18 +172,27 @@ export function stitchComicContext(paragraphs,words,language){
   })};
 }
 function uniqueCandidate(map,key,value){map.set(key,map.has(key)?-1:value)}
-export async function recognizeComicPage(blob,{language='eng',signal,onProgress,region}={}){
+function visibleCropSource(image,header){
+  if(typeof HTMLImageElement!=='function'||!(image instanceof HTMLImageElement)||!image.isConnected||
+    !image.complete||!image.currentSrc.startsWith('blob:')||image.src!==image.currentSrc)return null;
+  const {naturalWidth:width,naturalHeight:height}=image;
+  // The import and normal decoder both honor EXIF. Keep page orientation
+  // and normalized OCR geometry identical to the artwork actually shown.
+  if(!((width===header.w&&height===header.h)||(width===header.h&&height===header.w)))return null;
+  return {image,width,height}; // Borrowed, never cached or released by OCR.
+}
+export async function recognizeComicPage(blob,{language='eng',signal,onProgress,region,displayImage}={}){
   check(signal);
   if(!COMIC_OCR_LANGUAGES.includes(language))throw new Error('Выберите доступный язык OCR.');
   if(!(blob instanceof Blob)||!blob.size||blob.size>L.imageBytes)throw new Error('Выберите изображение до 16 МБ.');
   const bytes=new Uint8Array(await blob.arrayBuffer());check(signal);
   // Infer the real format, even when a drag-and-drop caller has no MIME type.
   const ext=bytes[0]===0xff?'jpg':bytes[0]===0x89?'png':'webp';
-  const {type}=comicImageHeader(bytes,'page.'+ext);
+  const header=comicImageHeader(bytes,'page.'+ext),{type}=header;
   let source,session,canvas;
   try{
     onProgress?.({stage:'render',page:1,total:1,progress:0});check(signal);
-    source=await decodeComicImage(blob.type===type?blob:blob.slice(0,blob.size,type),signal,
+    source=(region&&visibleCropSource(displayImage,header))||await decodeComicImage(blob.type===type?blob:blob.slice(0,blob.size,type),signal,
       'Для распознавания страниц нужен современный браузер.');check(signal);
     const rect=region?comicRegionPixels(region,source.width,source.height):
       {x:0,y:0,w:source.width,h:source.height};
@@ -219,5 +228,5 @@ export async function recognizeComicPage(blob,{language='eng',signal,onProgress,
     if(region)result.words=result.words.map(w=>comicRegionWord(w,rect,source.width,source.height));
     return {...result,status:words.length?'ready':'empty'};
   } catch(e){check(signal);throw e;}
-  finally{session?.close();source?.close();if(canvas)canvas.width=canvas.height=0;}
+  finally{session?.close();source?.close?.();if(canvas)canvas.width=canvas.height=0;}
 }

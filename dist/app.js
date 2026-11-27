@@ -885,7 +885,9 @@ async function recognizeCurrentComicPage(index,language,{replace=false,region}={
   comicView.setOCR({status:'loading',cancellable:!!region});
   try{
     const {recognizeComicPage}=await import('./comic-ocr.js');
-    const result=await recognizeComicPage(stored.blob,{language,signal,region,onProgress:update=>{
+    if(!active())return;
+    const displayImage=region?comicView.decodedPage(stored.blob):null;
+    const result=await recognizeComicPage(stored.blob,{language,signal,region,displayImage,onProgress:update=>{
       if(active())comicView.setOCRProgress(update);
     }});
     if(!active())return;

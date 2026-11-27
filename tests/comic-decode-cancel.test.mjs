@@ -10,6 +10,7 @@ const file=()=>new File([Buffer.from(
 const modes={
   import:(f,signal)=>parseComicFiles([f],{signal}),
   OCR:(f,signal)=>recognizeComicPage(f,{signal}),
+  'selected OCR without a mounted bitmap':(f,signal)=>recognizeComicPage(f,{signal,region:{x:0,y:0,w:.5,h:.5}}),
   'book scan':async(f,signal)=>parseImage(await f.arrayBuffer(),f.name,{signal})
 };
 const deferred=()=>{let resolve,reject;const promise=new Promise((ok,bad)=>{resolve=ok;reject=bad});return {promise,resolve,reject}};

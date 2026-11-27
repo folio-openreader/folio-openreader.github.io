@@ -7,6 +7,7 @@ from playwright.sync_api import expect, sync_playwright
 fixtures=runpy.run_path(str(Path(__file__).with_name("comic-korean-ocr-browser.py")))
 serve,sample=fixtures["serve"],fixtures["sample"]
 TOP,BOTTOM=fixtures["TOP"],fixtures["BOTTOM"]
+STRIP_ANCHOR=runpy.run_path(str(Path(__file__).with_name("comic-strip-browser.py")))["MEASURE"]
 ANCHOR="""() => {
  const sc=document.querySelector('#reading-scroll'),f=sc.querySelector('.comic-frame').getBoundingClientRect();
  return (sc.getBoundingClientRect().top+sc.querySelector('.comic-bar').offsetHeight-f.top)/f.height;
@@ -27,6 +28,14 @@ def run(dist,chromium,font):
         c.route("**/*",fence)
         c.add_init_script("""if(!localStorage.getItem('folio-v2'))localStorage.setItem('folio-v2',JSON.stringify({
           prefs:{readingLanguage:'en',dictionaryTarget:'ru',languageSetup:'done'}}));
+          const bitmap=window.createImageBitmap;
+          window.fullPageBitmaps=[];
+          window.createImageBitmap=async (...args)=>{
+            const started=performance.now();
+            const decoded=await bitmap(...args);
+            window.fullPageBitmaps.push([decoded.width,decoded.height,performance.now()-started]);
+            return decoded;
+          };
           const Native=Worker;
           window.ocrCrops=[];
           window.Worker=class extends Native{
@@ -68,7 +77,16 @@ def run(dist,chromium,font):
         p.locator("#reading-scroll").evaluate("sc=>sc.scrollTop=610")
         p.wait_for_function("""() => JSON.parse(localStorage.getItem('folio-v2')).positions[
          JSON.parse(localStorage.getItem('folio-v2')).lastBook]?.comicImageOffset>.1""")
+        p.locator("#comic-layout").tap()
+        p.wait_for_function("document.querySelector('.comic-strip-frame img')?.naturalHeight===4800")
+        strip_before=p.evaluate(STRIP_ANCHOR,0)
+        assert strip_before>.1,strip_before
+        p.get_by_role("button",name="Распознавание текущей страницы").tap()
+        p.wait_for_function("document.querySelector('.comic-art')?.naturalHeight===4800")
+        expect(p.locator(".comic-language")).to_be_visible()
         before=p.evaluate(ANCHOR)
+        assert abs(before-strip_before)<.006,(before,strip_before)
+        p.evaluate("window.fullPageBitmaps=[];window.readerArtwork=document.querySelector('.comic-art')")
         correction=p.locator(".comic-language")
         region=p.get_by_role("dialog",name="Область распознавания")
         go=region.get_by_role("button",name="Распознать область")
@@ -94,10 +112,11 @@ def run(dist,chromium,font):
         assert cancelled.startswith("blob:")
         touch(.30,.94)
         expect(go).to_be_disabled()
-        p.keyboard.press("Escape")
+        region.get_by_role("button",name="Отменить выбор области").tap()
         expect(region).to_be_hidden()
         expect(correction).to_be_focused()
         assert len(p.evaluate("window.ocrCrops"))==existing
+        assert p.evaluate("window.fullPageBitmaps")==[]
         assert abs(p.evaluate(ANCHOR)-before)<.003
         assert not p.evaluate("url=>fetch(url).then(r=>r.ok,()=>false)",cancelled)
 
@@ -110,7 +129,7 @@ def run(dist,chromium,font):
         go.tap()
         expect(region).to_be_hidden()
         p.wait_for_function("window.blockedRegion")
-        p.get_by_role("button",name="Отменить распознавание области",exact=True).press("Enter")
+        p.get_by_role("button",name="Отменить распознавание области",exact=True).tap()
         p.wait_for_function("window.terminatedRegion")
         expect(correction).to_be_focused()
         assert p.locator(".comic-hotspot").all_text_contents()==older
@@ -130,6 +149,18 @@ def run(dist,chromium,font):
         assert len(jobs)==1 and jobs[0][0]<550 and jobs[0][1]<250,jobs
         assert p.locator('.comic-hotspot[data-word="정원"]').get_attribute("style")==preserved
         assert abs(p.evaluate(ANCHOR)-before)<.005,(before,p.evaluate(ANCHOR))
+        decoded=p.evaluate("window.fullPageBitmaps")
+        print("Recognition-only bitmap allocations after a canceled and completed crop:",decoded)
+        assert decoded==[],decoded
+        assert p.evaluate("""() => {
+          const now=document.querySelector('.comic-art');
+          return now===window.readerArtwork && now.complete && now.naturalHeight===4800;
+        }""")
+        p.locator("#comic-layout").tap()
+        p.wait_for_function("document.querySelector('.comic-strip-frame img')?.naturalHeight===4800")
+        assert abs(p.evaluate(STRIP_ANCHOR,0)-before)<.006
+        p.get_by_role("button",name="Распознавание текущей страницы").tap()
+        expect(p.locator(".comic-text-toggle")).to_be_visible()
         p.locator(".comic-text-toggle").tap()
         expect(p.locator(".comic-transcript p")).to_have_text([TOP,BOTTOM])
         p.reload()

@@ -334,5 +334,11 @@ export function createComicReader(host,{onNavigate,onRecognize,onCorrection,onCa
     if(dead)return;dead=true;revoke();root.removeEventListener('click',click);root.removeEventListener('keydown',keys);root.removeEventListener('focusin',focusWord);
     root.remove();instances.delete(host);page={};content={paragraphs:[],marks:[]};
   }
-  const api={showPage,setOCR,setOCRProgress,destroy};instances.set(host,api);return api;
+  // The reader owns this exact Blob URL. OCR may borrow its decoded art,
+  // but must never keep it after the view changes or revoke it itself.
+  function decodedPage(blob){
+    return !dead&&page.blob===blob&&img?.isConnected&&img.complete&&!img.hidden&&url&&
+      img.currentSrc===url&&img.src===url&&img.naturalWidth===page.width&&img.naturalHeight===page.height?img:null;
+  }
+  const api={showPage,setOCR,setOCRProgress,decodedPage,destroy};instances.set(host,api);return api;
 }
